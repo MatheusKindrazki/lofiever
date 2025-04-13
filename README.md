@@ -1,36 +1,75 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Lofiever - 24/7 Lofi Streaming with AI Curation
+
+Lofiever is an open-source platform for streaming lofi music continuously, with playlists curated by AI. The application provides a seamless listening experience with real-time statistics and a customizable music player.
+
+## Features
+
+- **Continuous Streaming**: Listen to lofi music 24/7 without interruptions.
+- **AI Curation**: Get personalized music recommendations using AI technology.
+- **Real-time Statistics**: See listener count, days active, and songs played.
+- **Responsive Design**: Enjoy the application on any device with a responsive interface.
+- **Dark Mode Support**: Automatically adapts to your system's theme preference.
+
+## Tech Stack
+
+- **Frontend**: Next.js 15, React 19, Tailwind CSS 4
+- **Backend**: Next.js API Routes
+- **Streaming**: WebSockets via Socket.IO (planned)
+- **AI Integration**: OpenAI API (simulated in current version)
+- **Styling**: Tailwind CSS with custom lofi theme
 
 ## Getting Started
 
-First, run the development server:
+### Prerequisites
 
+- Node.js 20.x or later
+- pnpm (this project uses pnpm as the package manager)
+
+### Installation
+
+1. Clone the repository:
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+git clone https://github.com/your-username/lofiever.git
+cd lofiever
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+2. Install dependencies:
+```bash
+pnpm install
+```
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+3. Run the development server:
+```bash
+pnpm dev
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+4. Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-## Learn More
+## Project Structure
 
-To learn more about Next.js, take a look at the following resources:
+- `src/components/`: React components
+- `src/app/`: Next.js pages and app router
+- `src/lib/`: Utility functions and API services
+- `src/app/api/`: Backend API routes
+- `src/styles/`: Global styles and Tailwind configuration
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Roadmap
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- [ ] Implement real-time streaming with Socket.IO
+- [ ] Add user authentication for saved playlists
+- [ ] Integrate with actual music sources (Spotify, YouTube)
+- [ ] Implement real AI curation with OpenAI
+- [ ] Add social features (share playlists, comments)
 
-## Deploy on Vercel
+## Contributing
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Contributions are welcome! Please feel free to submit a Pull Request.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+## Acknowledgments
+
+- Inspired by lofi hip hop radio streams
+- Built with Next.js, React, and Tailwind CSS
