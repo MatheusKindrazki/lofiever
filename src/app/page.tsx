@@ -4,9 +4,9 @@ import Curation from '@/components/Curation';
 
 export default function Home() {
   return (
-    <main className="flex min-h-screen flex-col items-center justify-between p-4 md:p-8 lg:p-12">
-      <div className="z-10 w-full max-w-7xl flex flex-col items-center justify-center gap-8">
-        <header className="flex flex-col items-center">
+    <main className="flex min-h-screen flex-col items-center p-4 md:p-6 lg:p-8 overflow-hidden">
+      <div className="z-10 w-full max-w-7xl flex flex-col items-center justify-start h-full">
+        <header className="flex flex-col items-center mb-6">
           <h1 className="text-4xl font-bold text-lofi-600 dark:text-lofi-300 md:text-6xl">
             Lofiever
           </h1>
@@ -15,20 +15,22 @@ export default function Home() {
           </p>
         </header>
 
-        <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-8">
+        <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-6 flex-1 overflow-hidden">
           {/* Coluna da esquerda com o Player */}
-          <div className="flex flex-col gap-8">
+          <div className="flex flex-col h-full overflow-hidden">
             <Player />
           </div>
           
           {/* Coluna da direita com Stats e Curation */}
-          <div className="flex flex-col gap-8">
+          <div className="flex flex-col gap-6 h-full overflow-hidden">
             <Stats />
-            <Curation />
+            <div className="flex-1 overflow-auto">
+              <Curation />
+            </div>
           </div>
         </div>
         
-        <footer className="mt-8 text-center text-sm text-gray-500 dark:text-gray-400">
+        <footer className="mt-6 text-center text-sm text-gray-500 dark:text-gray-400">
           <p>© {new Date().getFullYear()} Lofiever. All rights reserved.</p>
           <p className="mt-1">Built with ❤️ using Next.js, React, and AI</p>
         </footer>

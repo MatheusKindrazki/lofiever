@@ -146,9 +146,9 @@ export default function Player() {
   }
 
   return (
-    <div className="w-full bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
-      <div className="flex flex-col items-center">
-        <div className="relative w-64 h-64 rounded-lg overflow-hidden shadow-md mb-4">
+    <div className="w-full bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 h-full flex flex-col overflow-hidden">
+      <div className="flex flex-col items-center overflow-hidden">
+        <div className="relative w-48 h-48 md:w-56 md:h-56 lg:w-64 lg:h-64 rounded-lg overflow-hidden shadow-md mb-4 flex-shrink-0">
           <Image 
             src={currentSong.coverUrl} 
             alt={`${currentSong.title} by ${currentSong.artist}`}
@@ -199,7 +199,7 @@ export default function Player() {
           </button>
         </div>
         
-        <div className="flex items-center w-full">
+        <div className="flex items-center w-full mb-4">
           <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-500 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15.536a5 5 0 001.415-7.072m-2.829 9.9a9 9 0 010-12.728" />
           </svg>
@@ -216,14 +216,14 @@ export default function Player() {
         </div>
         
         {nextUp.length > 0 && (
-          <div className="w-full mt-6">
+          <div className="w-full mt-2 flex-1 overflow-auto">
             <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               Coming Up Next
             </h3>
-            <div className="space-y-2">
+            <div className="space-y-2 overflow-auto">
               {nextUp.map((song) => (
                 <div key={song.id} className="flex items-center p-2 bg-gray-100 dark:bg-gray-700 rounded">
-                  <div className="relative w-10 h-10 rounded overflow-hidden">
+                  <div className="relative w-10 h-10 rounded overflow-hidden flex-shrink-0">
                     <Image 
                       src={song.coverUrl} 
                       alt={song.title}
@@ -239,7 +239,7 @@ export default function Player() {
                       {song.artist}
                     </p>
                   </div>
-                  <span className="text-xs text-gray-500 dark:text-gray-400">
+                  <span className="text-xs text-gray-500 dark:text-gray-400 flex-shrink-0">
                     {formatTime(song.duration)}
                   </span>
                 </div>
