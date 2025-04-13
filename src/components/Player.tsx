@@ -114,7 +114,7 @@ export default function Player() {
 
   if (loading) {
     return (
-      <div className="w-full max-w-md bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 flex justify-center items-center">
+      <div className="w-full bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 flex justify-center items-center">
         <div className="animate-pulse-slow text-lofi-500">
           <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
@@ -127,7 +127,7 @@ export default function Player() {
 
   if (error || !currentSong) {
     return (
-      <div className="w-full max-w-md bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
+      <div className="w-full bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
         <div className="text-center text-red-500">
           <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -146,7 +146,7 @@ export default function Player() {
   }
 
   return (
-    <div className="w-full max-w-md bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
+    <div className="w-full bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
       <div className="flex flex-col items-center">
         <div className="relative w-64 h-64 rounded-lg overflow-hidden shadow-md mb-4">
           <Image 

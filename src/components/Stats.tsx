@@ -59,7 +59,7 @@ export default function Stats() {
 
   if (loading) {
     return (
-      <div className="w-full max-w-md">
+      <div className="w-full">
         <div className="grid grid-cols-3 gap-4">
           {[1, 2, 3].map((index) => (
             <div key={index} className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 animate-pulse">
@@ -75,7 +75,7 @@ export default function Stats() {
 
   if (error) {
     return (
-      <div className="w-full max-w-md">
+      <div className="w-full">
         <div className="bg-red-100 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg p-4 text-center text-red-600 dark:text-red-400">
           <p>{error}</p>
           <button 
@@ -91,7 +91,7 @@ export default function Stats() {
   }
 
   return (
-    <div className="w-full max-w-md">
+    <div className="w-full">
       <div className="grid grid-cols-3 gap-4">
         <StatCard 
           value={stats.listenersCount} 

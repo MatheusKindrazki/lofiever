@@ -39,7 +39,7 @@ export default function Curation() {
   };
 
   return (
-    <div className="w-full max-w-md bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
+    <div className="w-full bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg font-semibold text-gray-800 dark:text-white">
           AI Curated Music
@@ -98,8 +98,8 @@ export default function Curation() {
         </div>
       ) : recommendations.length > 0 ? (
         <ul className="space-y-2">
-          {recommendations.map((rec, index) => (
-            <li key={index} className="border-b border-gray-100 dark:border-gray-700 last:border-b-0 py-2">
+          {recommendations.map((rec) => (
+            <li key={`${rec.title}-${rec.artist}`} className="border-b border-gray-100 dark:border-gray-700 last:border-b-0 py-2">
               <div className="flex justify-between">
                 <div>
                   <h3 className="font-medium text-gray-900 dark:text-white">{rec.title}</h3>

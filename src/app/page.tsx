@@ -5,7 +5,7 @@ import Curation from '@/components/Curation';
 export default function Home() {
   return (
     <main className="flex min-h-screen flex-col items-center justify-between p-4 md:p-8 lg:p-12">
-      <div className="z-10 w-full max-w-5xl flex flex-col items-center justify-center gap-8">
+      <div className="z-10 w-full max-w-7xl flex flex-col items-center justify-center gap-8">
         <header className="flex flex-col items-center">
           <h1 className="text-4xl font-bold text-lofi-600 dark:text-lofi-300 md:text-6xl">
             Lofiever
@@ -15,11 +15,18 @@ export default function Home() {
           </p>
         </header>
 
-        <Player />
-        
-        <Stats />
-        
-        <Curation />
+        <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-8">
+          {/* Coluna da esquerda com o Player */}
+          <div className="flex flex-col gap-8">
+            <Player />
+          </div>
+          
+          {/* Coluna da direita com Stats e Curation */}
+          <div className="flex flex-col gap-8">
+            <Stats />
+            <Curation />
+          </div>
+        </div>
         
         <footer className="mt-8 text-center text-sm text-gray-500 dark:text-gray-400">
           <p>© {new Date().getFullYear()} Lofiever. All rights reserved.</p>
