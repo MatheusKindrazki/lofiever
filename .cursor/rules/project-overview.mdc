@@ -1,0 +1,69 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Lofiever - Visão Geral do Projeto
+
+## Sobre o Projeto
+
+Lofiever é uma plataforma de streaming de música lofi 24/7 com curadoria baseada em IA. O frontend é construído com tecnologias modernas para oferecer uma experiência de usuário fluida e responsiva, permitindo que os usuários escutem música lofi enquanto veem estatísticas em tempo real e recebem recomendações personalizadas.
+
+## Documentação Completa
+
+Para uma visão completa do frontend, consulte a documentação OnePage detalhada:
+[DOCUMENTACAO_FRONTEND.md](mdc:DOCUMENTACAO_FRONTEND.md)
+
+## Estrutura Principal
+
+```
+src/
+├── app/                 # Estrutura do Next.js App Router
+│   ├── api/             # Endpoints da API (route handlers)
+│   ├── layout.tsx       # Layout principal da aplicação
+│   └── page.tsx         # Página inicial
+├── components/          # Componentes React reutilizáveis
+│   ├── Player.tsx       # Reprodutor de música
+│   ├── Stats.tsx        # Estatísticas do streaming
+│   └── Curation.tsx     # Recomendações de IA
+├── lib/                 # Funções utilitárias e chamadas de API
+│   └── api.ts           # Funções para comunicação com o backend
+├── styles/              # Estilos globais
+│   └── globals.css      # CSS global com imports do Tailwind
+└── utils/               # Utilitários adicionais
+```
+
+## Componentes Principais
+
+- **[Player.tsx](mdc:src/components/Player.tsx)**: Reprodutor de música com controles de play/pause, volume e visualização de progresso
+- **[Stats.tsx](mdc:src/components/Stats.tsx)**: Exibe estatísticas como número de ouvintes, dias ativos e músicas reproduzidas
+- **[Curation.tsx](mdc:src/components/Curation.tsx)**: Interface para recomendações personalizadas de música via IA
+
+## APIs
+
+- **[/api/stream](mdc:src/app/api/stream/route.ts)**: Fornece dados do stream atual (música, estatísticas)
+- **[/api/curation](mdc:src/app/api/curation/route.ts)**: Gera recomendações de música baseadas em prompt
+
+## Padrões e Guias
+
+Para obter detalhes completos sobre os padrões de desenvolvimento, consulte:
+
+- **[frontend-standards.mdc](mdc:.cursor/rules/frontend-standards.mdc)**: Padrões gerais de frontend
+- **[componentes.mdc](mdc:.cursor/rules/componentes.mdc)**: Padrões específicos para componentes
+- **[api-patterns.mdc](mdc:.cursor/rules/api-patterns.mdc)**: Padrões para APIs e comunicação
+- **[styling-guidelines.mdc](mdc:.cursor/rules/styling-guidelines.mdc)**: Guias de estilização
+
+## Versões e Dependências
+
+- **Next.js**: 15.3.0
+- **React**: 19.0.0
+- **Tailwind CSS**: 4.1.3
+- **TypeScript**: 5.x
+- **Socket.io-client**: 4.8.1
+
+## Objetivos Futuros
+
+- Implementação de streaming real via Socket.io
+- Integração com APIs de música (Spotify, YouTube)
+- Integração real com OpenAI para curadoria
+- Autenticação de usuários e recursos sociais

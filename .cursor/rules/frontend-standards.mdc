@@ -1,0 +1,184 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Lofiever - Padrões de Frontend
+
+## Stack Tecnológico
+- **Framework**: Next.js 15.3.0 com App Router
+- **UI Library**: React 19.0.0
+- **CSS**: Tailwind CSS 4.1.3
+- **Comunicação Real-time**: Socket.io-client 4.8.1
+- **Build Tool**: Turbopack (via flag `--turbopack`)
+- **Linguagem**: TypeScript 5.x
+
+## Estrutura de Arquivos
+- Todos os componentes devem residir em `src/components/`
+- Funções de API devem ser centralizadas em `src/lib/api.ts`
+- Estilos globais em `src/styles/globals.css`
+- Páginas/rotas em `src/app/`, seguindo o padrão do Next.js App Router
+- Endpoints da API em `src/app/api/`
+- Utilitários em `src/utils/`
+- Serviços em `src/services/`
+
+## Componentes
+
+### Anatomia de Componentes
+1. Utilizar 'use client' apenas quando necessário (componentes interativos)
+2. Imports organizados por: React/Next -> Bibliotecas externas -> Componentes internos -> Utilitários/Hooks
+3. Interfaces TypeScript no topo do arquivo
+4. Funções helper dentro do arquivo ou extraídas para utilitários quando reutilizáveis
+5. Componentes como funções nomeadas e exportadas como default
+
+Exemplo:
+```tsx
+'use client';
+
+import { useState, useEffect } from 'react';
+import { ExternalLib } from 'external-lib';
+import { OtherComponent } from '@/components/OtherComponent';
+import { utilFunction } from '@/utils/helpers';
+
+interface ComponentProps {
+  prop1: string;
+  prop2?: number;
+}
+
+export default function ComponentName({ prop1, prop2 = 0 }: ComponentProps) {
+  // Implementação
+  return (
+    <div>
+      {/* Conteúdo */}
+    </div>
+  );
+}
+```
+
+### Estado e Efeitos
+- Usar `useState` para estado local
+- Usar `useEffect` para efeitos colaterais com limpeza adequada
+- Evitar múltiplos `useEffect` quando possível
+- Implementar verificação de `isMounted` para evitar memory leaks
+
+```tsx
+useEffect(() => {
+  let isMounted = true;
+  
+  async function fetchData() {
+    // Lógica de fetch
+    if (isMounted) {
+      // Atualizar estado
+    }
+  }
+  
+  fetchData();
+  
+  return () => {
+    isMounted = false;
+  };
+}, [dependências]);
+```
+
+## Tailwind CSS
+
+### Configuração
+- Usar a versão 4.1.3 do Tailwind
+- Configuração em `tailwind.config.js` na raiz do projeto
+- Tema customizado "lofi" já definido como padrão do projeto
+
+### Cores Personalizadas
+```js
+colors: {
+  'lofi': {
+    50: '#f7f5fb',
+    100: '#eae4f6',
+    200: '#d7cbee',
+    300: '#bca6e0',
+    400: '#9c7bd0',
+    500: '#8459c0',
+    600: '#7045a8',
+    700: '#5d3889',
+    800: '#4c3071',
+    900: '#41295d',
+    950: '#28173b',
+  },
+},
+```
+
+### Convenções de Classes
+- Utilizar classes Tailwind diretamente nos componentes
+- Para classes repetitivas, considerar extrair para constantes ou componentes base
+- Seguir ordem: layout -> dimensões -> espaçamento -> tipografia -> cores -> estados
+
+## Comunicação com a API
+
+### Chamadas de API
+- Centralizar funções de API em `src/lib/api.ts` 
+- Usar fetch API com tratamento de erros adequado
+- Incluir tipagem para as requisições e respostas
+
+Exemplo:
+```typescript
+export async function apiCall(params: ParamsType): Promise<ResponseType> {
+  try {
+    const response = await fetch('/api/endpoint', {
+      method: 'METHOD',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(params),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Error: ${response.status}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('Failed to call API:', error);
+    throw error;
+  }
+}
+```
+
+### Route Handlers (API Endpoints)
+- Criar em `src/app/api/[rota]/route.ts`
+- Exportar funções como `GET`, `POST`, etc.
+- Retornar `NextResponse` com status adequados
+- Tratar erros e enviar respostas apropriadas
+
+## Estados Visuais e Feedback
+
+### Loading States
+- Implementar estados de loading para todas as chamadas assíncronas
+- Usar componentes de skeleton (via classes animate-pulse do Tailwind) para feedback visual
+- Componentizar estados de loading reutilizáveis
+
+### Tratamento de Erros
+- Capturar e exibir erros de forma amigável ao usuário
+- Oferecer opções para retry quando apropriado
+- Usar mensagens claras e ações possíveis
+
+## Responsividade
+- Design mobile-first com breakpoints padrão do Tailwind
+- Grid de coluna única em mobile, duas colunas em desktop
+- Utilizar classes responsivas do Tailwind (sm:, md:, lg:, xl:)
+- Testar em múltiplos dispositivos e tamanhos de tela
+
+## Modo Escuro
+- Implementar suporte a modo escuro usando classes dark: do Tailwind
+- Detectar preferências do sistema com media query
+- Garantir contraste adequado em ambos os temas (claro/escuro)
+
+## Performance
+- Otimizar imagens com o componente Image do Next.js
+- Implementar code-splitting via dynamic imports quando necessário
+- Minimizar re-renderizações desnecessárias
+- Usar memo, useMemo e useCallback para componentes ou cálculos custosos
+
+## Acessibilidade
+- Utilizar elementos semânticos HTML
+- Incluir atributos ARIA quando necessário
+- Garantir contraste adequado de cores
+- Suportar navegação por teclado para elementos interativos

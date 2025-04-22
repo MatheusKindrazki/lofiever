@@ -1,0 +1,193 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Lofiever - Padrões de Componentes
+
+## Componentes Principais
+
+### Player.tsx
+- Componente responsável pela reprodução de áudio
+- Deve conter controles de play/pause e volume
+- Deve exibir informações da música atual
+- Implementar feedback visual para estados de loading/erro
+- Referência: [Player.tsx](mdc:src/components/Player.tsx)
+
+Padrão de estrutura:
+```tsx
+'use client';
+
+// Imports
+import { useState, useEffect, useRef } from 'react';
+import Image from 'next/image';
+// APIs
+import { getStreamData } from '@/lib/api';
+
+// Interfaces
+interface SongInfo {
+  id: string;
+  title: string;
+  artist: string;
+  coverUrl: string;
+  duration: number;
+}
+
+export default function Player() {
+  // Estados
+  const [playing, setPlaying] = useState(false);
+  const [loading, setLoading] = useState(true);
+  // ...
+
+  // Refs
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  // Effects
+  useEffect(() => {
+    // Inicialização e limpeza
+  }, []);
+
+  // Handlers
+  const handlePlayPause = () => {
+    // Lógica
+  };
+
+  // Renderização
+  if (loading) {
+    return <LoadingState />;
+  }
+
+  if (error) {
+    return <ErrorState />;
+  }
+
+  return (
+    // JSX principal do componente
+  );
+}
+```
+
+### Stats.tsx
+- Componente para exibição de estatísticas
+- Deve mostrar contadores de ouvintes, dias e músicas
+- Implementar atualização periódica (a cada 60s)
+- Tratar estados de loading/erro adequadamente
+- Referência: [Stats.tsx](mdc:src/components/Stats.tsx)
+
+### Curation.tsx
+- Componente para recomendações baseadas em IA
+- Deve permitir customização do prompt
+- Exibir resultados após chamada à API
+- Permitir toggle do formulário de prompt
+- Referência: [Curation.tsx](mdc:src/components/Curation.tsx)
+
+## Padrões UI Comuns
+
+### Cards
+- Utilizar classes consistentes para cards:
+  - `bg-white dark:bg-gray-800`
+  - `rounded-xl shadow-lg`
+  - `p-6`
+  - Seguir padrão de padding responsivo: `p-4 md:p-6 lg:p-8`
+
+### Botões
+- Botão primário:
+  ```
+  bg-lofi-500 hover:bg-lofi-600 text-white rounded-md px-4 py-2
+  ```
+
+- Botão secundário:
+  ```
+  text-lofi-500 hover:text-lofi-600 dark:text-lofi-400 dark:hover:text-lofi-300
+  ```
+
+- Botão de play/pause:
+  ```
+  bg-lofi-500 hover:bg-lofi-600 text-white rounded-full p-4 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-lofi-400
+  ```
+
+### Loading States
+- Usar `animate-pulse` para skeletons
+- Cores de skeleton: `bg-gray-300 dark:bg-gray-600`
+- Implementar loaders consistentes entre componentes
+
+### Inputs e Formulários
+- Estilo consistente para inputs:
+  ```
+  w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white
+  ```
+
+- Labels:
+  ```
+  block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1
+  ```
+
+## Estados e Ciclo de Vida
+
+### Padrão de Atualização Periódica
+```tsx
+useEffect(() => {
+  let isMounted = true;
+  
+  async function fetchData() {
+    try {
+      setLoading(true);
+      const data = await apiCall();
+      
+      if (isMounted) {
+        setData(data);
+        setError(null);
+      }
+    } catch (err) {
+      if (isMounted) {
+        setError('Mensagem de erro');
+        console.error('Error fetching data:', err);
+      }
+    } finally {
+      if (isMounted) {
+        setLoading(false);
+      }
+    }
+  }
+  
+  fetchData();
+  
+  // Intervalo de atualização
+  const intervalId = setInterval(fetchData, 60000);
+  
+  return () => {
+    isMounted = false;
+    clearInterval(intervalId);
+  };
+}, []);
+```
+
+## Componentização
+
+### StatCard
+- Extrair componentes menores e reutilizáveis:
+```tsx
+function StatCard({ 
+  value, 
+  label, 
+  icon 
+}: { 
+  value: number; 
+  label: string; 
+  icon: React.ReactNode; 
+}) {
+  return (
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 text-center">
+      <div className="flex justify-center mb-2 text-lofi-500">
+        {icon}
+      </div>
+      <div className="text-2xl font-bold text-gray-800 dark:text-white">
+        {value.toLocaleString()}
+      </div>
+      <div className="text-sm text-gray-500 dark:text-gray-400">
+        {label}
+      </div>
+    </div>
+  );
+}
+```

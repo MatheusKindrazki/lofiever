@@ -1,0 +1,208 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Lofiever - Padrões de API
+
+## Estrutura de API
+- Centralizar funções de comunicação em `src/lib/api.ts`
+- Implementar endpoints da API em `src/app/api/[rota]/route.ts`
+- Usar interfaces claras para tipagem de requests e responses
+
+## Funções de API Client
+
+### Estrutura de Funções
+- Seguir padrão assíncrono com tratamento de erros
+- Incluir tipagem forte para parâmetros e retorno
+- Implementar logging consistente
+- Retornar erros para tratamento no componente
+
+```typescript
+// src/lib/api.ts
+export async function getStreamData(): Promise<StreamData> {
+  try {
+    const response = await fetch('/api/stream', {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      credentials: 'same-origin',
+    });
+
+    if (!response.ok) {
+      throw new Error(`Error: ${response.status}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('Failed to fetch stream data:', error);
+    throw error;
+  }
+}
+```
+
+### Interfaces de Dados
+- Definir interfaces para todos os dados trafegados
+- Usar nomes descritivos e documentação quando necessário
+- Compartilhar interfaces entre cliente e servidor quando possível
+
+```typescript
+// Exemplo de interfaces para dados de streaming
+interface SongInfo {
+  id: string;
+  title: string;
+  artist: string;
+  coverUrl: string;
+  duration: number;
+}
+
+interface StreamData {
+  currentSong: SongInfo;
+  listeners: number;
+  daysActive: number;
+  songsPlayed: number;
+  nextUp: SongInfo[];
+}
+```
+
+## Route Handlers
+
+### Estrutura de Endpoint
+- Implementar em `/src/app/api/[endpoint]/route.ts`
+- Exportar funções HTTP (GET, POST, etc.) para cada operação
+- Usar `NextResponse` para retornar dados formatados
+- Implementar validação de entrada
+- Tratar erros adequadamente
+
+```typescript
+// src/app/api/stream/route.ts
+import { NextResponse } from 'next/server';
+
+export async function GET() {
+  try {
+    // Lógica para obter dados
+    const data = await getStreamData();
+    
+    return NextResponse.json(data, { status: 200 });
+  } catch (error) {
+    console.error("Error:", error);
+    return NextResponse.json(
+      { error: "Failed to fetch data" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function POST(request: Request) {
+  try {
+    const body = await request.json();
+    
+    // Validação
+    if (!body.requiredField) {
+      return NextResponse.json(
+        { error: "Required field is missing" },
+        { status: 400 }
+      );
+    }
+    
+    // Processamento
+    const result = await processData(body);
+    
+    return NextResponse.json(result, { status: 200 });
+  } catch (error) {
+    console.error("Error:", error);
+    return NextResponse.json(
+      { error: "Failed to process request" },
+      { status: 500 }
+    );
+  }
+}
+```
+
+## Interação com Dados Mockados
+
+### Dados Mockados
+- Armazenar dados mockados em arquivos separados ou inline (até implementação real)
+- Simular latência realista com `setTimeout`
+- Implementar variabilidade nos dados quando apropriado
+
+```typescript
+// Exemplo de dados mockados
+const mockStreamData = {
+  currentSong: {
+    id: "song123",
+    title: "Rainy Day Lofi",
+    artist: "Lofi Artist",
+    coverUrl: "https://images.unsplash.com/...",
+    duration: 180,
+  },
+  listeners: 128,
+  daysActive: 7,
+  songsPlayed: 342,
+  nextUp: [
+    // Músicas na fila
+  ]
+};
+
+// Simular latência
+await new Promise(resolve => setTimeout(resolve, 500));
+```
+
+## Integrações Futuras
+
+### Socket.io
+- Preparar para integração futura com Socket.io
+- Seguir padrão de inicialização em componentes cliente:
+
+```typescript
+import { io } from 'socket.io-client';
+
+// Em componente
+useEffect(() => {
+  const socket = io('/stream', {
+    path: '/api/socketio',
+  });
+  
+  socket.on('connect', () => {
+    console.log('Connected to socket');
+  });
+  
+  socket.on('update', (data) => {
+    // Atualizar estado com novos dados
+  });
+  
+  return () => {
+    socket.disconnect();
+  };
+}, []);
+```
+
+### Integrações com IA
+- Preparar para integração com OpenAI API
+- Implementar endpoints de curadoria seguindo padrão atual
+
+```typescript
+// Exemplo futuro para integração com OpenAI
+async function getAIRecommendations(prompt: string) {
+  const response = await fetch('/api/openai', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ prompt }),
+  });
+  
+  if (!response.ok) {
+    throw new Error(`Error: ${response.status}`);
+  }
+  
+  return await response.json();
+}
+```
+
+## Referências de API
+
+### Endpoints Atuais
+- [/api/stream](mdc:src/app/api/stream/route.ts) - Dados do stream atual
+- [/api/curation](mdc:src/app/api/curation/route.ts) - Recomendações de IA

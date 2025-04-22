@@ -1,0 +1,221 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Lofiever - Guia de Estilização
+
+## Tecnologias
+
+- **Framework CSS**: Tailwind CSS 4.1.3
+- **Configuração**: [tailwind.config.js](mdc:tailwind.config.js)
+- **Estilos Globais**: [globals.css](mdc:src/styles/globals.css)
+- **Responsividade**: Mobile-first com breakpoints padronizados
+
+## Tema Personalizado
+
+### Cores Lofi
+
+A paleta de cores "lofi" é o centro da identidade visual do projeto:
+
+```js
+colors: {
+  'lofi': {
+    50: '#f7f5fb',   // Background muito claro
+    100: '#eae4f6',  // Background claro
+    200: '#d7cbee',  // Elementos secundários claros
+    300: '#bca6e0',  // Elementos terciários
+    400: '#9c7bd0',  // Elementos de destaque suave
+    500: '#8459c0',  // Cor principal
+    600: '#7045a8',  // Hover/Active states
+    700: '#5d3889',  // Elementos de destaque escuros
+    800: '#4c3071',  // Textos em fundos claros
+    900: '#41295d',  // Textos de destaque em fundos escuros
+    950: '#28173b',  // Fundos muito escuros
+  },
+}
+```
+
+### Tema Escuro
+
+- Implementado via classes condicionais `dark:`
+- Ativado via media query nativa do Tailwind
+- Cores escuras devem manter suficiente contraste e legibilidade
+
+## Classes Utilitárias
+
+### Layout & Containers
+
+- Container principal:
+  ```
+  flex min-h-screen flex-col items-center p-4 md:p-6 lg:p-8
+  ```
+
+- Container de conteúdo:
+  ```
+  w-full max-w-7xl flex flex-col items-center justify-start h-full
+  ```
+
+- Cards de componentes:
+  ```
+  w-full bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6
+  ```
+
+### Tipografia
+
+- **Títulos Principais**:
+  ```
+  text-4xl font-bold text-lofi-600 dark:text-lofi-300 md:text-6xl
+  ```
+
+- **Subtítulos**:
+  ```
+  text-lg text-gray-600 dark:text-gray-300
+  ```
+
+- **Cabeçalhos de Componentes**:
+  ```
+  text-lg font-semibold text-gray-800 dark:text-white
+  ```
+
+- **Texto Regular**:
+  ```
+  text-gray-800 dark:text-white
+  ```
+
+- **Texto Secundário**:
+  ```
+  text-gray-600 dark:text-gray-300
+  ```
+
+- **Texto Terciário/Muted**:
+  ```
+  text-gray-500 dark:text-gray-400
+  ```
+
+### Elementos UI
+
+- **Botões Primários**:
+  ```
+  px-4 py-2 bg-lofi-500 hover:bg-lofi-600 disabled:bg-lofi-300 dark:disabled:bg-lofi-800 text-white rounded-md
+  ```
+
+- **Botões Circulares**:
+  ```
+  bg-lofi-500 hover:bg-lofi-600 text-white rounded-full p-4 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-lofi-400
+  ```
+
+- **Links e Botões de Texto**:
+  ```
+  text-lofi-500 hover:text-lofi-600 text-sm underline hover:no-underline
+  ```
+
+- **Inputs**:
+  ```
+  w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white
+  ```
+
+## Animações e Estados
+
+### Loaders/Skeletons
+
+- Skeletons padrão:
+  ```
+  animate-pulse bg-gray-300 dark:bg-gray-600 rounded
+  ```
+
+- Animação lenta:
+  ```
+  animate-pulse-slow
+  ```
+
+### Progress Bar
+
+- Container:
+  ```
+  w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5
+  ```
+
+- Barra de progresso:
+  ```
+  bg-lofi-500 h-1.5 rounded-full
+  ```
+
+## Layouts Responsivos
+
+### Grid de Conteúdo
+
+- Desktop (2 colunas) / Mobile (1 coluna):
+  ```
+  w-full grid grid-cols-1 md:grid-cols-2 gap-6
+  ```
+
+### Tamanhos de Imagens
+
+- Imagem de capa do player:
+  ```
+  w-48 h-48 md:w-56 md:h-56 lg:w-64 lg:h-64 rounded-lg overflow-hidden shadow-md
+  ```
+
+## Scrollbars Customizadas
+
+- Definidas em `globals.css`
+- Estilo consistente com a paleta Lofi
+- Width de 8px para facilitar interação
+
+```css
+/* WebKit Scrollbars */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: rgba(156, 123, 208, 0.5);
+  border-radius: 20px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(156, 123, 208, 0.8);
+}
+```
+
+## Estados de Erro
+
+- Container de erro:
+  ```
+  mb-3 p-2 bg-red-100 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-md text-red-600 dark:text-red-400 text-sm
+  ```
+
+## Convenções e Boas Práticas
+
+1. **Ordem de Classes**:
+   - Layout (flex, grid, position)
+   - Dimensões (width, height)
+   - Espaçamento (padding, margin)
+   - Tipografia (text, font)
+   - Cores (bg, text, border)
+   - Estados (hover, focus, disabled)
+
+2. **Responsividade**:
+   - Mobile-first como padrão
+   - Breakpoints padrão do Tailwind:
+     - sm: 640px
+     - md: 768px
+     - lg: 1024px
+     - xl: 1280px
+
+3. **Truncamento**:
+   - Para textos com limite de espaço:
+     ```
+     truncate
+     ```
+
+4. **Transições**:
+   - Para elementos interativos:
+     ```
+     transition-colors duration-200
+     ```
