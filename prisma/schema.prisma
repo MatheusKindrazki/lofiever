@@ -1,0 +1,105 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Track model for storing music information
+model Track {
+  id          String    @id @default(uuid())
+  title       String
+  artist      String
+  sourceType  String    // "spotify" or "youtube"
+  sourceId    String
+  duration    Int
+  bpm         Int?
+  mood        String?
+  createdAt   DateTime  @default(now())
+  lastPlayed  DateTime?
+  
+  // Relations
+  playlists   PlaylistTrack[]
+  feedback    Feedback[]
+  history     PlaybackHistory[]
+
+  @@map("tracks")
+}
+
+// Playlist model for managing current and historical playlists
+model Playlist {
+  id        String    @id @default(uuid())
+  version   Int
+  createdAt DateTime  @default(now())
+  active    Boolean   @default(false)
+  
+  // Relations
+  tracks    PlaylistTrack[]
+
+  @@map("playlists")
+}
+
+// Junction table for playlist tracks with position
+model PlaylistTrack {
+  playlistId String
+  trackId    String
+  position   Int
+  addedBy    String?
+  addedAt    DateTime @default(now())
+  
+  // Relations
+  playlist   Playlist @relation(fields: [playlistId], references: [id])
+  track      Track    @relation(fields: [trackId], references: [id])
+
+  @@id([playlistId, trackId])
+  @@map("playlist_tracks")
+}
+
+// User feedback on tracks
+model Feedback {
+  id        String   @id @default(uuid())
+  trackId   String
+  userId    String
+  sentiment String   // "positive" or "negative"
+  comment   String?
+  createdAt DateTime @default(now())
+  
+  // Relations
+  track     Track    @relation(fields: [trackId], references: [id])
+
+  @@map("feedback")
+}
+
+// Chat messages including suggestions and feedback
+model ChatMessage {
+  id        String   @id @default(uuid())
+  userId    String
+  content   String
+  type      String   // "message", "suggestion", or "feedback"
+  createdAt DateTime @default(now())
+
+  @@map("chat_messages")
+}
+
+// Track playback history
+model PlaybackHistory {
+  id            String   @id @default(uuid())
+  trackId       String
+  startedAt     DateTime
+  endedAt       DateTime?
+  listenersPeak Int?
+  version       Int
+  
+  // Relations
+  track         Track    @relation(fields: [trackId], references: [id])
+
+  @@map("playback_history")
+}
