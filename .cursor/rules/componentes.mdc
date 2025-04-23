@@ -3,191 +3,440 @@ description:
 globs: 
 alwaysApply: false
 ---
-# Lofiever - Padrões de Componentes
+# Lofiever - Component Architecture & Patterns
 
-## Componentes Principais
+## Component Organization
 
-### Player.tsx
-- Componente responsável pela reprodução de áudio
-- Deve conter controles de play/pause e volume
-- Deve exibir informações da música atual
-- Implementar feedback visual para estados de loading/erro
-- Referência: [Player.tsx](mdc:src/components/Player.tsx)
+### Directory Structure
+```
+src/components/
+├── player/                 # Audio player components
+│   ├── Player/
+│   │   ├── Player.tsx
+│   │   ├── Player.test.tsx
+│   │   ├── PlayerControls.tsx
+│   │   └── index.ts
+│   ├── VolumeControl/
+│   └── index.ts
+├── chat/                  # Chat components
+│   ├── Chat/
+│   ├── MessageList/
+│   └── MessageInput/
+├── playlist/             # Playlist components
+│   ├── Playlist/
+│   ├── TrackList/
+│   └── TrackCard/
+└── shared/              # Shared UI components
+    ├── Button/
+    ├── Input/
+    └── Card/
+```
 
-Padrão de estrutura:
-```tsx
-'use client';
+## Core Components
 
-// Imports
-import { useState, useEffect, useRef } from 'react';
-import Image from 'next/image';
-// APIs
-import { getStreamData } from '@/lib/api';
+### Player Component
+```typescript
+// src/components/player/Player/Player.tsx
+import { useEffect } from 'react';
+import { usePlayerStore } from '@/stores/player';
+import { usePlaybackSync } from '@/hooks/usePlaybackSync';
+import { PlayerControls } from './PlayerControls';
+import { VolumeControl } from '../VolumeControl';
 
-// Interfaces
-interface SongInfo {
-  id: string;
-  title: string;
-  artist: string;
-  coverUrl: string;
-  duration: number;
+interface PlayerProps {
+  initialTrack?: Track;
+  onTrackChange?: (track: Track) => void;
 }
 
-export default function Player() {
-  // Estados
-  const [playing, setPlaying] = useState(false);
-  const [loading, setLoading] = useState(true);
-  // ...
+export function Player({ initialTrack, onTrackChange }: PlayerProps) {
+  const { currentTrack, isPlaying, volume } = usePlayerStore();
+  const { syncPlayback } = usePlaybackSync();
 
-  // Refs
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-
-  // Effects
   useEffect(() => {
-    // Inicialização e limpeza
-  }, []);
-
-  // Handlers
-  const handlePlayPause = () => {
-    // Lógica
-  };
-
-  // Renderização
-  if (loading) {
-    return <LoadingState />;
-  }
-
-  if (error) {
-    return <ErrorState />;
-  }
-
-  return (
-    // JSX principal do componente
-  );
-}
-```
-
-### Stats.tsx
-- Componente para exibição de estatísticas
-- Deve mostrar contadores de ouvintes, dias e músicas
-- Implementar atualização periódica (a cada 60s)
-- Tratar estados de loading/erro adequadamente
-- Referência: [Stats.tsx](mdc:src/components/Stats.tsx)
-
-### Curation.tsx
-- Componente para recomendações baseadas em IA
-- Deve permitir customização do prompt
-- Exibir resultados após chamada à API
-- Permitir toggle do formulário de prompt
-- Referência: [Curation.tsx](mdc:src/components/Curation.tsx)
-
-## Padrões UI Comuns
-
-### Cards
-- Utilizar classes consistentes para cards:
-  - `bg-white dark:bg-gray-800`
-  - `rounded-xl shadow-lg`
-  - `p-6`
-  - Seguir padrão de padding responsivo: `p-4 md:p-6 lg:p-8`
-
-### Botões
-- Botão primário:
-  ```
-  bg-lofi-500 hover:bg-lofi-600 text-white rounded-md px-4 py-2
-  ```
-
-- Botão secundário:
-  ```
-  text-lofi-500 hover:text-lofi-600 dark:text-lofi-400 dark:hover:text-lofi-300
-  ```
-
-- Botão de play/pause:
-  ```
-  bg-lofi-500 hover:bg-lofi-600 text-white rounded-full p-4 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-lofi-400
-  ```
-
-### Loading States
-- Usar `animate-pulse` para skeletons
-- Cores de skeleton: `bg-gray-300 dark:bg-gray-600`
-- Implementar loaders consistentes entre componentes
-
-### Inputs e Formulários
-- Estilo consistente para inputs:
-  ```
-  w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white
-  ```
-
-- Labels:
-  ```
-  block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1
-  ```
-
-## Estados e Ciclo de Vida
-
-### Padrão de Atualização Periódica
-```tsx
-useEffect(() => {
-  let isMounted = true;
-  
-  async function fetchData() {
-    try {
-      setLoading(true);
-      const data = await apiCall();
-      
-      if (isMounted) {
-        setData(data);
-        setError(null);
-      }
-    } catch (err) {
-      if (isMounted) {
-        setError('Mensagem de erro');
-        console.error('Error fetching data:', err);
-      }
-    } finally {
-      if (isMounted) {
-        setLoading(false);
-      }
+    if (initialTrack) {
+      syncPlayback(initialTrack);
     }
-  }
-  
-  fetchData();
-  
-  // Intervalo de atualização
-  const intervalId = setInterval(fetchData, 60000);
-  
-  return () => {
-    isMounted = false;
-    clearInterval(intervalId);
-  };
-}, []);
-```
+  }, [initialTrack, syncPlayback]);
 
-## Componentização
-
-### StatCard
-- Extrair componentes menores e reutilizáveis:
-```tsx
-function StatCard({ 
-  value, 
-  label, 
-  icon 
-}: { 
-  value: number; 
-  label: string; 
-  icon: React.ReactNode; 
-}) {
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 text-center">
-      <div className="flex justify-center mb-2 text-lofi-500">
-        {icon}
+    <div className="player-container">
+      <div className="player-artwork">
+        {/* Album art */}
       </div>
-      <div className="text-2xl font-bold text-gray-800 dark:text-white">
-        {value.toLocaleString()}
+      <div className="player-info">
+        {/* Track info */}
       </div>
-      <div className="text-sm text-gray-500 dark:text-gray-400">
-        {label}
-      </div>
+      <PlayerControls />
+      <VolumeControl />
     </div>
   );
 }
 ```
+
+### Chat Component
+```typescript
+// src/components/chat/Chat/Chat.tsx
+import { useEffect } from 'react';
+import { useChatStore } from '@/stores/chat';
+import { MessageList } from '../MessageList';
+import { MessageInput } from '../MessageInput';
+
+export function Chat() {
+  const { messages, connect, disconnect } = useChatStore();
+
+  useEffect(() => {
+    connect();
+    return () => disconnect();
+  }, [connect, disconnect]);
+
+  return (
+    <div className="chat-container">
+      <MessageList messages={messages} />
+      <MessageInput />
+    </div>
+  );
+}
+```
+
+### Playlist Component
+```typescript
+// src/components/playlist/Playlist/Playlist.tsx
+import { useQuery } from '@tanstack/react-query';
+import { usePlaylistStore } from '@/stores/playlist';
+import { TrackList } from '../TrackList';
+
+export function Playlist() {
+  const { data: playlist } = useQuery({
+    queryKey: ['playlist'],
+    queryFn: () => api.getCurrentPlaylist(),
+  });
+
+  return (
+    <div className="playlist-container">
+      <TrackList tracks={playlist?.tracks} />
+    </div>
+  );
+}
+```
+
+## Shared Components
+
+### Button Component
+```typescript
+// src/components/shared/Button/Button.tsx
+import { cva } from 'class-variance-authority';
+import { cn } from '@/utils/styles';
+
+const buttonVariants = cva(
+  'inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none',
+  {
+    variants: {
+      variant: {
+        default: 'bg-primary-600 text-white hover:bg-primary-700',
+        secondary: 'bg-neutral-100 text-neutral-900 hover:bg-neutral-200',
+        ghost: 'hover:bg-neutral-100 hover:text-neutral-900',
+      },
+      size: {
+        default: 'h-10 py-2 px-4',
+        sm: 'h-9 px-3',
+        lg: 'h-11 px-8',
+      },
+    },
+    defaultVariants: {
+      variant: 'default',
+      size: 'default',
+    },
+  }
+);
+
+export interface ButtonProps
+  extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+  variant?: 'default' | 'secondary' | 'ghost';
+  size?: 'default' | 'sm' | 'lg';
+}
+
+export function Button({
+  className,
+  variant,
+  size,
+  ...props
+}: ButtonProps) {
+  return (
+    <button
+      className={cn(buttonVariants({ variant, size }), className)}
+      {...props}
+    />
+  );
+}
+```
+
+## Component Patterns
+
+### State Management
+```typescript
+// src/stores/player.ts
+import { create } from 'zustand';
+import { devtools, persist } from 'zustand/middleware';
+
+interface PlayerState {
+  currentTrack: Track | null;
+  isPlaying: boolean;
+  volume: number;
+  actions: {
+    play: () => void;
+    pause: () => void;
+    setTrack: (track: Track) => void;
+    setVolume: (volume: number) => void;
+  };
+}
+
+export const usePlayerStore = create<PlayerState>()(
+  devtools(
+    persist(
+      (set) => ({
+        currentTrack: null,
+        isPlaying: false,
+        volume: 1,
+        actions: {
+          play: () => set({ isPlaying: true }),
+          pause: () => set({ isPlaying: false }),
+          setTrack: (track) => set({ currentTrack: track }),
+          setVolume: (volume) => set({ volume }),
+        },
+      }),
+      { name: 'player-store' }
+    )
+  )
+);
+```
+
+### Custom Hooks
+```typescript
+// src/hooks/usePlaybackSync.ts
+import { useCallback } from 'react';
+import { usePlayerStore } from '@/stores/player';
+import { useSocketClient } from '@/hooks/useSocketClient';
+
+export function usePlaybackSync() {
+  const socket = useSocketClient();
+  const { actions } = usePlayerStore();
+
+  const syncPlayback = useCallback(
+    (track: Track) => {
+      socket.emit('sync:request', { trackId: track.id });
+      actions.setTrack(track);
+    },
+    [socket, actions]
+  );
+
+  return { syncPlayback };
+}
+```
+
+### Error Boundaries
+```typescript
+// src/components/shared/ErrorBoundary/ErrorBoundary.tsx
+import { Component, ErrorInfo, ReactNode } from 'react';
+
+interface Props {
+  children: ReactNode;
+  fallback: ReactNode;
+}
+
+interface State {
+  hasError: boolean;
+}
+
+export class ErrorBoundary extends Component<Props, State> {
+  public state: State = {
+    hasError: false,
+  };
+
+  public static getDerivedStateFromError(): State {
+    return { hasError: true };
+  }
+
+  public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    console.error('Uncaught error:', error, errorInfo);
+  }
+
+  public render() {
+    if (this.state.hasError) {
+      return this.props.fallback;
+    }
+
+    return this.props.children;
+  }
+}
+```
+
+## Testing Patterns
+
+### Component Tests
+```typescript
+// src/components/player/Player/Player.test.tsx
+import { render, screen, fireEvent } from '@testing-library/react';
+import { Player } from './Player';
+
+describe('Player', () => {
+  it('should render player controls', () => {
+    render(<Player />);
+    expect(screen.getByRole('button', { name: /play/i })).toBeInTheDocument();
+  });
+
+  it('should toggle play/pause when clicked', () => {
+    render(<Player />);
+    const playButton = screen.getByRole('button', { name: /play/i });
+    
+    fireEvent.click(playButton);
+    expect(screen.getByLabelText(/playing/i)).toBeInTheDocument();
+    
+    fireEvent.click(playButton);
+    expect(screen.getByLabelText(/paused/i)).toBeInTheDocument();
+  });
+});
+```
+
+### Integration Tests
+```typescript
+// src/tests/integration/player.test.tsx
+import { test, expect } from '@playwright/test';
+
+test('player synchronization', async ({ page }) => {
+  await page.goto('/');
+  
+  // Connect two clients
+  const client1 = await page.context().newPage();
+  const client2 = await page.context().newPage();
+  
+  await client1.goto('/');
+  await client2.goto('/');
+  
+  // Play track on client1
+  await client1.click('[data-testid="play-button"]');
+  
+  // Verify sync on client2
+  await expect(
+    client2.locator('[data-testid="player-status"]')
+  ).toHaveText('Playing');
+});
+```
+
+## Performance Optimization
+
+### Code Splitting
+```typescript
+// src/app/page.tsx
+import dynamic from 'next/dynamic';
+
+const Chat = dynamic(() => import('@/components/chat/Chat'), {
+  loading: () => <ChatSkeleton />,
+  ssr: false,
+});
+
+const Player = dynamic(() => import('@/components/player/Player'), {
+  ssr: false,
+});
+```
+
+### Memoization
+```typescript
+// src/components/playlist/TrackList/TrackList.tsx
+import { memo } from 'react';
+
+interface TrackListProps {
+  tracks: Track[];
+  onTrackSelect: (track: Track) => void;
+}
+
+export const TrackList = memo(function TrackList({
+  tracks,
+  onTrackSelect,
+}: TrackListProps) {
+  return (
+    <div className="track-list">
+      {tracks.map((track) => (
+        <TrackCard
+          key={track.id}
+          track={track}
+          onSelect={onTrackSelect}
+        />
+      ))}
+    </div>
+  );
+});
+```
+
+## Accessibility
+
+### ARIA Attributes
+```typescript
+// src/components/player/PlayerControls/PlayerControls.tsx
+export function PlayerControls() {
+  const { isPlaying, actions } = usePlayerStore();
+
+  return (
+    <div
+      role="group"
+      aria-label="Player controls"
+      className="player-controls"
+    >
+      <button
+        onClick={isPlaying ? actions.pause : actions.play}
+        aria-label={isPlaying ? 'Pause' : 'Play'}
+        aria-pressed={isPlaying}
+      >
+        {isPlaying ? <PauseIcon /> : <PlayIcon />}
+      </button>
+    </div>
+  );
+}
+```
+
+## Documentation
+
+### Component Documentation
+```typescript
+/**
+ * Player component that handles synchronized audio playback
+ * @component
+ * @example
+ * ```tsx
+ * <Player
+ *   initialTrack={track}
+ *   onTrackChange={handleTrackChange}
+ * />
+ * ```
+ */
+export function Player({ initialTrack, onTrackChange }: PlayerProps) {
+  // Implementation
+}
+```
+
+## Best Practices
+
+1. **Component Structure**
+   - Keep components focused and single-responsibility
+   - Use TypeScript for props and state
+   - Implement proper error boundaries
+   - Handle loading and error states
+
+2. **State Management**
+   - Use Zustand for global state
+   - React Query for server state
+   - Local state for UI-only concerns
+
+3. **Performance**
+   - Implement proper memoization
+   - Use code splitting for large components
+   - Optimize re-renders
+
+4. **Testing**
+   - Write unit tests for components
+   - Add integration tests for critical flows
+   - Test accessibility features
+
+5. **Documentation**
+   - Document component APIs
+   - Include usage examples
+   - Document accessibility considerations

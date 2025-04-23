@@ -3,219 +3,358 @@ description:
 globs: 
 alwaysApply: false
 ---
-# Lofiever - Guia de Estilização
+# Lofiever - Styling Guidelines & Design System
 
-## Tecnologias
+## Design System
 
-- **Framework CSS**: Tailwind CSS 4.1.3
-- **Configuração**: [tailwind.config.js](mdc:tailwind.config.js)
-- **Estilos Globais**: [globals.css](mdc:src/styles/globals.css)
-- **Responsividade**: Mobile-first com breakpoints padronizados
+### Colors
 
-## Tema Personalizado
-
-### Cores Lofi
-
-A paleta de cores "lofi" é o centro da identidade visual do projeto:
-
-```js
-colors: {
-  'lofi': {
-    50: '#f7f5fb',   // Background muito claro
-    100: '#eae4f6',  // Background claro
-    200: '#d7cbee',  // Elementos secundários claros
-    300: '#bca6e0',  // Elementos terciários
-    400: '#9c7bd0',  // Elementos de destaque suave
-    500: '#8459c0',  // Cor principal
-    600: '#7045a8',  // Hover/Active states
-    700: '#5d3889',  // Elementos de destaque escuros
-    800: '#4c3071',  // Textos em fundos claros
-    900: '#41295d',  // Textos de destaque em fundos escuros
-    950: '#28173b',  // Fundos muito escuros
+```typescript
+// tailwind.config.js
+const colors = {
+  primary: {
+    50: '#f0f7ff',
+    100: '#e0effe',
+    200: '#bae2fd',
+    300: '#7dcbfb',
+    400: '#38aff7',
+    500: '#0f8de8',
+    600: '#0470c7',
+    700: '#0559a1',
+    800: '#094b85',
+    900: '#0d406f',
+    950: '#082849',
   },
+  neutral: {
+    50: '#f8fafc',
+    100: '#f1f5f9',
+    200: '#e2e8f0',
+    300: '#cbd5e1',
+    400: '#94a3b8',
+    500: '#64748b',
+    600: '#475569',
+    700: '#334155',
+    800: '#1e293b',
+    900: '#0f172a',
+    950: '#020617',
+  },
+  accent: {
+    50: '#fdf4ff',
+    100: '#fae8ff',
+    200: '#f5d0fe',
+    300: '#f0abfc',
+    400: '#e879f9',
+    500: '#d946ef',
+    600: '#c026d3',
+    700: '#a21caf',
+    800: '#86198f',
+    900: '#701a75',
+    950: '#4a044e',
+  },
+};
+```
+
+### Typography
+
+```typescript
+// tailwind.config.js
+const typography = {
+  fontFamily: {
+    sans: ['var(--font-inter)', 'system-ui', 'sans-serif'],
+    mono: ['var(--font-jetbrains-mono)', 'monospace'],
+  },
+  fontSize: {
+    xs: ['0.75rem', { lineHeight: '1rem' }],
+    sm: ['0.875rem', { lineHeight: '1.25rem' }],
+    base: ['1rem', { lineHeight: '1.5rem' }],
+    lg: ['1.125rem', { lineHeight: '1.75rem' }],
+    xl: ['1.25rem', { lineHeight: '1.75rem' }],
+    '2xl': ['1.5rem', { lineHeight: '2rem' }],
+    '3xl': ['1.875rem', { lineHeight: '2.25rem' }],
+    '4xl': ['2.25rem', { lineHeight: '2.5rem' }],
+  },
+};
+```
+
+### Spacing & Layout
+
+```typescript
+// tailwind.config.js
+const spacing = {
+  container: {
+    center: true,
+    padding: {
+      DEFAULT: '1rem',
+      sm: '2rem',
+      lg: '4rem',
+      xl: '5rem',
+      '2xl': '6rem',
+    },
+    screens: {
+      sm: '640px',
+      md: '768px',
+      lg: '1024px',
+      xl: '1280px',
+      '2xl': '1536px',
+    },
+  },
+};
+```
+
+## Component Styling
+
+### Base Components
+
+```typescript
+// src/components/ui/button.tsx
+const buttonVariants = cva(
+  'inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none',
+  {
+    variants: {
+      variant: {
+        default: 'bg-primary-600 text-white hover:bg-primary-700',
+        secondary: 'bg-neutral-100 text-neutral-900 hover:bg-neutral-200',
+        ghost: 'hover:bg-neutral-100 hover:text-neutral-900',
+      },
+      size: {
+        default: 'h-10 py-2 px-4',
+        sm: 'h-9 px-3',
+        lg: 'h-11 px-8',
+      },
+    },
+    defaultVariants: {
+      variant: 'default',
+      size: 'default',
+    },
+  }
+);
+```
+
+### Layout Components
+
+```typescript
+// src/components/ui/card.tsx
+export const Card = styled('div', {
+  base: 'rounded-lg border bg-card text-card-foreground shadow-sm',
+  variants: {
+    padding: {
+      default: 'p-6',
+      compact: 'p-4',
+      none: '',
+    },
+  },
+  defaultVariants: {
+    padding: 'default',
+  },
+});
+
+export const CardHeader = styled('div', {
+  base: 'flex flex-col space-y-1.5',
+});
+
+export const CardTitle = styled('h3', {
+  base: 'text-2xl font-semibold leading-none tracking-tight',
+});
+
+export const CardDescription = styled('p', {
+  base: 'text-sm text-muted-foreground',
+});
+
+export const CardContent = styled('div', {
+  base: 'p-6 pt-0',
+});
+
+export const CardFooter = styled('div', {
+  base: 'flex items-center p-6 pt-0',
+});
+```
+
+### Form Components
+
+```typescript
+// src/components/ui/input.tsx
+export const Input = styled('input', {
+  base: 'flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50',
+});
+
+// src/components/ui/select.tsx
+export const Select = styled('select', {
+  base: 'flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50',
+});
+```
+
+## Animations
+
+### Keyframes
+
+```typescript
+// tailwind.config.js
+const keyframes = {
+  fadeIn: {
+    from: { opacity: 0 },
+    to: { opacity: 1 },
+  },
+  slideIn: {
+    from: { transform: 'translateY(100%)' },
+    to: { transform: 'translateY(0)' },
+  },
+  spin: {
+    from: { transform: 'rotate(0deg)' },
+    to: { transform: 'rotate(360deg)' },
+  },
+};
+
+const animation = {
+  fadeIn: 'fadeIn 0.3s ease-in-out',
+  slideIn: 'slideIn 0.4s ease-out',
+  spin: 'spin 1s linear infinite',
+};
+```
+
+### Motion Components
+
+```typescript
+// src/components/ui/motion.tsx
+import { motion } from 'framer-motion';
+
+export const fadeIn = {
+  initial: { opacity: 0 },
+  animate: { opacity: 1 },
+  exit: { opacity: 0 },
+  transition: { duration: 0.3 },
+};
+
+export const slideIn = {
+  initial: { y: 20, opacity: 0 },
+  animate: { y: 0, opacity: 1 },
+  exit: { y: 20, opacity: 0 },
+  transition: { duration: 0.4 },
+};
+```
+
+## Dark Mode
+
+### Theme Configuration
+
+```typescript
+// src/lib/theme.ts
+export const theme = {
+  light: {
+    background: 'bg-white',
+    text: 'text-neutral-900',
+    border: 'border-neutral-200',
+    hover: 'hover:bg-neutral-100',
+  },
+  dark: {
+    background: 'bg-neutral-900',
+    text: 'text-neutral-50',
+    border: 'border-neutral-800',
+    hover: 'hover:bg-neutral-800',
+  },
+};
+```
+
+### Theme Toggle
+
+```typescript
+// src/components/theme-toggle.tsx
+export function ThemeToggle() {
+  const { theme, setTheme } = useTheme();
+
+  return (
+    <Button
+      variant="ghost"
+      size="sm"
+      onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+    >
+      <SunIcon className="h-5 w-5 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
+      <MoonIcon className="absolute h-5 w-5 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
+      <span className="sr-only">Toggle theme</span>
+    </Button>
+  );
 }
 ```
 
-### Tema Escuro
+## Responsive Design
 
-- Implementado via classes condicionais `dark:`
-- Ativado via media query nativa do Tailwind
-- Cores escuras devem manter suficiente contraste e legibilidade
+### Breakpoints
 
-## Classes Utilitárias
+```typescript
+// tailwind.config.js
+const screens = {
+  xs: '360px',
+  sm: '640px',
+  md: '768px',
+  lg: '1024px',
+  xl: '1280px',
+  '2xl': '1536px',
+};
+```
 
-### Layout & Containers
+### Container Queries
 
-- Container principal:
-  ```
-  flex min-h-screen flex-col items-center p-4 md:p-6 lg:p-8
-  ```
-
-- Container de conteúdo:
-  ```
-  w-full max-w-7xl flex flex-col items-center justify-start h-full
-  ```
-
-- Cards de componentes:
-  ```
-  w-full bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6
-  ```
-
-### Tipografia
-
-- **Títulos Principais**:
-  ```
-  text-4xl font-bold text-lofi-600 dark:text-lofi-300 md:text-6xl
-  ```
-
-- **Subtítulos**:
-  ```
-  text-lg text-gray-600 dark:text-gray-300
-  ```
-
-- **Cabeçalhos de Componentes**:
-  ```
-  text-lg font-semibold text-gray-800 dark:text-white
-  ```
-
-- **Texto Regular**:
-  ```
-  text-gray-800 dark:text-white
-  ```
-
-- **Texto Secundário**:
-  ```
-  text-gray-600 dark:text-gray-300
-  ```
-
-- **Texto Terciário/Muted**:
-  ```
-  text-gray-500 dark:text-gray-400
-  ```
-
-### Elementos UI
-
-- **Botões Primários**:
-  ```
-  px-4 py-2 bg-lofi-500 hover:bg-lofi-600 disabled:bg-lofi-300 dark:disabled:bg-lofi-800 text-white rounded-md
-  ```
-
-- **Botões Circulares**:
-  ```
-  bg-lofi-500 hover:bg-lofi-600 text-white rounded-full p-4 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-lofi-400
-  ```
-
-- **Links e Botões de Texto**:
-  ```
-  text-lofi-500 hover:text-lofi-600 text-sm underline hover:no-underline
-  ```
-
-- **Inputs**:
-  ```
-  w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white
-  ```
-
-## Animações e Estados
-
-### Loaders/Skeletons
-
-- Skeletons padrão:
-  ```
-  animate-pulse bg-gray-300 dark:bg-gray-600 rounded
-  ```
-
-- Animação lenta:
-  ```
-  animate-pulse-slow
-  ```
-
-### Progress Bar
-
-- Container:
-  ```
-  w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5
-  ```
-
-- Barra de progresso:
-  ```
-  bg-lofi-500 h-1.5 rounded-full
-  ```
-
-## Layouts Responsivos
-
-### Grid de Conteúdo
-
-- Desktop (2 colunas) / Mobile (1 coluna):
-  ```
-  w-full grid grid-cols-1 md:grid-cols-2 gap-6
-  ```
-
-### Tamanhos de Imagens
-
-- Imagem de capa do player:
-  ```
-  w-48 h-48 md:w-56 md:h-56 lg:w-64 lg:h-64 rounded-lg overflow-hidden shadow-md
-  ```
-
-## Scrollbars Customizadas
-
-- Definidas em `globals.css`
-- Estilo consistente com a paleta Lofi
-- Width de 8px para facilitar interação
-
-```css
-/* WebKit Scrollbars */
-::-webkit-scrollbar {
-  width: 8px;
-}
-
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-::-webkit-scrollbar-thumb {
-  background-color: rgba(156, 123, 208, 0.5);
-  border-radius: 20px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background-color: rgba(156, 123, 208, 0.8);
+```typescript
+// src/components/player/player-card.tsx
+export function PlayerCard() {
+  return (
+    <div className="@container">
+      <div className="@sm:grid-cols-2 @lg:grid-cols-3 grid gap-4">
+        {/* Content */}
+      </div>
+    </div>
+  );
 }
 ```
 
-## Estados de Erro
+## CSS Utilities
 
-- Container de erro:
-  ```
-  mb-3 p-2 bg-red-100 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-md text-red-600 dark:text-red-400 text-sm
-  ```
+### Custom Utilities
 
-## Convenções e Boas Práticas
+```typescript
+// src/styles/utilities.css
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+  
+  .scrollbar-hide {
+    scrollbar-width: none;
+    &::-webkit-scrollbar {
+      display: none;
+    }
+  }
+}
+```
 
-1. **Ordem de Classes**:
-   - Layout (flex, grid, position)
-   - Dimensões (width, height)
-   - Espaçamento (padding, margin)
-   - Tipografia (text, font)
-   - Cores (bg, text, border)
-   - Estados (hover, focus, disabled)
+### Gradient Generator
 
-2. **Responsividade**:
-   - Mobile-first como padrão
-   - Breakpoints padrão do Tailwind:
-     - sm: 640px
-     - md: 768px
-     - lg: 1024px
-     - xl: 1280px
+```typescript
+// src/utils/gradient.ts
+export function generateGradient(color: string) {
+  return `linear-gradient(135deg, ${color}, ${adjustHue(color, 30)})`;
+}
+```
 
-3. **Truncamento**:
-   - Para textos com limite de espaço:
-     ```
-     truncate
-     ```
+## Best Practices
 
-4. **Transições**:
-   - Para elementos interativos:
-     ```
-     transition-colors duration-200
-     ```
+1. **Component Organization**
+   - Keep styles close to components
+   - Use CSS Modules for component-specific styles
+   - Leverage Tailwind's utility classes
+
+2. **Performance**
+   - Use `@apply` sparingly
+   - Implement proper purging configuration
+   - Optimize for Core Web Vitals
+
+3. **Accessibility**
+   - Maintain WCAG 2.1 AA compliance
+   - Use semantic HTML elements
+   - Ensure sufficient color contrast
+   - Support reduced motion preferences
+
+4. **Maintainability**
+   - Follow consistent naming conventions
+   - Document custom utilities and components
+   - Use CSS variables for theme values
+   - Keep styles modular and reusable

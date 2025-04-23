@@ -3,206 +3,341 @@ description:
 globs: 
 alwaysApply: false
 ---
-# Lofiever - Padrões de API
+# Lofiever - API Patterns & Communication Standards
 
-## Estrutura de API
-- Centralizar funções de comunicação em `src/lib/api.ts`
-- Implementar endpoints da API em `src/app/api/[rota]/route.ts`
-- Usar interfaces claras para tipagem de requests e responses
+## API Structure
 
-## Funções de API Client
+### Core API Endpoints
 
-### Estrutura de Funções
-- Seguir padrão assíncrono com tratamento de erros
-- Incluir tipagem forte para parâmetros e retorno
-- Implementar logging consistente
-- Retornar erros para tratamento no componente
-
-```typescript
-// src/lib/api.ts
-export async function getStreamData(): Promise<StreamData> {
-  try {
-    const response = await fetch('/api/stream', {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      credentials: 'same-origin',
-    });
-
-    if (!response.ok) {
-      throw new Error(`Error: ${response.status}`);
-    }
-
-    return await response.json();
-  } catch (error) {
-    console.error('Failed to fetch stream data:', error);
-    throw error;
-  }
-}
-```
-
-### Interfaces de Dados
-- Definir interfaces para todos os dados trafegados
-- Usar nomes descritivos e documentação quando necessário
-- Compartilhar interfaces entre cliente e servidor quando possível
-
-```typescript
-// Exemplo de interfaces para dados de streaming
-interface SongInfo {
-  id: string;
-  title: string;
-  artist: string;
-  coverUrl: string;
-  duration: number;
-}
-
-interface StreamData {
-  currentSong: SongInfo;
-  listeners: number;
-  daysActive: number;
-  songsPlayed: number;
-  nextUp: SongInfo[];
-}
-```
-
-## Route Handlers
-
-### Estrutura de Endpoint
-- Implementar em `/src/app/api/[endpoint]/route.ts`
-- Exportar funções HTTP (GET, POST, etc.) para cada operação
-- Usar `NextResponse` para retornar dados formatados
-- Implementar validação de entrada
-- Tratar erros adequadamente
-
+#### Streaming API
 ```typescript
 // src/app/api/stream/route.ts
 import { NextResponse } from 'next/server';
+import { StreamingService } from '@/lib/streaming';
 
 export async function GET() {
-  try {
-    // Lógica para obter dados
-    const data = await getStreamData();
-    
-    return NextResponse.json(data, { status: 200 });
-  } catch (error) {
-    console.error("Error:", error);
-    return NextResponse.json(
-      { error: "Failed to fetch data" },
-      { status: 500 }
-    );
-  }
+  const stream = await StreamingService.getCurrentStream();
+  return NextResponse.json(stream);
+}
+```
+
+#### Playlist Management
+```typescript
+// src/app/api/playlist/route.ts
+export async function GET() {
+  const playlist = await PlaylistService.getCurrentPlaylist();
+  return NextResponse.json(playlist);
 }
 
-export async function POST(request: Request) {
-  try {
-    const body = await request.json();
+export async function POST(req: Request) {
+  const { tracks } = await req.json();
+  const updatedPlaylist = await PlaylistService.updatePlaylist(tracks);
+  return NextResponse.json(updatedPlaylist);
+}
+```
+
+#### Chat System
+```typescript
+// src/app/api/chat/route.ts
+export async function POST(req: Request) {
+  const { message } = await req.json();
+  const response = await ChatService.processMessage(message);
+  return NextResponse.json(response);
+}
+```
+
+## WebSocket Communication
+
+### Socket.IO Events
+```typescript
+// src/lib/socket/events.ts
+export const SOCKET_EVENTS = {
+  // Playback Events
+  PLAYBACK_START: 'playback:start',
+  PLAYBACK_PAUSE: 'playback:pause',
+  TRACK_CHANGE: 'track:change',
+  SYNC_REQUEST: 'sync:request',
+  SYNC_RESPONSE: 'sync:response',
+  
+  // Chat Events
+  CHAT_MESSAGE: 'chat:message',
+  CHAT_REACTION: 'chat:reaction',
+  
+  // Playlist Events
+  PLAYLIST_UPDATE: 'playlist:update',
+  PLAYLIST_VOTE: 'playlist:vote',
+  
+  // System Events
+  CONNECT: 'connect',
+  DISCONNECT: 'disconnect',
+  ERROR: 'error',
+} as const;
+```
+
+### Socket Client Implementation
+```typescript
+// src/lib/socket/client.ts
+import { io, Socket } from 'socket.io-client';
+import { SOCKET_EVENTS } from './events';
+
+export class SocketClient {
+  private socket: Socket;
+  
+  constructor() {
+    this.socket = io(process.env.NEXT_PUBLIC_WS_URL!, {
+      transports: ['websocket'],
+      autoConnect: false,
+    });
     
-    // Validação
-    if (!body.requiredField) {
-      return NextResponse.json(
-        { error: "Required field is missing" },
-        { status: 400 }
-      );
+    this.setupEventHandlers();
+  }
+  
+  private setupEventHandlers() {
+    this.socket.on(SOCKET_EVENTS.CONNECT, this.handleConnect);
+    this.socket.on(SOCKET_EVENTS.DISCONNECT, this.handleDisconnect);
+    this.socket.on(SOCKET_EVENTS.ERROR, this.handleError);
+  }
+  
+  public connect() {
+    this.socket.connect();
+  }
+  
+  public disconnect() {
+    this.socket.disconnect();
+  }
+  
+  // Event handlers and emitters
+}
+```
+
+## API Client
+
+### Base API Client
+```typescript
+// src/lib/api/client.ts
+export class ApiClient {
+  private static baseUrl = process.env.NEXT_PUBLIC_API_URL;
+  
+  private static async request<T>(
+    endpoint: string,
+    options?: RequestInit
+  ): Promise<T> {
+    const url = `${this.baseUrl}${endpoint}`;
+    const response = await fetch(url, {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        ...options?.headers,
+      },
+    });
+    
+    if (!response.ok) {
+      throw new ApiError(response.statusText, response.status);
     }
     
-    // Processamento
-    const result = await processData(body);
-    
-    return NextResponse.json(result, { status: 200 });
+    return response.json();
+  }
+  
+  public static async get<T>(endpoint: string): Promise<T> {
+    return this.request<T>(endpoint);
+  }
+  
+  public static async post<T>(
+    endpoint: string,
+    data: unknown
+  ): Promise<T> {
+    return this.request<T>(endpoint, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+}
+```
+
+### Feature-specific Clients
+```typescript
+// src/lib/api/playlist.ts
+export class PlaylistApi {
+  public static async getCurrentPlaylist(): Promise<Playlist> {
+    return ApiClient.get<Playlist>('/api/playlist');
+  }
+  
+  public static async updatePlaylist(
+    tracks: Track[]
+  ): Promise<Playlist> {
+    return ApiClient.post<Playlist>('/api/playlist', { tracks });
+  }
+}
+```
+
+## Error Handling
+
+### API Error Types
+```typescript
+// src/lib/api/errors.ts
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    public status: number
+  ) {
+    super(message);
+    this.name = 'ApiError';
+  }
+}
+
+export class NetworkError extends Error {
+  constructor(message = 'Network error occurred') {
+    super(message);
+    this.name = 'NetworkError';
+  }
+}
+```
+
+### Error Handling Middleware
+```typescript
+// src/middleware.ts
+import { NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
+
+export async function middleware(request: NextRequest) {
+  try {
+    const response = await fetch(request);
+    return response;
   } catch (error) {
-    console.error("Error:", error);
-    return NextResponse.json(
-      { error: "Failed to process request" },
+    console.error('API Error:', error);
+    return new NextResponse(
+      JSON.stringify({
+        error: 'Internal Server Error',
+        message: 'Something went wrong',
+      }),
       { status: 500 }
     );
   }
 }
 ```
 
-## Interação com Dados Mockados
+## Authentication
 
-### Dados Mockados
-- Armazenar dados mockados em arquivos separados ou inline (até implementação real)
-- Simular latência realista com `setTimeout`
-- Implementar variabilidade nos dados quando apropriado
-
+### Auth Middleware
 ```typescript
-// Exemplo de dados mockados
-const mockStreamData = {
-  currentSong: {
-    id: "song123",
-    title: "Rainy Day Lofi",
-    artist: "Lofi Artist",
-    coverUrl: "https://images.unsplash.com/...",
-    duration: 180,
-  },
-  listeners: 128,
-  daysActive: 7,
-  songsPlayed: 342,
-  nextUp: [
-    // Músicas na fila
-  ]
+// src/middleware.ts
+export const config = {
+  matcher: ['/api/playlist/:path*', '/api/chat/:path*'],
 };
 
-// Simular latência
-await new Promise(resolve => setTimeout(resolve, 500));
-```
-
-## Integrações Futuras
-
-### Socket.io
-- Preparar para integração futura com Socket.io
-- Seguir padrão de inicialização em componentes cliente:
-
-```typescript
-import { io } from 'socket.io-client';
-
-// Em componente
-useEffect(() => {
-  const socket = io('/stream', {
-    path: '/api/socketio',
-  });
+export async function middleware(request: NextRequest) {
+  const token = request.headers.get('Authorization')?.split(' ')[1];
   
-  socket.on('connect', () => {
-    console.log('Connected to socket');
-  });
-  
-  socket.on('update', (data) => {
-    // Atualizar estado com novos dados
-  });
-  
-  return () => {
-    socket.disconnect();
-  };
-}, []);
-```
-
-### Integrações com IA
-- Preparar para integração com OpenAI API
-- Implementar endpoints de curadoria seguindo padrão atual
-
-```typescript
-// Exemplo futuro para integração com OpenAI
-async function getAIRecommendations(prompt: string) {
-  const response = await fetch('/api/openai', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ prompt }),
-  });
-  
-  if (!response.ok) {
-    throw new Error(`Error: ${response.status}`);
+  if (!token) {
+    return new NextResponse(
+      JSON.stringify({ error: 'Unauthorized' }),
+      { status: 401 }
+    );
   }
   
-  return await response.json();
+  try {
+    // Verify token
+    const decoded = await verifyToken(token);
+    const requestHeaders = new Headers(request.headers);
+    requestHeaders.set('x-user-id', decoded.sub);
+    
+    return NextResponse.next({
+      request: {
+        headers: requestHeaders,
+      },
+    });
+  } catch (error) {
+    return new NextResponse(
+      JSON.stringify({ error: 'Invalid token' }),
+      { status: 401 }
+    );
+  }
 }
 ```
 
-## Referências de API
+## Rate Limiting
 
-### Endpoints Atuais
-- [/api/stream](mdc:src/app/api/stream/route.ts) - Dados do stream atual
-- [/api/curation](mdc:src/app/api/curation/route.ts) - Recomendações de IA
+### Rate Limit Configuration
+```typescript
+// src/lib/api/rate-limit.ts
+import rateLimit from 'express-rate-limit';
+
+export const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // Limit each IP to 100 requests per windowMs
+  message: 'Too many requests from this IP',
+});
+
+export const chatLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 20, // 20 messages per minute
+  message: 'Chat rate limit exceeded',
+});
+```
+
+## API Documentation
+
+### OpenAPI Specification
+```yaml
+openapi: 3.0.0
+info:
+  title: Lofiever API
+  version: 1.0.0
+paths:
+  /api/stream:
+    get:
+      summary: Get current stream status
+      responses:
+        200:
+          description: Current stream information
+  /api/playlist:
+    get:
+      summary: Get current playlist
+    post:
+      summary: Update playlist
+  /api/chat:
+    post:
+      summary: Send chat message
+```
+
+## Testing
+
+### API Integration Tests
+```typescript
+// src/tests/api/playlist.test.ts
+import { describe, it, expect } from 'vitest';
+import { PlaylistApi } from '@/lib/api/playlist';
+
+describe('PlaylistApi', () => {
+  it('should fetch current playlist', async () => {
+    const playlist = await PlaylistApi.getCurrentPlaylist();
+    expect(playlist).toBeDefined();
+    expect(Array.isArray(playlist.tracks)).toBe(true);
+  });
+});
+```
+
+## Monitoring & Logging
+
+### API Monitoring
+```typescript
+// src/lib/monitoring/api.ts
+export function trackApiCall(
+  endpoint: string,
+  method: string,
+  duration: number,
+  status: number
+) {
+  // Send metrics to monitoring service
+  console.log(`API ${method} ${endpoint}: ${status} (${duration}ms)`);
+}
+```
+
+### Error Tracking
+```typescript
+// src/lib/monitoring/errors.ts
+export function trackError(error: Error, context?: Record<string, unknown>) {
+  // Send error to error tracking service
+  console.error('Error:', error, context);
+}
+```

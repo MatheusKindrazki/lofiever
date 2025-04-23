@@ -3,182 +3,312 @@ description:
 globs: 
 alwaysApply: false
 ---
-# Lofiever - Padrões de Frontend
+# Lofiever - Frontend Standards
 
-## Stack Tecnológico
-- **Framework**: Next.js 15.3.0 com App Router
-- **UI Library**: React 19.0.0
-- **CSS**: Tailwind CSS 4.1.3
-- **Comunicação Real-time**: Socket.io-client 4.8.1
-- **Build Tool**: Turbopack (via flag `--turbopack`)
-- **Linguagem**: TypeScript 5.x
+## Tech Stack
+- **Framework**: Next.js 14.1.0 with App Router
+- **UI Library**: React 18.2.0
+- **CSS**: Tailwind CSS 3.4.x
+- **Real-time Communication**: Socket.io-client 4.7.x
+- **Build Tool**: Turbopack (experimental)
+- **Language**: TypeScript 5.x
+- **State Management**: Zustand + React Query
+- **Testing**: Jest + React Testing Library
+- **E2E Testing**: Playwright
 
-## Estrutura de Arquivos
-- Todos os componentes devem residir em `src/components/`
-- Funções de API devem ser centralizadas em `src/lib/api.ts`
-- Estilos globais em `src/styles/globals.css`
-- Páginas/rotas em `src/app/`, seguindo o padrão do Next.js App Router
-- Endpoints da API em `src/app/api/`
-- Utilitários em `src/utils/`
-- Serviços em `src/services/`
+## Project Structure
+```
+src/
+├── app/                    # Next.js App Router
+│   ├── api/               # API endpoints
+│   ├── (auth)/            # Auth-required routes
+│   └── layout.tsx         # Root layout
+├── components/            # React components
+│   ├── player/           # Audio player components
+│   ├── chat/             # Chat components
+│   ├── playlist/         # Playlist components
+│   └── shared/           # Shared components
+├── lib/                   # Core libraries
+├── stores/               # Zustand stores
+├── styles/               # Global styles
+└── utils/                # Utilities
+```
 
-## Componentes
+## Component Architecture
 
-### Anatomia de Componentes
-1. Utilizar 'use client' apenas quando necessário (componentes interativos)
-2. Imports organizados por: React/Next -> Bibliotecas externas -> Componentes internos -> Utilitários/Hooks
-3. Interfaces TypeScript no topo do arquivo
-4. Funções helper dentro do arquivo ou extraídas para utilitários quando reutilizáveis
-5. Componentes como funções nomeadas e exportadas como default
+### Component Organization
+1. Group related components in feature directories
+2. Use barrel exports (index.ts) for clean imports
+3. Co-locate tests with components
+4. Keep components focused and single-responsibility
 
-Exemplo:
+Example structure:
+```
+components/player/
+├── Player/
+│   ├── Player.tsx
+│   ├── Player.test.tsx
+│   ├── PlayerControls.tsx
+│   ├── PlayerProgress.tsx
+│   └── index.ts
+├── VolumeControl/
+└── index.ts
+```
+
+### Component Template
 ```tsx
 'use client';
 
 import { useState, useEffect } from 'react';
-import { ExternalLib } from 'external-lib';
-import { OtherComponent } from '@/components/OtherComponent';
-import { utilFunction } from '@/utils/helpers';
+import { useQuery } from '@tanstack/react-query';
+import { usePlayerStore } from '@/stores/player';
+import { cn } from '@/utils/styles';
 
-interface ComponentProps {
-  prop1: string;
-  prop2?: number;
+interface PlayerProps {
+  initialTrack?: Track;
+  onTrackChange?: (track: Track) => void;
 }
 
-export default function ComponentName({ prop1, prop2 = 0 }: ComponentProps) {
-  // Implementação
+export function Player({ initialTrack, onTrackChange }: PlayerProps) {
+  // Implementation
   return (
-    <div>
-      {/* Conteúdo */}
+    <div className={cn('player-container', className)}>
+      {/* Content */}
     </div>
   );
 }
 ```
 
-### Estado e Efeitos
-- Usar `useState` para estado local
-- Usar `useEffect` para efeitos colaterais com limpeza adequada
-- Evitar múltiplos `useEffect` quando possível
-- Implementar verificação de `isMounted` para evitar memory leaks
+## State Management
+
+### Zustand Store Pattern
+```typescript
+import { create } from 'zustand';
+import { devtools, persist } from 'zustand/middleware';
+
+interface PlayerState {
+  isPlaying: boolean;
+  volume: number;
+  actions: {
+    play: () => void;
+    pause: () => void;
+    setVolume: (volume: number) => void;
+  };
+}
+
+export const usePlayerStore = create<PlayerState>()(
+  devtools(
+    persist(
+      (set) => ({
+        isPlaying: false,
+        volume: 1,
+        actions: {
+          play: () => set({ isPlaying: true }),
+          pause: () => set({ isPlaying: false }),
+          setVolume: (volume) => set({ volume }),
+        },
+      }),
+      { name: 'player-store' }
+    )
+  )
+);
+```
+
+### React Query Usage
+```typescript
+import { useQuery, useMutation } from '@tanstack/react-query';
+
+export function useCurrentTrack() {
+  return useQuery({
+    queryKey: ['currentTrack'],
+    queryFn: () => api.getCurrentTrack(),
+    staleTime: 1000 * 60, // 1 minute
+  });
+}
+```
+
+## Styling
+
+### Tailwind Configuration
+```js
+// tailwind.config.js
+module.exports = {
+  content: ['./src/**/*.{ts,tsx}'],
+  theme: {
+    extend: {
+      colors: {
+        brand: {
+          50: '#f0f9ff',
+          // ... other shades
+          900: '#0c4a6e',
+        },
+      },
+      animation: {
+        'fade-in': 'fadeIn 0.5s ease-in-out',
+      },
+    },
+  },
+  plugins: [require('@tailwindcss/forms')],
+};
+```
+
+### CSS Conventions
+1. Use Tailwind classes directly for most styling
+2. Create reusable class combinations with @apply for complex patterns
+3. Follow mobile-first responsive design
+4. Use CSS variables for dynamic values
+
+## Performance Optimization
+
+### Code Splitting
+- Use dynamic imports for large components
+- Lazy load below-the-fold content
+- Implement route-based code splitting
+
+```typescript
+const Chat = dynamic(() => import('@/components/chat/Chat'), {
+  loading: () => <ChatSkeleton />,
+});
+```
+
+### Image Optimization
+- Use Next.js Image component
+- Implement responsive images
+- Use appropriate formats (WebP)
 
 ```tsx
-useEffect(() => {
-  let isMounted = true;
-  
-  async function fetchData() {
-    // Lógica de fetch
-    if (isMounted) {
-      // Atualizar estado
-    }
-  }
-  
-  fetchData();
-  
-  return () => {
-    isMounted = false;
-  };
-}, [dependências]);
+import Image from 'next/image';
+
+export function AlbumArt({ src, alt }: ImageProps) {
+  return (
+    <Image
+      src={src}
+      alt={alt}
+      width={300}
+      height={300}
+      className="rounded-lg"
+      placeholder="blur"
+      blurDataURL={generateBlurHash(src)}
+    />
+  );
+}
 ```
 
-## Tailwind CSS
+### Performance Monitoring
+- Implement Core Web Vitals tracking
+- Use React Profiler for component optimization
+- Monitor and optimize bundle size
 
-### Configuração
-- Usar a versão 4.1.3 do Tailwind
-- Configuração em `tailwind.config.js` na raiz do projeto
-- Tema customizado "lofi" já definido como padrão do projeto
+## Testing
 
-### Cores Personalizadas
-```js
-colors: {
-  'lofi': {
-    50: '#f7f5fb',
-    100: '#eae4f6',
-    200: '#d7cbee',
-    300: '#bca6e0',
-    400: '#9c7bd0',
-    500: '#8459c0',
-    600: '#7045a8',
-    700: '#5d3889',
-    800: '#4c3071',
-    900: '#41295d',
-    950: '#28173b',
-  },
-},
-```
-
-### Convenções de Classes
-- Utilizar classes Tailwind diretamente nos componentes
-- Para classes repetitivas, considerar extrair para constantes ou componentes base
-- Seguir ordem: layout -> dimensões -> espaçamento -> tipografia -> cores -> estados
-
-## Comunicação com a API
-
-### Chamadas de API
-- Centralizar funções de API em `src/lib/api.ts` 
-- Usar fetch API com tratamento de erros adequado
-- Incluir tipagem para as requisições e respostas
-
-Exemplo:
+### Unit Tests
 ```typescript
-export async function apiCall(params: ParamsType): Promise<ResponseType> {
+import { render, screen, fireEvent } from '@testing-library/react';
+import { Player } from './Player';
+
+describe('Player', () => {
+  it('should play/pause when controls are clicked', () => {
+    render(<Player />);
+    const playButton = screen.getByRole('button', { name: /play/i });
+    
+    fireEvent.click(playButton);
+    expect(screen.getByLabelText(/playing/i)).toBeInTheDocument();
+  });
+});
+```
+
+### E2E Tests
+```typescript
+import { test, expect } from '@playwright/test';
+
+test('user can control playback', async ({ page }) => {
+  await page.goto('/');
+  await page.click('[data-testid="play-button"]');
+  await expect(page.locator('[data-testid="player-status"]')).toHaveText('Playing');
+});
+```
+
+## Error Handling
+
+### Error Boundaries
+```tsx
+import { ErrorBoundary } from '@/components/shared/ErrorBoundary';
+
+export default function PlayerWithErrorBoundary() {
+  return (
+    <ErrorBoundary fallback={<PlayerError />}>
+      <Player />
+    </ErrorBoundary>
+  );
+}
+```
+
+### API Error Handling
+```typescript
+export async function fetchWithErrorHandling<T>(
+  url: string,
+  options?: RequestInit
+): Promise<T> {
   try {
-    const response = await fetch('/api/endpoint', {
-      method: 'METHOD',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(params),
-    });
-
+    const response = await fetch(url, options);
     if (!response.ok) {
-      throw new Error(`Error: ${response.status}`);
+      throw new ApiError(response.statusText, response.status);
     }
-
     return await response.json();
   } catch (error) {
-    console.error('Failed to call API:', error);
+    handleApiError(error);
     throw error;
   }
 }
 ```
 
-### Route Handlers (API Endpoints)
-- Criar em `src/app/api/[rota]/route.ts`
-- Exportar funções como `GET`, `POST`, etc.
-- Retornar `NextResponse` com status adequados
-- Tratar erros e enviar respostas apropriadas
+## Accessibility
 
-## Estados Visuais e Feedback
+### Guidelines
+1. Use semantic HTML elements
+2. Implement ARIA attributes when needed
+3. Ensure keyboard navigation
+4. Maintain color contrast ratios
+5. Support screen readers
 
-### Loading States
-- Implementar estados de loading para todas as chamadas assíncronas
-- Usar componentes de skeleton (via classes animate-pulse do Tailwind) para feedback visual
-- Componentizar estados de loading reutilizáveis
+### Example Implementation
+```tsx
+export function PlayButton({ onClick, isPlaying }: PlayButtonProps) {
+  return (
+    <button
+      onClick={onClick}
+      aria-label={isPlaying ? 'Pause' : 'Play'}
+      aria-pressed={isPlaying}
+      className={cn(
+        'focus:ring-2 focus:ring-offset-2 focus:ring-brand-500',
+        'hover:bg-brand-100 dark:hover:bg-brand-800'
+      )}
+    >
+      {isPlaying ? <PauseIcon /> : <PlayIcon />}
+    </button>
+  );
+}
+```
 
-### Tratamento de Erros
-- Capturar e exibir erros de forma amigável ao usuário
-- Oferecer opções para retry quando apropriado
-- Usar mensagens claras e ações possíveis
+## Documentation
 
-## Responsividade
-- Design mobile-first com breakpoints padrão do Tailwind
-- Grid de coluna única em mobile, duas colunas em desktop
-- Utilizar classes responsivas do Tailwind (sm:, md:, lg:, xl:)
-- Testar em múltiplos dispositivos e tamanhos de tela
+### Component Documentation
+- Use JSDoc comments for component documentation
+- Include usage examples
+- Document props and return types
+- Add accessibility notes when relevant
 
-## Modo Escuro
-- Implementar suporte a modo escuro usando classes dark: do Tailwind
-- Detectar preferências do sistema com media query
-- Garantir contraste adequado em ambos os temas (claro/escuro)
-
-## Performance
-- Otimizar imagens com o componente Image do Next.js
-- Implementar code-splitting via dynamic imports quando necessário
-- Minimizar re-renderizações desnecessárias
-- Usar memo, useMemo e useCallback para componentes ou cálculos custosos
-
-## Acessibilidade
-- Utilizar elementos semânticos HTML
-- Incluir atributos ARIA quando necessário
-- Garantir contraste adequado de cores
-- Suportar navegação por teclado para elementos interativos
+```tsx
+/**
+ * Player component that handles audio playback synchronization
+ * @param {PlayerProps} props - The component props
+ * @returns {JSX.Element} The rendered Player component
+ * @example
+ * ```tsx
+ * <Player
+ *   initialTrack={track}
+ *   onTrackChange={handleTrackChange}
+ * />
+ * ```
+ */
+```
