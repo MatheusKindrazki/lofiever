@@ -18,12 +18,13 @@ model Track {
   id          String    @id @default(uuid())
   title       String
   artist      String
-  sourceType  String    // "spotify" or "youtube"
-  sourceId    String
-  duration    Int
-  bpm         Int?
-  mood        String?
-  createdAt   DateTime  @default(now())
+  sourceType  String    // "spotify", "youtube", "local", "s3", "free-api"
+  sourceId    String    // URL, path, ID específico da fonte
+  duration    Int         // em segundos
+  bpm         Int?        // batidas por minuto (opcional)
+  mood        String?     // ambiente da música (opcional)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
   lastPlayed  DateTime?
   
   // Relations

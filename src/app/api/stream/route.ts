@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { DatabaseService } from '@/services/database';
 import { handleApiError } from '@/lib/api-utils';
+import { getCoverUrl } from '@/utils/player-source';
 
 export async function GET(): Promise<NextResponse> {
   try {
@@ -51,10 +52,12 @@ export async function GET(): Promise<NextResponse> {
         id: currentTrack.id,
         title: currentTrack.title,
         artist: currentTrack.artist,
-        coverUrl: `https://img.youtube.com/vi/${currentTrack.sourceType === 'youtube' ? currentTrack.sourceId : 'dQw4w9WgXcQ'}/maxresdefault.jpg`,
+        coverUrl: getCoverUrl(currentTrack),
         duration: currentTrack.duration,
         mood: currentTrack.mood,
         bpm: currentTrack.bpm,
+        sourceType: currentTrack.sourceType,
+        sourceId: currentTrack.sourceId,
       },
       listeners: stats.currentListeners,
       daysActive: stats.daysActive,
@@ -63,8 +66,10 @@ export async function GET(): Promise<NextResponse> {
         id: item.track.id,
         title: item.track.title,
         artist: item.track.artist,
-        coverUrl: `https://img.youtube.com/vi/${item.track.sourceType === 'youtube' ? item.track.sourceId : 'dQw4w9WgXcQ'}/maxresdefault.jpg`,
+        coverUrl: getCoverUrl(item.track),
         duration: item.track.duration,
+        sourceType: item.track.sourceType,
+        sourceId: item.track.sourceId,
       })) || [],
     };
     
