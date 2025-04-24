@@ -7,8 +7,9 @@ interface SongInfo {
   id: string;
   title: string;
   artist: string;
-  coverUrl: string;
+  artworkUrl: string;
   duration: number;
+  streamUrl?: string; // URL to the audio stream
 }
 
 interface StreamData {
@@ -50,6 +51,28 @@ export async function getStreamData(): Promise<StreamData> {
     return await response.json();
   } catch (error) {
     console.error('Failed to fetch stream data:', error);
+    throw error;
+  }
+}
+
+// Function to get the current track with streaming URL
+export async function getCurrentTrack(): Promise<SongInfo> {
+  try {
+    const response = await fetch('/api/stream/current', {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      credentials: 'same-origin',
+    });
+
+    if (!response.ok) {
+      throw new Error(`Error: ${response.status}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('Failed to fetch current track:', error);
     throw error;
   }
 }

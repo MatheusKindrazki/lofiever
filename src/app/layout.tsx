@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import '../styles/globals.css';
+import ReactQueryProvider from '@/lib/providers/ReactQueryProvider';
 
 export const metadata: Metadata = {
   title: 'Lofiever - 24/7 Lofi Streaming',
@@ -13,11 +14,13 @@ export default function RootLayout({
   children,
 }: {
   children: React.ReactNode;
-}) {
+}): React.ReactElement {
   return (
     <html lang="en">
       <body className="antialiased">
-        {children}
+        <ReactQueryProvider>
+          {children}
+        </ReactQueryProvider>
       </body>
     </html>
   );

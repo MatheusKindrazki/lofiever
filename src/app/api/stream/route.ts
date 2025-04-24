@@ -1,79 +1,74 @@
 import { NextResponse } from 'next/server';
 import { DatabaseService } from '@/services/database';
+import { redisHelpers } from '@/lib/redis';
 import { handleApiError } from '@/lib/api-utils';
-import { getCoverUrl } from '@/utils/player-source';
+import type { Track } from '@/lib/redis';
 
+// GET - Obter dados da stream atual
 export async function GET(): Promise<NextResponse> {
   try {
-    // Obter a música atual
-    const currentTrack = await DatabaseService.getCurrentTrack();
+    // Get current playback state and listeners count from Redis
+    const [currentTrack, listenersCount] = await Promise.all([
+      redisHelpers.getCurrentTrack(),
+      redisHelpers.getListenersCount(),
+    ]);
     
-    // Se não houver música atual, usar dados mockados para desenvolvimento
     if (!currentTrack) {
-      return NextResponse.json({
-        currentSong: {
-          id: "song123",
-          title: "Rainy Day Lofi",
-          artist: "Lofi Artist",
-          coverUrl: "https://images.unsplash.com/photo-1569982175971-d92b01cf8694?w=500&auto=format&fit=crop&q=60&ixlib=rb-4.0.3",
-          duration: 180, // in seconds
-        },
-        listeners: 128,
-        daysActive: 7,
-        songsPlayed: 342,
-        nextUp: [
-          {
-            id: "song124",
-            title: "Coffee Shop Vibes",
-            artist: "Chill Beats",
-            coverUrl: "https://images.unsplash.com/photo-1542320662-b15547e0c1fe?w=500&auto=format&fit=crop&q=60&ixlib=rb-4.0.3",
-            duration: 165,
-          },
-          {
-            id: "song125",
-            title: "Late Night Study",
-            artist: "Lo-fi Dreamer",
-            coverUrl: "https://images.unsplash.com/photo-1534531173927-aeb928d54385?w=500&auto=format&fit=crop&q=60&ixlib=rb-4.0.3",
-            duration: 195,
-          }
-        ]
-      }, { status: 200 });
+      return NextResponse.json(
+        { error: 'No active track found', code: 'NOT_FOUND' },
+        { status: 404 }
+      );
     }
-    
-    // Obter a lista de reprodução ativa
+
+    // Get upcoming tracks from the active playlist
     const playlist = await DatabaseService.getActivePlaylist();
     
-    // Obter estatísticas do stream
-    const stats = await DatabaseService.getStreamStats();
+    // Find the position of the current track in the playlist
+    const currentPosition = playlist?.tracks.findIndex(item => item.track.id === currentTrack.id) || 0;
     
-    // Montar resposta
-    const response = {
-      currentSong: {
-        id: currentTrack.id,
-        title: currentTrack.title,
-        artist: currentTrack.artist,
-        coverUrl: getCoverUrl(currentTrack),
-        duration: currentTrack.duration,
-        mood: currentTrack.mood,
-        bpm: currentTrack.bpm,
-        sourceType: currentTrack.sourceType,
-        sourceId: currentTrack.sourceId,
-      },
-      listeners: stats.currentListeners,
-      daysActive: stats.daysActive,
-      songsPlayed: stats.totalTracksPlayed,
-      nextUp: playlist?.tracks.slice(0, 5).map(item => ({
-        id: item.track.id,
-        title: item.track.title,
-        artist: item.track.artist,
-        coverUrl: getCoverUrl(item.track),
-        duration: item.track.duration,
-        sourceType: item.track.sourceType,
-        sourceId: item.track.sourceId,
-      })) || [],
+    // Get the next 2 tracks in the playlist
+    const nextUp = playlist?.tracks
+      .slice(currentPosition + 1, currentPosition + 3) // Only get next 2 tracks
+      .map(item => {
+        // The track from the database might have different properties than our Redis Track
+        const track = item.track as unknown as Track;
+        return {
+          id: track.id,
+          title: track.title,
+          artist: track.artist,
+          duration: track.duration,
+          artworkUrl: track.artworkUrl || `https://lofiever-assets.s3.amazonaws.com/covers/${track.id}.jpg`,
+        };
+      }) || [];
+    
+    // Format the current track response
+    const formattedCurrentTrack = {
+      id: currentTrack.id,
+      title: currentTrack.title,
+      artist: currentTrack.artist,
+      duration: currentTrack.duration,
+      artworkUrl: currentTrack.artworkUrl || `https://lofiever-assets.s3.amazonaws.com/covers/${currentTrack.id}.jpg`,
+      streamUrl: `/api/stream/audio/${currentTrack.id}`,
     };
     
-    return NextResponse.json(response, { status: 200 });
+    // Calculate days the stream has been active (for demo purposes)
+    const launchDate = new Date('2023-01-01');
+    const now = new Date();
+    const daysActive = Math.floor((now.getTime() - launchDate.getTime()) / (1000 * 60 * 60 * 24));
+    
+    // Calculate total songs played (for demo purposes)
+    const songsPlayed = playlist?.version ? playlist.version * 20 : 1000;
+    
+    // Construct the stream data response
+    const streamData = {
+      currentSong: formattedCurrentTrack,
+      listeners: listenersCount,
+      daysActive,
+      songsPlayed,
+      nextUp,
+    };
+    
+    return NextResponse.json(streamData, { status: 200 });
   } catch (error) {
     return handleApiError(error);
   }

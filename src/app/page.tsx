@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/explicit-function-return-type */
 import Player from '@/components/Player';
 import Stats from '@/components/Stats';
 import Curation from '@/components/Curation';
