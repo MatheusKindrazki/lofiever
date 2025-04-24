@@ -6,10 +6,14 @@
     "seed": "ts-node -P tsconfig-seed.json prisma/seed.ts"
   },
   "scripts": {
-    "dev": "next dev --turbopack",
+    "dev": "ts-node -P tsconfig-seed.json server/index.ts",
+    "dev:server": "ts-node -P tsconfig-seed.json server/index.ts",
+    "dev:next": "next dev --turbopack",
     "build": "next build",
-    "start": "next start",
-    "lint": "next lint"
+    "start": "NODE_ENV=production ts-node -P tsconfig-seed.json server/index.ts",
+    "start:next": "next start",
+    "lint": "next lint",
+    "test:redis": "ts-node -P tsconfig-seed.json scripts/test-redis.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.6.0",
