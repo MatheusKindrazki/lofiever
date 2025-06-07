@@ -19,6 +19,19 @@ services:
       - postgres-data:/var/lib/postgresql/data
     ports:
       - 5432:5432
+  icecast:
+    image: moul/icecast
+    ports:
+      - 8000:8000
+    volumes:
+      - ./streaming/icecast/icecast.xml:/etc/icecast.xml:ro
+  liquidsoap:
+    image: savonet/liquidsoap:2.1.4
+    depends_on:
+      - icecast
+    volumes:
+      - ./streaming/liquidsoap:/radio
+    command: ["/radio/radio.liq"]
 
 volumes:
   redis-data:

@@ -45,6 +45,20 @@ pnpm dev
 
 4. Open [http://localhost:3000](http://localhost:3000) in your browser.
 
+### Streaming Setup (Icecast & Liquidsoap)
+
+This project uses **Icecast** and **Liquidsoap** to deliver a real 24/7 radio
+stream. A `docker-compose.yml` file is provided with ready-to-use services.
+
+1. Ensure Docker is installed on your machine.
+2. Run the streaming stack:
+   ```bash
+   docker compose up icecast liquidsoap
+   ```
+3. The Icecast server will be available at `http://localhost:8000/stream`.
+4. To generate DASH segments from the stream you can use the helper script
+   `streaming/dash/segmenter.sh` (requires `ffmpeg`).
+
 ## Project Structure
 
 - `src/components/`: React components
