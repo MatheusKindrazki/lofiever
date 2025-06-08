@@ -1,5 +1,3 @@
-version: '3.8'
-
 name: lofiever-dev
 
 services:
@@ -23,14 +21,21 @@ services:
     image: moul/icecast
     ports:
       - 8000:8000
+    environment:
+      - ICECAST_SOURCE_PASSWORD=source_password
+      - ICECAST_ADMIN_PASSWORD=admin_password
+      - ICECAST_RELAY_PASSWORD=relay_password
+      - ICECAST_PASSWORD=source_password
+      - ICECAST_HOSTNAME=localhost
     volumes:
       - ./streaming/icecast/icecast.xml:/etc/icecast.xml:ro
   liquidsoap:
-    image: savonet/liquidsoap:2.1.4
+    image: savonet/liquidsoap:v2.3.3
     depends_on:
       - icecast
     volumes:
       - ./streaming/liquidsoap:/radio
+      - ./public/music:/music
     command: ["/radio/radio.liq"]
 
 volumes:
