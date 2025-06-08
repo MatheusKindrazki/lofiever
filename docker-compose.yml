@@ -22,17 +22,23 @@ services:
     ports:
       - 8000:8000
     environment:
-      - ICECAST_SOURCE_PASSWORD=source_password
-      - ICECAST_ADMIN_PASSWORD=admin_password
-      - ICECAST_RELAY_PASSWORD=relay_password
-      - ICECAST_PASSWORD=source_password
+      - ICECAST_SOURCE_PASSWORD=${ICECAST_SOURCE_PASSWORD:-source_password}
+      - ICECAST_ADMIN_PASSWORD=${ICECAST_ADMIN_PASSWORD:-admin_password}
+      - ICECAST_RELAY_PASSWORD=${ICECAST_RELAY_PASSWORD:-relay_password}
+      - ICECAST_ADMIN_USER=${ICECAST_ADMIN_USER:-admin}
+      - ICECAST_PASSWORD=${ICECAST_SOURCE_PASSWORD:-source_password}
       - ICECAST_HOSTNAME=localhost
     volumes:
       - ./streaming/icecast/icecast.xml:/etc/icecast.xml:ro
+    command: >
+      sh -c "envsubst < /etc/icecast.xml > /tmp/icecast.xml && 
+             icecast -c /tmp/icecast.xml"
   liquidsoap:
     image: savonet/liquidsoap:v2.3.3
     depends_on:
       - icecast
+    environment:
+      - ICECAST_SOURCE_PASSWORD=${ICECAST_SOURCE_PASSWORD:-source_password}
     volumes:
       - ./streaming/liquidsoap:/radio
       - ./public/music:/music

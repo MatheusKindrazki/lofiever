@@ -25,7 +25,7 @@ output.icecast(
   ),
   host="icecast", 
   port=8000,
-  password="source_password",
+  password=get_env("ICECAST_SOURCE_PASSWORD"),
   mount="/stream",
   name="Lofiever Radio",
   description="Lo-fi 24/7 Radio Stream",
