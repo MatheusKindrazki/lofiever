@@ -2,6 +2,7 @@ import { createServer } from 'node:http';
 import { parse } from 'node:url';
 import next from 'next';
 import { createSocketServer } from '../src/lib/socket/server';
+import { LiquidsoapIntegrationService } from '../src/services/playlist/liquidsoap-integration.service';
 
 const dev = process.env.NODE_ENV !== 'production';
 const hostname = 'localhost';
@@ -13,8 +14,23 @@ const handle = app.getRequestHandler();
 
 app.prepare().then(() => {
   // Create HTTP server
-  const server = createServer((req, res) => {
+  const server = createServer(async (req, res) => {
     const parsedUrl = parse(req.url || '', true);
+
+    if (req.method === 'GET' && parsedUrl.pathname === '/api/next-track') {
+      try {
+        const trackUrl = await LiquidsoapIntegrationService.handleNextTrackRequest();
+        res.statusCode = 200;
+        res.setHeader('Content-Type', 'text/plain');
+        res.end(trackUrl);
+      } catch (err) {
+        res.statusCode = 500;
+        res.setHeader('Content-Type', 'text/plain');
+        res.end('');
+      }
+      return;
+    }
+
     handle(req, res, parsedUrl);
   });
 

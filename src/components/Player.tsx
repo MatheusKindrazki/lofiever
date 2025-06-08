@@ -29,96 +29,232 @@ export default function Player(): React.ReactNode {
   const [playing, setPlaying] = useState(false);
   const [volume, setVolume] = useState(70);
   const [currentTime, setCurrentTime] = useState(0);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isClient, setIsClient] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   
   // Use React Query for fetching stream data
   const { 
     data: streamData, 
-    isLoading, 
+    isLoading: queryIsLoading, 
     isError, 
     error 
   } = useQuery<StreamData>({
     queryKey: ['streamData'],
     queryFn: getStreamData,
     refetchInterval: 30000, // Refetch every 30 seconds
+    enabled: isClient, // Only fetch on client side
   });
 
-  // Use the socket sync hook for real-time playback
-  const { currentTrack, isPlaying, position, requestSync } = usePlaybackSync();
+  // Use the socket sync hook for real-time playback (for future metadata sync)
+  const { requestSync } = usePlaybackSync();
 
   // Extract the current song and next up songs from the stream data
   const currentSong = streamData?.currentSong;
+  
   // Limit next up songs to only 2
   const nextUpSongs = streamData?.nextUp?.slice(0, 2) || [];
 
+  // Client-side only effect for hydration
   useEffect(() => {
-    // If we have a current track from Socket.IO sync, use that
-    if (currentTrack) {
-      // Initialize the audio element with the current track URL
-      if (audioRef.current) {
-        // Use artworkUrl as proxy for streamUrl to handle the Track type difference
-        const streamUrl = currentTrack.artworkUrl || `/api/stream/audio/${currentTrack.id}`;
-        audioRef.current.src = streamUrl;
-        audioRef.current.currentTime = position / 1000; // Convert position from ms to seconds
-        
-        if (isPlaying) {
-          audioRef.current.play().catch(err => {
-            console.error("Error playing audio:", err);
-          });
-          setPlaying(true);
-        } else {
-          audioRef.current.pause();
-          setPlaying(false);
-        }
-      }
-    }
-  }, [currentTrack, position, isPlaying]);
+    setIsClient(true);
+  }, []);
 
   useEffect(() => {
-    // Initialize audio element
+    // Only run on client side
+    if (!isClient) return;
+
+    // Initialize audio element only once on client
     const audio = new Audio();
     audioRef.current = audio;
     
-    audio.addEventListener('timeupdate', updateProgress);
+    // Set initial volume
     audio.volume = volume / 100;
+    
+    // Set up audio event listeners
+    const handleLoadStart = (): void => {
+      console.log('🎵 Audio loading started');
+      setIsLoading(true);
+    };
+    
+    const handleCanPlay = (): void => {
+      console.log('🎵 Audio can play');
+      setIsLoading(false);
+    };
+    
+    const handleLoadedData = (): void => {
+      console.log('🎵 Audio loaded data');
+      setIsLoading(false);
+    };
+    
+    const handlePlaying = (): void => {
+      console.log('🎵 Audio playing');
+      setPlaying(true);
+    };
+    
+    const handlePause = (): void => {
+      console.log('🎵 Audio paused');
+      setPlaying(false);
+    };
+    
+    const handleEnded = (): void => {
+      console.log('🎵 Audio ended');
+      setPlaying(false);
+    };
+    
+    const handleError = (e: Event): void => {
+      console.error('🚨 Audio error:', e);
+      const target = e.target as HTMLAudioElement;
+      console.error('🚨 Error details:', {
+        error: target.error,
+        networkState: target.networkState,
+        readyState: target.readyState,
+        src: target.src
+      });
+      
+      setIsLoading(false);
+      setPlaying(false);
+      
+      // Fallback to example file if stream fails
+      if (audio.src.includes('/api/stream/audio-stream') || audio.src.includes('localhost:8000')) {
+        console.log('🔄 Stream failed, falling back to local file');
+        audio.src = '/music/example.mp3';
+        // Don't auto-load, wait for user interaction
+      }
+    };
+    
+    const handleTimeUpdate = (): void => {
+      setCurrentTime(audio.currentTime);
+    };
+    
+    audio.addEventListener('loadstart', handleLoadStart);
+    audio.addEventListener('canplay', handleCanPlay);
+    audio.addEventListener('loadeddata', handleLoadedData);
+    audio.addEventListener('playing', handlePlaying);
+    audio.addEventListener('pause', handlePause);
+    audio.addEventListener('ended', handleEnded);
+    audio.addEventListener('error', handleError);
+    audio.addEventListener('timeupdate', handleTimeUpdate);
+    
+    // Set the audio source - start with local file for better compatibility
+    console.log('🎯 Setting initial audio source to local file');
+    audio.src = '/music/example.mp3';
+    
+    // Check browser support
+    const canPlayMp3 = audio.canPlayType('audio/mpeg');
+    const canPlayOgg = audio.canPlayType('audio/ogg; codecs="opus"');
+    console.log('🎵 Browser support - MP3:', canPlayMp3, 'Opus:', canPlayOgg);
+    
+    // Don't auto-load to avoid autoplay issues
+    console.log('🎵 Audio configured, waiting for user interaction');
+    setIsLoading(false);
     
     // Request sync from the server when component mounts
     requestSync();
 
     return () => {
       audio.pause();
-      audio.removeEventListener('timeupdate', updateProgress);
+      audio.removeEventListener('loadstart', handleLoadStart);
+      audio.removeEventListener('canplay', handleCanPlay);
+      audio.removeEventListener('loadeddata', handleLoadedData);
+      audio.removeEventListener('playing', handlePlaying);
+      audio.removeEventListener('pause', handlePause);
+      audio.removeEventListener('ended', handleEnded);
+      audio.removeEventListener('error', handleError);
+      audio.removeEventListener('timeupdate', handleTimeUpdate);
     };
-  }, [requestSync, volume]);
+  }, [isClient, requestSync, volume]);
 
-  const updateProgress = (): void => {
-    if (audioRef.current) {
-      setCurrentTime(audioRef.current.currentTime);
+  // Separate effect for volume changes
+  useEffect(() => {
+    if (audioRef.current && isClient) {
+      audioRef.current.volume = volume / 100;
+    }
+  }, [volume, isClient]);
+
+  const togglePlayPause = (): void => {
+    if (!audioRef.current || !isClient) return;
+    
+    const audio = audioRef.current;
+    
+    if (playing) {
+      audio.pause();
+    } else {
+      console.log('🎵 Attempting to play audio:', audio.src);
+      
+      // Load the audio if not already loaded
+      if (audio.readyState === 0) {
+        console.log('🔄 Loading audio for first time...');
+        audio.load();
+      }
+      
+      audio.play()
+        .then(() => {
+          console.log('✅ Audio play started successfully');
+        })
+        .catch(error => {
+          console.error("❌ Error playing audio:", error);
+          
+          // Try fallback if current source fails
+          if (!audio.src.includes('/music/example.mp3')) {
+            console.log('🔄 Trying fallback file...');
+            audio.src = '/music/example.mp3';
+            audio.load();
+            
+            return audio.play();
+          }
+          
+          throw error;
+        })
+        .catch(error => {
+          console.error("❌ Fallback audio also failed:", error);
+        });
     }
   };
 
-  const togglePlayPause = (): void => {
-    if (audioRef.current) {
-      if (playing) {
-        audioRef.current.pause();
-      } else {
-        audioRef.current.play().catch(error => {
-          console.error("Error playing audio:", error);
-        });
+  const testStreamDirectly = async (): Promise<void> => {
+    if (!audioRef.current || !isClient) return;
+    
+    console.log('🧪 Testing stream directly');
+    const streamUrl = '/api/stream/audio-stream?proxy=true';
+    console.log('🎯 Setting stream URL:', streamUrl);
+    
+    const audio = audioRef.current;
+    audio.src = streamUrl;
+    audio.load();
+    
+    // Try to play after a short delay
+    setTimeout(async () => {
+      try {
+        await audio.play();
+        console.log('✅ Direct stream test successful');
+      } catch (error) {
+        console.error('❌ Direct stream test failed:', error);
       }
-      setPlaying(!playing);
-      
-      // In a real implementation, we would emit an event via Socket.IO
-      // to sync the playback state with all clients
-    }
+    }, 1000);
+  };
+
+  const testFallbackFile = (): void => {
+    if (!audioRef.current || !isClient) return;
+    
+    console.log('🧪 Testing fallback file');
+    const audio = audioRef.current;
+    audio.src = '/music/example.mp3';
+    audio.load();
+    
+    setTimeout(async () => {
+      try {
+        await audio.play();
+        console.log('✅ Fallback file test successful');
+      } catch (error) {
+        console.error('❌ Fallback file test failed:', error);
+      }
+    }, 1000);
   };
 
   const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
     const newVolume = Number.parseInt(e.target.value);
     setVolume(newVolume);
-    if (audioRef.current) {
-      audioRef.current.volume = newVolume / 100;
-    }
   };
 
   const formatTime = (seconds: number): string => {
@@ -127,7 +263,8 @@ export default function Player(): React.ReactNode {
     return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
   };
 
-  if (isLoading) {
+  // Show loading state while hydrating or loading data
+  if (!isClient || isLoading || queryIsLoading) {
     return (
       <div className="w-full bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 flex justify-center items-center">
         <div className="animate-pulse-slow text-lofi-500">
@@ -135,7 +272,9 @@ export default function Player(): React.ReactNode {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
           </svg>
         </div>
-        <span className="ml-3 text-lg text-gray-600 dark:text-gray-300">Loading player...</span>
+        <span className="ml-3 text-lg text-gray-600 dark:text-gray-300">
+          {!isClient ? 'Initializing...' : 'Loading player...'}
+        </span>
       </div>
     );
   }
@@ -194,7 +333,7 @@ export default function Player(): React.ReactNode {
           </div>
         </div>
         
-        <div className="flex items-center justify-center w-full mb-4">
+        <div className="flex items-center justify-center w-full mb-4 gap-2">
           <button 
             onClick={togglePlayPause}
             className="bg-lofi-500 hover:bg-lofi-600 text-white rounded-full p-4 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-lofi-400"
@@ -211,6 +350,24 @@ export default function Player(): React.ReactNode {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
             )}
+          </button>
+          
+          {/* Debug buttons - remove in production */}
+          <button 
+            onClick={testStreamDirectly}
+            className="bg-blue-500 hover:bg-blue-600 text-white rounded px-3 py-1 text-xs focus:outline-none"
+            type="button"
+            title="Test Stream"
+          >
+            🧪 Stream
+          </button>
+          <button 
+            onClick={testFallbackFile}
+            className="bg-green-500 hover:bg-green-600 text-white rounded px-3 py-1 text-xs focus:outline-none"
+            type="button"
+            title="Test Local File"
+          >
+            🧪 Local
           </button>
         </div>
         

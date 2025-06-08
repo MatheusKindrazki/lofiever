@@ -15,10 +15,10 @@
   </limits>
 
   <authentication>
-    <source-password>${ICECAST_SOURCE_PASSWORD}</source-password>
-    <relay-password>${ICECAST_RELAY_PASSWORD}</relay-password>
-    <admin-user>${ICECAST_ADMIN_USER}</admin-user>
-    <admin-password>${ICECAST_ADMIN_PASSWORD}</admin-password>
+    <source-password>source_password</source-password>
+    <relay-password>relay_password</relay-password>
+    <admin-user>admin</admin-user>
+    <admin-password>admin_password</admin-password>
   </authentication>
 
   <hostname>localhost</hostname>

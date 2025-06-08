@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audio Test - Lofiever</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        button {
+            margin: 10px;
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+        .log {
+            background: #f0f0f0;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+            font-family: monospace;
+            white-space: pre-wrap;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>🎵 Lofiever Audio Test</h1>
+    
+    <div>
+        <h2>Test Controls</h2>
+        <button onclick="testStream()">🧪 Test Stream</button>
+        <button onclick="testLocal()">🧪 Test Local File</button>
+        <button onclick="playPause()">⏯️ Play/Pause</button>
+        <button onclick="clearLog()">🗑️ Clear Log</button>
+    </div>
+    
+    <div>
+        <h2>Audio Element</h2>
+        <audio id="audioPlayer" controls style="width: 100%;">
+            Your browser does not support the audio element.
+        </audio>
+    </div>
+    
+    <div>
+        <h2>Log</h2>
+        <div id="log" class="log"></div>
+    </div>
+
+    <script>
+        const audio = document.getElementById('audioPlayer');
+        const logDiv = document.getElementById('log');
+        
+        function log(message) {
+            const timestamp = new Date().toLocaleTimeString();
+            logDiv.textContent += `[${timestamp}] ${message}\n`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+            console.log(message);
+        }
+        
+        function clearLog() {
+            logDiv.textContent = '';
+        }
+        
+        // Set up audio event listeners
+        audio.addEventListener('loadstart', () => log('🎵 loadstart'));
+        audio.addEventListener('loadedmetadata', () => log('🎵 loadedmetadata'));
+        audio.addEventListener('loadeddata', () => log('🎵 loadeddata'));
+        audio.addEventListener('canplay', () => log('🎵 canplay'));
+        audio.addEventListener('canplaythrough', () => log('🎵 canplaythrough'));
+        audio.addEventListener('playing', () => log('🎵 playing'));
+        audio.addEventListener('pause', () => log('🎵 pause'));
+        audio.addEventListener('ended', () => log('🎵 ended'));
+        audio.addEventListener('error', (e) => {
+            log(`🚨 error: ${e.target.error?.message || 'Unknown error'}`);
+            log(`🚨 error code: ${e.target.error?.code || 'Unknown code'}`);
+            log(`🚨 network state: ${e.target.networkState}`);
+            log(`🚨 ready state: ${e.target.readyState}`);
+        });
+        audio.addEventListener('stalled', () => log('⚠️ stalled'));
+        audio.addEventListener('suspend', () => log('⚠️ suspend'));
+        audio.addEventListener('abort', () => log('⚠️ abort'));
+        audio.addEventListener('emptied', () => log('⚠️ emptied'));
+        
+        function testStream() {
+            log('🧪 Testing stream proxy...');
+            const streamUrl = '/api/stream/audio-stream?proxy=true';
+            log(`🎯 Setting src: ${streamUrl}`);
+            
+            // Check browser support
+            const canPlayOgg = audio.canPlayType('audio/ogg; codecs="opus"');
+            log(`🎵 Browser Opus support: "${canPlayOgg}"`);
+            
+            audio.src = streamUrl;
+            audio.load();
+        }
+        
+        function testLocal() {
+            log('🧪 Testing local file...');
+            const localUrl = '/music/example.mp3';
+            log(`🎯 Setting src: ${localUrl}`);
+            
+            // Check browser support
+            const canPlayMp3 = audio.canPlayType('audio/mpeg');
+            log(`🎵 Browser MP3 support: "${canPlayMp3}"`);
+            
+            audio.src = localUrl;
+            audio.load();
+        }
+        
+        function playPause() {
+            if (audio.paused) {
+                log('▶️ Attempting to play...');
+                audio.play()
+                    .then(() => log('✅ Play started successfully'))
+                    .catch(error => log(`❌ Play failed: ${error.message}`));
+            } else {
+                log('⏸️ Pausing...');
+                audio.pause();
+            }
+        }
+        
+        // Initial log
+        log('🎉 Audio test page loaded');
+        log(`🌐 User agent: ${navigator.userAgent}`);
+    </script>
+</body>
+</html> 

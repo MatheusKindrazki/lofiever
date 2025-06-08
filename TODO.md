@@ -30,18 +30,18 @@ Este documento detalha as tarefas necessárias para reestruturar o projeto Lofie
 
 **Objetivo:** Criar um sistema onde as músicas são adicionadas dinamicamente à playlist por uma IA, sem interromper o stream.
 
--   [ ] **2.1. Criar o Serviço de Geração de Playlist (Node.js):**
-    -   [ ] Desenvolver um novo serviço/módulo em Node.js que será o "cérebro" da rádio.
-    -   [ ] Criar uma API REST para que o Liquidsoap possa solicitar a próxima música.
-    -   [ ] Implementar a lógica para consultar o motor de recomendação de IA (Fase 3).
+-   [x] **2.1. Criar o Serviço de Geração de Playlist (Node.js):**
+    -   [x] Desenvolver um novo serviço/módulo em Node.js que será o "cérebro" da rádio.
+    -   [x] Criar uma API REST para que o Liquidsoap possa solicitar a próxima música.
+    -   [x] Implementar a lógica para consultar o motor de recomendação de IA (Fase 3).
 
--   [ ] **2.2. Integrar o Node.js com o Liquidsoap:**
-    -   [ ] Modificar o script `.liq` para usar `request.dynamic` ou um protocolo customizado.
-    -   [ ] Fazer o Liquidsoap chamar a API Node.js para obter a URL da próxima música.
-    -   [ ] Implementar `fallbacks` no Liquidsoap (uma playlist de emergência) caso a API falhe.
+-   [x] **2.2. Integrar o Node.js com o Liquidsoap:**
+    -   [x] Modificar o script `.liq` para usar `request.dynamic` ou um protocolo customizado.
+    -   [x] Fazer o Liquidsoap chamar a API Node.js para obter a URL da próxima música.
+    -   [x] Implementar `fallbacks` no Liquidsoap (uma playlist de emergência) caso a API falhe.
 
--   [ ] **2.3. Adicionar Transições Suaves:**
-    -   [ ] Usar a função `add_smart_crossfade` do Liquidsoap para criar transições suaves (crossfade) entre as músicas.
+-   [x] **2.3. Adicionar Transições Suaves:**
+    -   [x] Usar a função `add_smart_crossfade` do Liquidsoap para criar transições suaves (crossfade) entre as músicas.
 
 ## Fase 3: Desenvolvimento da IA de Curadoria
 
