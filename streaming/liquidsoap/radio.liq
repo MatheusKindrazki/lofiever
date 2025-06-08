@@ -6,23 +6,16 @@ set("server.telnet", false)
 # Configurações do servidor
 settings.server.telnet := false
 
-def get_next_track() =
-  uri = get_process_output("curl -s http://host.docker.internal:3000/api/next-track")
-  if uri == "" then
-    request.create("/music/example.mp3")
-  else
-    request.create(uri)
-  end
-end
+# Playlist de músicas
+music_source = playlist("/music/", mode="randomize", reload_mode="rounds", reload=3600)
 
-dynamic_source = request.dynamic(get_next_track)
-fallback_playlist = playlist("/music/", mode="randomize", reload_mode="rounds", reload=3600)
+# Fallback para caso não tenha música
+silence_source = blank(duration=2.0)
+source = fallback([music_source, silence_source])
 
-source = fallback([dynamic_source, fallback_playlist])
-
-# Crossfade e normalização
+# Tornar a fonte infallible e aplicar normalização
+source = mksafe(source)
 source = normalize(source)
-source = smart_crossfade(source)
 
 # Codificação e saída para Icecast
 output.icecast(
@@ -33,7 +26,7 @@ output.icecast(
   ),
   host="icecast",
   port=8000,
-  password=get_env("ICECAST_SOURCE_PASSWORD"),
+  password="source_password",
   mount="/stream",
   name="Lofiever Radio",
   description="Lo-fi 24/7 Radio Stream",

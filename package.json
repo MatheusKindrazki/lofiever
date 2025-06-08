@@ -22,7 +22,10 @@
     "stream:test": "curl -s http://localhost:8000/status-json.xsl | jq '.'",
     "stream:listen": "echo 'Stream URL: http://localhost:8000/stream'",
     "stream:monitor": "./scripts/monitor-stream.sh",
-    "stream:watch": "./scripts/monitor-stream.sh --watch"
+    "stream:watch": "./scripts/monitor-stream.sh --watch",
+    "db:seed": "ts-node -P tsconfig-seed.json scripts/seed-database.ts",
+    "db:migrate": "prisma migrate dev",
+    "db:generate": "prisma generate"
   },
   "dependencies": {
     "@prisma/client": "^6.6.0",

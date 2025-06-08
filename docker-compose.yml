@@ -30,9 +30,6 @@ services:
       - ICECAST_HOSTNAME=localhost
     volumes:
       - ./streaming/icecast/icecast.xml:/etc/icecast.xml:ro
-    command: >
-      sh -c "envsubst < /etc/icecast.xml > /tmp/icecast.xml && 
-             icecast -c /tmp/icecast.xml"
   liquidsoap:
     image: savonet/liquidsoap:v2.3.3
     depends_on:
