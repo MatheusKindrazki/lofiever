@@ -6,24 +6,24 @@ Este documento detalha as tarefas necessárias para reestruturar o projeto Lofie
 
 **Objetivo:** Substituir a simulação de streaming por uma arquitetura de rádio 24/7 real, onde todos os usuários ouvem a mesma parte da música simultaneamente.
 
--   [ ] **1.1. Configurar o Servidor de Streaming Icecast:**
-    -   [ ] Instalar o Icecast em um servidor de desenvolvimento.
-    -   [ ] Configurar as fontes (`<source>`) e os pontos de montagem (`<mount>`) no `icecast.xml`.
-    -   [ ] Proteger o acesso de administrador e de fonte com senhas seguras.
-    -   [ ] Testar a conexão ao servidor Icecast com um cliente de áudio (ex: VLC).
+-   [x] **1.1. Configurar o Servidor de Streaming Icecast:**
+    -   [x] Instalar o Icecast em um servidor de desenvolvimento.
+    -   [x] Configurar as fontes (`<source>`) e os pontos de montagem (`<mount>`) no `icecast.xml`.
+    -   [x] Proteger o acesso de administrador e de fonte com senhas seguras.
+    -   [x] Testar a conexão ao servidor Icecast com um cliente de áudio (ex: VLC).
 
--   [ ] **1.2. Instalar e Configurar o Liquidsoap:**
-    -   [ ] Instalar o Liquidsoap no mesmo servidor ou em um servidor separado.
-    -   [ ] Criar um script básico `.liq` para testar a conexão com o Icecast.
-    -   [ ] Configurar o Liquidsoap para transcodificar o áudio para um formato compatível (ex: Opus ou AAC).
-    -   [ ] Implementar a saída de áudio para o ponto de montagem do Icecast (`output.icecast`).
+-   [x] **1.2. Instalar e Configurar o Liquidsoap:**
+    -   [x] Instalar o Liquidsoap no mesmo servidor ou em um servidor separado.
+    -   [x] Criar um script básico `.liq` para testar a conexão com o Icecast.
+    -   [x] Configurar o Liquidsoap para transcodificar o áudio para um formato compatível (ex: Opus ou AAC).
+    -   [x] Implementar a saída de áudio para o ponto de montagem do Icecast (`output.icecast`).
 
--   [ ] **1.3. Sincronização de Tempo com NTP:**
-    -   [ ] Configurar o servidor (e, se possível, os clientes) para sincronizar com um servidor NTP (Network Time Protocol) público (ex: `a.ntp.br`). Isso garante uma base de tempo comum.
+-   [x] **1.3. Sincronização de Tempo com NTP:**
+    -   [x] Configurar o servidor (e, se possível, os clientes) para sincronizar com um servidor NTP (Network Time Protocol) público (ex: `a.ntp.br`). Isso garante uma base de tempo comum.
 
--   [ ] **1.4. (Opcional, mas recomendado) Mudar para o Protocolo DASH:**
-    -   [ ] Pesquisar e implementar uma ferramenta (como o Shaka Packager ou Bento4) para segmentar o áudio do Icecast/Liquidsoap em fragmentos DASH.
-    -   [ ] Gerar um `manifest.mpd` dinâmico.
+-   [x] **1.4. (Opcional, mas recomendado) Mudar para o Protocolo DASH:**
+    -   [x] Pesquisar e implementar uma ferramenta (como o Shaka Packager ou Bento4) para segmentar o áudio do Icecast/Liquidsoap em fragmentos DASH.
+    -   [x] Gerar um `manifest.mpd` dinâmico.
     -   **Justificativa:** DASH oferece menor latência que os streams tradicionais de Icecast, essencial para a sincronização.
 
 ## Fase 2: Implementação da Playlist Dinâmica

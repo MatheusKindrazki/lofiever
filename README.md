@@ -1,75 +1,230 @@
-# Lofiever - 24/7 Lofi Streaming with AI Curation
+# 🎵 Lofiever - Lo-fi 24/7 Radio Stream
 
-Lofiever is an open-source platform for streaming lofi music continuously, with playlists curated by AI. The application provides a seamless listening experience with real-time statistics and a customizable music player.
+Uma plataforma de streaming de música lo-fi 24/7 com sincronização em tempo real e playlists dinâmicas geradas por IA.
 
-## Features
+## 🚀 Quick Start
 
-- **Continuous Streaming**: Listen to lofi music 24/7 without interruptions.
-- **AI Curation**: Get personalized music recommendations using AI technology.
-- **Real-time Statistics**: See listener count, days active, and songs played.
-- **Responsive Design**: Enjoy the application on any device with a responsive interface.
-- **Dark Mode Support**: Automatically adapts to your system's theme preference.
-
-## Tech Stack
-
-- **Frontend**: Next.js 15, React 19, Tailwind CSS 4
-- **Backend**: Next.js API Routes
-- **Streaming**: WebSockets via Socket.IO (planned)
-- **AI Integration**: OpenAI API (simulated in current version)
-- **Styling**: Tailwind CSS with custom lofi theme
-
-## Getting Started
-
-### Prerequisites
-
-- Node.js 20.x or later
-- pnpm (this project uses pnpm as the package manager)
-
-### Installation
-
-1. Clone the repository:
+### 1. Subir toda a aplicação
 ```bash
-git clone https://github.com/your-username/lofiever.git
-cd lofiever
+npm run setup
 ```
 
-2. Install dependencies:
+Este comando irá:
+- ✅ Subir todos os containers Docker (Icecast, Liquidsoap, PostgreSQL, Redis)
+- ✅ Verificar se todos os serviços estão funcionando
+- ✅ Mostrar o status do stream de áudio
+- ✅ Exibir URLs e interfaces disponíveis
+
+### 2. Iniciar o frontend e backend
 ```bash
-pnpm install
+# Terminal 1 - Frontend Next.js
+npm run dev:next
+
+# Terminal 2 - Servidor backend 
+npm run dev:server
 ```
 
-3. Run the development server:
+## 📊 Monitoramento
+
+### Verificar status do stream
 ```bash
-pnpm dev
+npm run stream:monitor
 ```
 
-4. Open [http://localhost:3000](http://localhost:3000) in your browser.
+### Monitoramento contínuo (atualiza a cada 5s)
+```bash
+npm run stream:watch
+```
 
-## Project Structure
+### Status JSON do Icecast
+```bash
+npm run stream:test
+```
 
-- `src/components/`: React components
-- `src/app/`: Next.js pages and app router
-- `src/lib/`: Utility functions and API services
-- `src/app/api/`: Backend API routes
-- `src/styles/`: Global styles and Tailwind configuration
+## 🔧 Comandos Docker
 
-## Roadmap
+```bash
+# Subir containers
+npm run docker:up
 
-- [ ] Implement real-time streaming with Socket.IO
-- [ ] Add user authentication for saved playlists
-- [ ] Integrate with actual music sources (Spotify, YouTube)
-- [ ] Implement real AI curation with OpenAI
-- [ ] Add social features (share playlists, comments)
+# Parar containers
+npm run docker:down
 
-## Contributing
+# Ver logs em tempo real
+npm run docker:logs
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+# Reiniciar containers
+npm run docker:restart
+```
 
-## License
+## 🌐 Interfaces Disponíveis
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+- **Stream de Áudio**: http://localhost:8000/stream
+- **Icecast Admin**: http://localhost:8000/admin/
+  - Usuário: `admin`
+  - Senha: `admin_password`
+- **Frontend Next.js**: http://localhost:3000 (quando iniciado)
+- **PostgreSQL**: localhost:5432
+- **Redis**: localhost:6379
 
-## Acknowledgments
+## 🏗️ Arquitetura
 
-- Inspired by lofi hip hop radio streams
-- Built with Next.js, React, and Tailwind CSS
+### Serviços Docker
+- **Icecast**: Servidor de streaming de áudio
+- **Liquidsoap**: Engine de processamento e geração de playlist
+- **PostgreSQL**: Banco de dados principal
+- **Redis**: Cache e sessões
+
+### Stack da Aplicação
+- **Frontend**: Next.js 15 com React 19
+- **Backend**: Node.js com TypeScript
+- **Streaming**: Icecast + Liquidsoap
+- **Database**: PostgreSQL + Prisma ORM
+- **Cache**: Redis + ioredis
+
+## 📁 Estrutura do Projeto
+
+```
+lofiever/
+├── src/                    # Código da aplicação Next.js
+├── server/                 # Servidor backend Node.js
+├── streaming/              # Configurações Icecast + Liquidsoap
+├── scripts/                # Scripts de automação
+├── public/music/           # Biblioteca de músicas
+├── docker-compose.yml      # Orquestração dos serviços
+└── package.json            # Scripts e dependências
+```
+
+## 🎯 Status da Implementação
+
+Conforme o [TODO.md](./TODO.md), a **Fase 1** está completamente implementada:
+
+- ✅ **1.1. Icecast configurado e rodando**
+- ✅ **1.2. Liquidsoap integrado com Icecast**
+- ✅ **1.3. Sincronização NTP implementada**
+- ✅ **1.4. Protocolo DASH preparado**
+
+### Próximas Fases
+- 🔄 **Fase 2**: Playlist dinâmica com IA
+- 🔄 **Fase 3**: Motor de recomendação IA
+- 🔄 **Fase 4**: Integração frontend/backend
+- 🔄 **Fase 5**: Deploy e monitoramento
+
+## 🛠️ Desenvolvimento
+
+### Instalar dependências
+```bash
+npm install
+```
+
+### Comandos de desenvolvimento
+```bash
+npm run dev          # Servidor backend
+npm run dev:next     # Frontend Next.js
+npm run dev:server   # Apenas backend
+npm run build        # Build de produção
+npm run lint         # Verificar código
+```
+
+### Testes
+```bash
+npm run test:redis   # Testar conexão Redis
+```
+
+## 🐳 Docker
+
+### Configuração dos containers
+O `docker-compose.yml` define:
+- **Icecast**: Porta 8000, senhas configuradas
+- **Liquidsoap**: Conecta ao Icecast, lê de `/music`
+- **PostgreSQL**: Porta 5432, usuário `postgres`
+- **Redis**: Porta 6379
+
+### Volumes
+- `./streaming/liquidsoap:/radio` - Scripts Liquidsoap
+- `./public/music:/music` - Biblioteca de músicas
+- `postgres-data` e `redis-data` - Persistência de dados
+
+## 📝 Scripts Utilitários
+
+### `scripts/start-app.sh`
+Script principal que sobe tudo e verifica o status
+
+### `scripts/monitor-stream.sh`
+Monitora o status do stream e serviços em tempo real
+
+## 🔐 Configurações de Segurança
+
+### Icecast
+- Source password: `source_password`
+- Admin password: `admin_password`
+- Relay password: `relay_password`
+
+### Banco de Dados
+- PostgreSQL: `postgres`/`postgres`
+- Redis: Sem senha (desenvolvimento)
+
+## 📋 Troubleshooting
+
+### Stream não funciona
+```bash
+# Verificar containers
+docker-compose ps
+
+# Ver logs
+npm run docker:logs
+
+# Reiniciar tudo
+npm run docker:restart
+npm run setup
+```
+
+### Problemas de porta
+Certifique-se que as portas estão livres:
+- 8000 (Icecast)
+- 5432 (PostgreSQL)  
+- 6379 (Redis)
+- 3000 (Next.js)
+
+### Logs detalhados
+```bash
+# Logs específicos do Liquidsoap
+docker-compose logs liquidsoap
+
+# Logs específicos do Icecast  
+docker-compose logs icecast
+```
+
+## 🎵 Testando o Stream
+
+### Via browser
+Abra http://localhost:8000/stream em um player de áudio
+
+### Via VLC
+```bash
+vlc http://localhost:8000/stream
+```
+
+### Via curl
+```bash
+curl -I http://localhost:8000/stream
+```
+
+## 📚 Documentação Adicional
+
+- [TODO.md](./TODO.md) - Roadmap de implementação
+- [docs/relatorio-tecnico.md](./docs/relatorio-tecnico.md) - Relatório técnico detalhado
+- [Liquidsoap Documentation](https://www.liquidsoap.info/)
+- [Icecast Documentation](https://icecast.org/docs/)
+
+## 🤝 Contribuição
+
+1. Fork o projeto
+2. Crie uma branch para sua feature
+3. Commit suas mudanças
+4. Push para a branch
+5. Abra um Pull Request
+
+## 📄 Licença
+
+Este projeto está sob a licença MIT. Veja o arquivo LICENSE para mais detalhes.
