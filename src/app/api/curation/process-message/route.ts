@@ -1,6 +1,6 @@
 // src/app/api/curation/process-message/route.ts
 import { NextResponse } from 'next/server';
-import { streamText, tool } from 'ai';
+import { streamText, tool, StreamingTextResponse } from 'ai'; // Import StreamingTextResponse
 import { createOpenAI } from '@ai-sdk/openai';
 import { z } from 'zod';
 import { PlaylistManagerService } from '@/services/playlist/playlist-manager.service';
@@ -50,6 +50,8 @@ export async function POST(req: Request) {
               return `Certo! Adicionei "${track.title}" de ${track.artist} à playlist.`;
             }
             return `Poxa, não encontrei "${title}" no nosso catálogo.`;
+            // The `yield` statements make this function a Generator.
+            // The return value will be wrapped by the AI SDK's streaming mechanism.
           },
         }),
         find_and_queue_songs_by_mood: tool({
@@ -85,11 +87,7 @@ export async function POST(req: Request) {
       },
     });
 
-    return new NextResponse(result.toAIStream(), {
-      headers: {
-        'Content-Type': 'text/plain',
-      },
-    });
+    return new StreamingTextResponse(result);
 
   } catch (error) {
     return handleApiError(error);
