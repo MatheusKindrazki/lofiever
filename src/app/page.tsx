@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/explicit-function-return-type */
 import Player from '@/components/Player';
 import Stats from '@/components/Stats';
-import Curation from '@/components/Curation';
+import ChatRoom from '@/components/ChatRoom'; // Use the new ChatRoom component
 
 export default function Home() {
   return (
@@ -22,11 +22,11 @@ export default function Home() {
             <Player />
           </div>
           
-          {/* Coluna da direita com Stats e Curation */}
+          {/* Coluna da direita com Stats e ChatRoom */}
           <div className="flex flex-col gap-6 h-full overflow-hidden">
             <Stats />
             <div className="flex-1 overflow-auto">
-              <Curation />
+              <ChatRoom /> {/* Use ChatRoom here */}
             </div>
           </div>
         </div>

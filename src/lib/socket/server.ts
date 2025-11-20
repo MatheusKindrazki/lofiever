@@ -6,12 +6,15 @@ import { SOCKET_EVENTS } from './types';
 import type { Socket } from 'socket.io';
 import { redis, redisHelpers, KEYS } from '../redis';
 import { config } from '../config';
+import { Redis } from 'ioredis';
+import type { ChatMessage as RedisChatMessage, Track as RedisTrack } from '../redis';
 
 // Generate short, unique IDs for clients
 const nanoid = customAlphabet('1234567890abcdefghijklmnopqrstuvwxyz', 10);
 
 // Track active Socket.IO instances to prevent duplicates
 let io: SocketIOServer<ClientToServerEvents, ServerToClientEvents> | null = null;
+let redisSubscriber: Redis | null = null;
 
 export function createSocketServer(httpServer: HTTPServer): SocketIOServer<ClientToServerEvents, ServerToClientEvents> {
   // Return existing instance if already created
@@ -20,18 +23,16 @@ export function createSocketServer(httpServer: HTTPServer): SocketIOServer<Clien
   // Create new Socket.IO server instance
   io = new SocketIOServer<ClientToServerEvents, ServerToClientEvents>(httpServer, {
     path: config.socket.path,
-    transports: ['websocket'], // Force array type instead of readonly tuple
+    transports: ['websocket'],
     cors: {
       origin: config.app.url,
       methods: ['GET', 'POST'],
       credentials: true,
     },
     connectionStateRecovery: {
-      // Enable connection state recovery
       maxDisconnectionDuration: 2 * 60 * 1000, // 2 minutes
     },
-    // Add adapter for scaling if needed in the future
-    // adapter: createRedisAdapter(redis),
+    // adapter: createRedisAdapter(redis), // Future scaling
   });
 
   // Add connection middleware
@@ -39,6 +40,9 @@ export function createSocketServer(httpServer: HTTPServer): SocketIOServer<Clien
 
   // Register event handlers
   setupEventHandlers(io);
+
+  // Setup Redis Subscriber for proactive announcements
+  setupRedisSubscriber(io);
   
   console.log('Socket.IO server initialized');
   
@@ -49,13 +53,8 @@ export function createSocketServer(httpServer: HTTPServer): SocketIOServer<Clien
 function setupMiddleware(io: SocketIOServer<ClientToServerEvents, ServerToClientEvents>): void {
   io.use(async (socket, next) => {
     try {
-      // Add unique user ID to socket data
       socket.data.userId = socket.handshake.auth.userId || nanoid();
       socket.data.username = socket.handshake.auth.username || `user_${socket.data.userId.substring(0, 5)}`;
-      
-      // Authenticate user (can be enhanced when auth is implemented)
-      // For now, allow all connections
-      
       next();
     } catch (error) {
       console.error('Socket middleware error:', error);
@@ -73,17 +72,13 @@ function setupEventHandlers(io: SocketIOServer<ClientToServerEvents, ServerToCli
     console.log(`Client connected: ${socket.id} (${username})`);
     
     try {
-      // Update listeners count
       const listenersCount = await redisHelpers.incrementListeners();
       console.log(`Active listeners: ${listenersCount}`);
       
-      // Mark user as active in chat
       await redisHelpers.markUserActive(userId);
       
-      // Send current state to the client
       await syncClientState(socket);
       
-      // Broadcast updated listener count
       io.emit(SOCKET_EVENTS.LISTENERS_UPDATE, { count: listenersCount });
     } catch (error) {
       console.error('Error during client connection setup:', error);
@@ -92,7 +87,6 @@ function setupEventHandlers(io: SocketIOServer<ClientToServerEvents, ServerToCli
     
     // --- Event Handlers --- //
     
-    // Handle sync request
     socket.on(SOCKET_EVENTS.SYNC_REQUEST, async () => {
       try {
         await syncClientState(socket);
@@ -102,44 +96,87 @@ function setupEventHandlers(io: SocketIOServer<ClientToServerEvents, ServerToCli
       }
     });
 
-    // Handle chat messages
     socket.on(SOCKET_EVENTS.CHAT_MESSAGE, async (message) => {
+      const userMessageId = nanoid();
+      const aiMessageId = nanoid(); // Unique ID for AI's response
+
       try {
-        // Create chat message object
-        const chatMessage = {
-          id: nanoid(),
+        // 1. Store and broadcast user's message
+        const chatMessage: RedisChatMessage = {
+          id: userMessageId,
           userId,
           username,
           content: message.content,
           timestamp: Date.now(),
-          type: message.type,
+          type: 'user',
         };
         
-        // Store in Redis and broadcast
         await redisHelpers.addChatMessage(chatMessage);
+        io.emit(SOCKET_EVENTS.CHAT_MESSAGE, chatMessage); // Broadcast user's message
+
+        // 2. Forward message to AI agent
+        const aiResponse = await fetch(`${config.app.url}/api/curation/process-message`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            messages: [{ role: 'user', content: message.content }], // Pass user message to AI
+            data: { userId },
+          }),
+        });
+
+        if (!aiResponse.ok) {
+          const errorText = await aiResponse.text();
+          throw new Error(`AI response error: ${aiResponse.status} - ${errorText}`);
+        }
+
+        if (!aiResponse.body) {
+          throw new Error('AI response body is empty');
+        }
+
+        // 3. Process and stream AI's response
+        let aiFullContent = '';
+        const reader = aiResponse.body.getReader();
+        const decoder = new TextDecoder();
         
-        // Broadcast message to all clients
-        io.emit(SOCKET_EVENTS.CHAT_MESSAGE, chatMessage);
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          
+          const chunk = decoder.decode(value, { stream: true });
+          aiFullContent += chunk;
+
+          // Broadcast each chunk to clients
+          io.emit(SOCKET_EVENTS.AI_MESSAGE_CHUNK, { chunk, messageId: aiMessageId });
+        }
+        
+        // 4. Store full AI message and broadcast completion
+        const aiChatMessage: RedisChatMessage = {
+          id: aiMessageId,
+          userId: 'ai', // AI's ID
+          username: 'Lofine', // AI's username
+          content: aiFullContent,
+          timestamp: Date.now(),
+          type: 'ai',
+        };
+        await redisHelpers.addChatMessage(aiChatMessage);
+        io.emit(SOCKET_EVENTS.AI_MESSAGE_COMPLETE, { messageId: aiMessageId });
+
       } catch (error) {
-        console.error('Chat error:', error);
-        socket.emit(SOCKET_EVENTS.ERROR, { message: 'Failed to send message' });
+        console.error('Chat AI integration error:', error);
+        socket.emit(SOCKET_EVENTS.ERROR, { message: 'Failed to process message with AI' });
       }
     });
 
-    // Handle playlist votes
     socket.on(SOCKET_EVENTS.PLAYLIST_VOTE, async (trackId) => {
       try {
-        // Store vote in Redis
-        // We'll implement a more sophisticated voting system later
         const key = `${KEYS.PLAYLIST_VOTE}:${trackId}`;
         await redis.sadd(key, userId);
-        
-        // Get current votes count
         const votesCount = await redis.scard(key);
         
         console.log(`Vote for track ${trackId} by ${userId}. Total votes: ${votesCount}`);
         
-        // Broadcast vote update
         io.emit(SOCKET_EVENTS.PLAYLIST_VOTE_UPDATE, { trackId, votes: votesCount });
       } catch (error) {
         console.error('Vote error:', error);
@@ -147,20 +184,62 @@ function setupEventHandlers(io: SocketIOServer<ClientToServerEvents, ServerToCli
       }
     });
 
-    // Handle disconnection
     socket.on('disconnect', async (reason) => {
       try {
         console.log(`Client disconnected: ${socket.id} (${username}). Reason: ${reason}`);
-        
-        // Update listeners count
         const listenersCount = await redisHelpers.decrementListeners();
-        
-        // Broadcast updated count
         io.emit(SOCKET_EVENTS.LISTENERS_UPDATE, { count: listenersCount });
       } catch (error) {
         console.error('Error during client disconnection:', error);
       }
     });
+  });
+}
+
+// Setup Redis Subscriber
+function setupRedisSubscriber(io: SocketIOServer<ClientToServerEvents, ServerToClientEvents>): void {
+  if (redisSubscriber) return; // Only setup once
+
+  redisSubscriber = new Redis(config.redis.url);
+
+  redisSubscriber.on('error', (err) => {
+    console.error('Redis Subscriber Error:', err);
+  });
+
+  redisSubscriber.subscribe('lofi-ever:new-track', (err) => {
+    if (err) {
+      console.error('Failed to subscribe to Redis channel:', err);
+      return;
+    }
+    console.log('Subscribed to lofi-ever:new-track channel');
+  });
+
+  redisSubscriber.on('message', (channel, message) => {
+    if (channel === 'lofi-ever:new-track') {
+      try {
+        const track: RedisTrack = JSON.parse(message);
+        const djAnnouncementMessageId = nanoid();
+        const announcementContent = `Agora tocando: "${track.title}" por ${track.artist}. Aproveitem a vibe!`;
+        
+        // Broadcast DJ announcement
+        io.emit(SOCKET_EVENTS.DJ_ANNOUNCEMENT, { message: announcementContent, track });
+
+        // Store as a chat message
+        const djChatMessage: RedisChatMessage = {
+          id: djAnnouncementMessageId,
+          userId: 'dj', // Use a special ID for DJ
+          username: 'Lofine',
+          content: announcementContent,
+          timestamp: Date.now(),
+          type: 'system', // Or 'ai' if preferred for announcements
+        };
+        redisHelpers.addChatMessage(djChatMessage);
+
+        console.log(`DJ Announcement: ${announcementContent}`);
+      } catch (error) {
+        console.error('Error processing new track message from Redis:', error);
+      }
+    }
   });
 }
 
@@ -172,12 +251,10 @@ async function syncClientState(socket: Socket<ClientToServerEvents, ServerToClie
     redisHelpers.getChatMessages(50),
   ]);
   
-  // Calculate current position
   const position = playbackState.isPlaying 
-    ? (Date.now() - playbackState.startedAt) % (currentTrack?.duration || 0)
+    ? (Date.now() - (playbackState.startedAt || 0)) % (currentTrack?.duration || 0)
     : playbackState.position;
   
-  // Send sync response if we have a track
   if (currentTrack) {
     socket.emit(SOCKET_EVENTS.SYNC_RESPONSE, {
       track: currentTrack,
@@ -186,12 +263,14 @@ async function syncClientState(socket: Socket<ClientToServerEvents, ServerToClie
     });
   }
   
-  // Send chat history
   if (chatMessages.length > 0) {
-    socket.emit(SOCKET_EVENTS.CHAT_HISTORY, { messages: chatMessages });
+    // Filter out only relevant messages for initial sync
+    const relevantChatMessages = chatMessages.filter(msg => 
+      msg.type === 'user' || msg.type === 'ai' || msg.type === 'system'
+    );
+    socket.emit(SOCKET_EVENTS.CHAT_HISTORY, { messages: relevantChatMessages });
   }
   
-  // Send listener count
   const listenersCount = await redisHelpers.getListenersCount();
   socket.emit(SOCKET_EVENTS.LISTENERS_UPDATE, { count: listenersCount });
 }
@@ -209,6 +288,11 @@ export async function closeSocketServer(): Promise<void> {
       if (server) {
         server.close(() => {
           io = null;
+          if (redisSubscriber) {
+            redisSubscriber.unsubscribe();
+            redisSubscriber.quit();
+            redisSubscriber = null;
+          }
           resolve();
         });
       } else {

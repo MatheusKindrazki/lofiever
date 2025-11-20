@@ -28,6 +28,13 @@ export const SOCKET_EVENTS = {
   
   // System events
   ERROR: 'error',
+  
+  // AI Chat events
+  AI_MESSAGE_CHUNK: 'ai:message:chunk',
+  AI_MESSAGE_COMPLETE: 'ai:message:complete',
+
+  // DJ Announcement events
+  DJ_ANNOUNCEMENT: 'dj:announcement',
 } as const;
 
 export type SocketEvents = typeof SOCKET_EVENTS;
@@ -43,6 +50,9 @@ export interface ServerToClientEvents {
   [SOCKET_EVENTS.PLAYLIST_VOTE_UPDATE]: (data: { trackId: string; votes: number }) => void;
   [SOCKET_EVENTS.LISTENERS_UPDATE]: (data: { count: number }) => void;
   [SOCKET_EVENTS.ERROR]: (error: { message: string }) => void;
+  [SOCKET_EVENTS.AI_MESSAGE_CHUNK]: (data: { chunk: string; messageId: string }) => void;
+  [SOCKET_EVENTS.AI_MESSAGE_COMPLETE]: (data: { messageId: string }) => void;
+  [SOCKET_EVENTS.DJ_ANNOUNCEMENT]: (data: { message: string; track?: Track }) => void;
 }
 
 export interface ClientToServerEvents {
