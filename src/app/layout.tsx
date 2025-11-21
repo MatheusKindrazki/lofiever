@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import '../styles/globals.css';
-import ReactQueryProvider from '@/lib/providers/ReactQueryProvider';
+import AppProviders from '@/lib/providers/AppProviders';
 
 export const metadata: Metadata = {
   title: 'Lofiever - 24/7 Lofi Streaming',
@@ -17,11 +17,11 @@ export default function RootLayout({
 }): React.ReactElement {
   return (
     <html lang="en">
-      <body className="antialiased">
-        <ReactQueryProvider>
+      <body className="antialiased" suppressHydrationWarning>
+        <AppProviders>
           {children}
-        </ReactQueryProvider>
+        </AppProviders>
       </body>
     </html>
   );
-} 
+}

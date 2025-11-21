@@ -1,18 +1,4 @@
-import { PrismaClient } from '@prisma/client';
-
-// Define our own Track type that matches the Prisma schema
-export interface Track {
-  id: string;
-  title: string;
-  artist: string;
-  sourceType: string;
-  sourceId: string;
-  duration: number;
-  bpm?: number | null;
-  mood?: string | null;
-  createdAt: Date;
-  lastPlayed?: Date | null;
-}
+import { PrismaClient, type Track } from '@prisma/client';
 
 // PrismaClient is attached to the `global` object in development to prevent
 // exhausting your database connection limit.
@@ -36,14 +22,14 @@ export const prismaHelpers = {
   async getTrackById(id: string): Promise<Track | null> {
     return prisma.track.findUnique({
       where: { id },
-    }) as Promise<Track | null>;
+    });
   },
 
   async getRecentTracks(limit = 10): Promise<Track[]> {
     return prisma.track.findMany({
       orderBy: { lastPlayed: 'desc' },
       take: limit,
-    }) as Promise<Track[]>;
+    });
   },
   
   // Playlist related helpers

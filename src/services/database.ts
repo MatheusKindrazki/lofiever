@@ -1,46 +1,21 @@
 import { prisma, prismaHelpers } from '@/lib/prisma';
-import type { Track as PrismaTrack } from '@/lib/prisma';
+import type { Track, Playlist, PlaylistTrack, PlaybackHistory } from '@prisma/client';
 import { redis, redisHelpers, KEYS } from '@/lib/redis';
 import type { Track as RedisTrack } from '@/lib/redis';
 
-// Define tipos para os retornos de playlist
-interface PlaylistTrack {
-  playlistId: string;
-  trackId: string;
-  position: number;
-  addedBy?: string | null;
-  addedAt: Date;
-  track: PrismaTrack;
-}
-
-interface Playlist {
-  id: string;
-  version: number;
-  createdAt: Date;
-  active: boolean;
-  tracks: PlaylistTrack[];
-}
-
-interface PlaybackHistoryRecord {
-  id: string;
-  trackId: string;
-  startedAt: Date;
-  endedAt?: Date | null;
-  listenersPeak?: number | null;
-  version: number;
-}
+// Define o tipo para o objeto de playlist que inclui as faixas e os detalhes da faixa
+type FullPlaylist = Playlist & {
+  tracks: (PlaylistTrack & {
+    track: Track;
+  })[];
+};
 
 // Functions for operations that involve both databases
 export const DatabaseService = {
   // Synchronize a track between Redis and Postgres
-  async syncTrack(track: RedisTrack | PrismaTrack): Promise<void> {
-    // Update Redis cache
+  async syncTrack(track: RedisTrack | Track): Promise<void> {
     await redisHelpers.setCurrentTrack(track as RedisTrack);
-    
-    // Check if track exists in Postgres
     const existingTrack = await prismaHelpers.getTrackById(track.id);
-    
-    // Update lastPlayed in Postgres if track exists
     if (existingTrack) {
       await prisma.track.update({
         where: { id: track.id },
@@ -51,15 +26,12 @@ export const DatabaseService = {
   
   // Get current track with fallback between Redis and Postgres
   async getCurrentTrack(): Promise<RedisTrack | null> {
-    // Try Redis first (faster)
     const redisTrack = await redisHelpers.getCurrentTrack();
     if (redisTrack) return redisTrack;
     
-    // Fallback to Postgres if not in Redis
     const recentTrack = await prismaHelpers.getRecentTracks(1);
     if (recentTrack.length > 0) {
       const track = recentTrack[0] as unknown as RedisTrack;
-      // Cache in Redis for future requests
       await redisHelpers.setCurrentTrack(track);
       return track;
     }
@@ -68,51 +40,61 @@ export const DatabaseService = {
   },
   
   // Get active playlist with caching
-  async getActivePlaylist(): Promise<Playlist | null> {
-    // Try Redis cache first
+  async getActivePlaylist(): Promise<FullPlaylist | null> {
     const cachedPlaylist = await redis.get(KEYS.PLAYLIST_CACHE);
-    if (cachedPlaylist) return JSON.parse(cachedPlaylist) as Playlist;
+    if (cachedPlaylist) {
+      const playlist = JSON.parse(cachedPlaylist) as FullPlaylist;
+      if (playlist && playlist.tracks) {
+        playlist.tracks.forEach(pt => {
+          if (pt.track) {
+            pt.track.createdAt = new Date(pt.track.createdAt);
+            pt.track.updatedAt = new Date(pt.track.updatedAt);
+            if (pt.track.lastPlayed) {
+              pt.track.lastPlayed = new Date(pt.track.lastPlayed);
+            }
+          }
+        });
+      }
+      return playlist;
+    }
     
-    // Get from Postgres if not cached
     const playlist = await prismaHelpers.getActivePlaylist();
     if (playlist) {
-      // Cache the playlist for future requests (expire after 5 minutes)
       await redis.set(KEYS.PLAYLIST_CACHE, JSON.stringify(playlist), 'EX', 300);
-      return playlist as Playlist;
+      return playlist;
     }
     
     return null;
   },
   
   // Create a new playlist and update Redis cache
-  async createNewPlaylist(trackIds: string[]): Promise<Playlist> {
-    // Get current version from Redis
+  async createNewPlaylist(trackIds: string[]): Promise<FullPlaylist> {
     const versionStr = await redis.get(KEYS.PLAYLIST_VERSION);
-    const version = versionStr ? Number.parseInt(versionStr, 10) + 1 : 1;
+    const version = versionStr ? parseInt(versionStr, 10) + 1 : 1;
     
-    // Create playlist in Postgres
     const playlist = await prismaHelpers.createPlaylist(version, trackIds);
     
-    // Update Redis
     await redis.set(KEYS.PLAYLIST_VERSION, version.toString());
     await redis.set(KEYS.PLAYLIST_CACHE, JSON.stringify(playlist), 'EX', 300);
     
-    return playlist as Playlist;
+    return playlist;
   },
   
+  async invalidatePlaylistCache(): Promise<void> {
+    await redis.del(KEYS.PLAYLIST_CACHE);
+  },
+
   // Record playback start in Postgres and update Redis
   async startPlayback(trackId: string): Promise<string> {
-    // Get version from Redis
     const versionStr = await redis.get(KEYS.PLAYLIST_VERSION);
-    const version = versionStr ? Number.parseInt(versionStr, 10) : 1;
-    
-    // Record in Postgres
+    const version = versionStr ? parseInt(versionStr, 10) : 1;
     const history = await prismaHelpers.recordPlayback(trackId, version);
     
-    // Update Redis playback state
     await redisHelpers.setPlaybackState({
       isPlaying: true,
       timestamp: Date.now(),
+      position: 0,
+      startedAt: Date.now()
     });
     
     return history.id;
@@ -120,17 +102,15 @@ export const DatabaseService = {
   
   // Complete playback record and update stats
   async endPlayback(historyId: string): Promise<void> {
-    // Get current listener count
     const listenerCount = await redisHelpers.getListenersCount();
-    
-    // Update history record
     await prismaHelpers.completePlayback(historyId, listenerCount);
     
-    // Update Redis playback state
     await redisHelpers.setPlaybackState({
-      isPlaying: false,
-      timestamp: Date.now(),
-    });
+        isPlaying: false,
+        timestamp: Date.now(),
+        position: 0,
+        startedAt: Date.now()
+      });
   },
   
   // Metadata and stats methods
@@ -139,23 +119,21 @@ export const DatabaseService = {
     totalTracksPlayed: number;
     uniqueTracks: number;
     daysActive: number;
-    recentHistory: PlaybackHistoryRecord[];
+    recentHistory: PlaybackHistory[];
   }> {
-    // Get recent history from Postgres
-    const recentHistory = await prisma.playbackHistory.findMany({
-      orderBy: { startedAt: 'desc' },
-      take: 100,
-    });
-    
-    // Calculate stats
-    const totalPlayed = await prisma.playbackHistory.count();
-    const uniqueTracks = await prisma.track.count();
-    const listenerCount = await redisHelpers.getListenersCount();
-    
-    // Calculate days active (assuming continuous operation since first track)
-    const firstPlay = await prisma.playbackHistory.findFirst({
-      orderBy: { startedAt: 'asc' },
-    });
+    const [
+      totalPlayed,
+      uniqueTracks,
+      listenerCount,
+      firstPlay,
+      recentHistory,
+    ] = await Promise.all([
+      prisma.playbackHistory.count(),
+      prisma.track.count(),
+      redisHelpers.getListenersCount(),
+      prisma.playbackHistory.findFirst({ orderBy: { startedAt: 'asc' } }),
+      prisma.playbackHistory.findMany({ orderBy: { startedAt: 'desc' }, take: 100 }),
+    ]);
     
     const daysActive = firstPlay 
       ? Math.ceil((Date.now() - firstPlay.startedAt.getTime()) / (1000 * 60 * 60 * 24))
@@ -166,7 +144,7 @@ export const DatabaseService = {
       totalTracksPlayed: totalPlayed,
       uniqueTracks,
       daysActive,
-      recentHistory: recentHistory as PlaybackHistoryRecord[],
+      recentHistory,
     };
   },
-} as const; 
+} as const;

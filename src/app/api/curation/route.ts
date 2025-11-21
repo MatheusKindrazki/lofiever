@@ -1,73 +1,62 @@
 import { NextResponse } from 'next/server';
+import { generateObject } from 'ai';
+import { createOpenAI } from '@ai-sdk/openai';
+import { z } from 'zod';
+import { handleApiError } from '@/lib/api-utils';
+import { defaultCurationPrompt } from '@/lib/prompts';
 
-// In a real app, this would connect to OpenAI's API
-async function getAIRecommendations(prompt: string) {
-  // This is a mock of what OpenAI might return
-  console.log(`AI prompt received: ${prompt}`);
-  
-  // Mock data - in a real app, this would be the response from OpenAI
-  return {
-    recommendations: [
-      {
-        title: "Midnight Coffee",
-        artist: "Sleepy Beats",
-        mood: "calm",
-        bpm: 75,
-        duration: 180,
-      },
-      {
-        title: "Urban Rain",
-        artist: "City Lofi",
-        mood: "melancholic",
-        bpm: 80,
-        duration: 195,
-      },
-      {
-        title: "Study Break",
-        artist: "Chill Academia",
-        mood: "focused",
-        bpm: 70,
-        duration: 210,
-      },
-      {
-        title: "Empty Streets",
-        artist: "Night Walker",
-        mood: "atmospheric",
-        bpm: 65,
-        duration: 225,
-      },
-      {
-        title: "Morning Pages",
-        artist: "Ambient Thoughts",
-        mood: "inspired",
-        bpm: 85,
-        duration: 190,
-      }
-    ]
-  };
-}
+const openai = createOpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
+
+const RecommendationSchema = z.object({
+  recommendations: z
+    .array(
+      z.object({
+        title: z.string().min(2),
+        artist: z.string().min(2),
+        mood: z.string().min(2),
+        bpm: z.number().int().min(60).max(95),
+        duration: z.number().int().min(90).max(600),
+        description: z
+          .string()
+          .min(10)
+          .max(160)
+          .describe('Breve explicação do porquê a faixa combina com o pedido.'),
+      })
+    )
+    .min(3)
+    .max(12),
+});
 
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { prompt } = body;
-    
-    if (!prompt) {
+    const userPrompt = typeof body?.prompt === 'string' ? body.prompt.trim() : '';
+
+    if (!userPrompt && !defaultCurationPrompt) {
       return NextResponse.json(
-        { error: "Prompt is required" },
+        { error: 'Prompt is required' },
         { status: 400 }
       );
     }
-    
-    // In a real app, this would call OpenAI's API with the prompt
-    const recommendations = await getAIRecommendations(prompt);
-    
-    return NextResponse.json(recommendations, { status: 200 });
+
+    const composedPrompt = userPrompt
+      ? `${defaultCurationPrompt}\n\nPedido do ouvinte: ${userPrompt}`
+      : defaultCurationPrompt;
+
+    const { object } = await generateObject({
+      model: openai('gpt-4o-mini'),
+      system:
+        'Você é Lofine, a curadora oficial de lofi da rádio Lofiever. Gere apenas JSON válido seguindo o schema. '
+        + 'Priorize títulos originais, mantenha o BPM tranquilo (entre 60 e 95) e descreva brevemente o clima de cada faixa. '
+        + 'Responda sempre em português brasileiro.',
+      prompt: composedPrompt,
+      schema: RecommendationSchema,
+    });
+
+    return NextResponse.json(object, { status: 200 });
   } catch (error) {
-    console.error("Error getting AI recommendations:", error);
-    return NextResponse.json(
-      { error: "Failed to get AI recommendations" },
-      { status: 500 }
-    );
+    return handleApiError(error);
   }
-} 
+}

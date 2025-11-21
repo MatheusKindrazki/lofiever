@@ -5,6 +5,9 @@ import type { ClientToServerEvents, ServerToClientEvents } from './types';
 import { SOCKET_EVENTS } from './types';
 import { config } from '../config';
 import type { Track, ChatMessage } from '../redis';
+import { customAlphabet } from 'nanoid';
+
+const nanoid = customAlphabet('1234567890abcdefghijklmnopqrstuvwxyz', 10);
 
 // Singleton socket instance
 let socket: Socket<ServerToClientEvents, ClientToServerEvents> | null = null;
@@ -54,62 +57,121 @@ export function getSocket(): Socket<ServerToClientEvents, ClientToServerEvents> 
  * Hook to use the socket connection
  */
 export function useSocket() {
-  const [isConnected, setIsConnected] = useState<boolean>(false);
-  const socketRef = useRef<Socket<ServerToClientEvents, ClientToServerEvents> | null>(null);
+  const [isConnected, setIsConnected] = useState(false);
+  const [userId, setUserId] = useState<string>('');
+  const heartbeatIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
-    try {
-      // Get existing socket or create a new one
-      socketRef.current = socket || initializeSocket();
-      
+    // Initialize socket on client side
+    if (typeof window === 'undefined') return;
+
+    // Get or create userId
+    const storedUserId = localStorage.getItem('userId') || nanoid();
+    setUserId(storedUserId);
+
+    if (!socket) {
       // Set up connection event listeners
-      const onConnect = () => setIsConnected(true);
-      const onDisconnect = () => setIsConnected(false);
+      const onConnect = () => {
+        console.log('Socket connected:', socket?.id);
+        setIsConnected(true);
 
-      socketRef.current.on('connect', onConnect);
-      socketRef.current.on('disconnect', onDisconnect);
-      
-      // Set initial connection state
-      setIsConnected(socketRef.current.connected);
-
-      // Cleanup event listeners
-      return () => {
-        const socket = socketRef.current;
-        if (socket) {
-          socket.off('connect', onConnect);
-          socket.off('disconnect', onDisconnect);
+        // Start heartbeat when connected
+        if (socket && !heartbeatIntervalRef.current) {
+          heartbeatIntervalRef.current = setInterval(() => {
+            socket?.emit(SOCKET_EVENTS.HEARTBEAT);
+          }, 10000); // Send heartbeat every 10 seconds
         }
       };
-    } catch (error) {
-      console.error('Error initializing socket in hook:', error);
-      return () => {};
+      const onDisconnect = () => {
+        console.log('Socket disconnected');
+        setIsConnected(false);
+
+        // Clear heartbeat when disconnected
+        if (heartbeatIntervalRef.current) {
+          clearInterval(heartbeatIntervalRef.current);
+          heartbeatIntervalRef.current = null;
+        }
+      };
+
+      try {
+        const username = localStorage.getItem('username') || `user_${storedUserId.substring(0, 5)}`;
+
+        // Save to local storage for future sessions
+        localStorage.setItem('userId', storedUserId);
+        localStorage.setItem('username', username);
+
+        console.log('[Client] Initializing socket with:', { userId: storedUserId, username });
+        socket = initializeSocket({ userId: storedUserId, username });
+
+        socket.on(SOCKET_EVENTS.CONNECT, onConnect);
+        socket.on(SOCKET_EVENTS.DISCONNECT, onDisconnect);
+
+        if (socket.connected) {
+          setIsConnected(true);
+          // Start heartbeat if already connected
+          if (!heartbeatIntervalRef.current) {
+            heartbeatIntervalRef.current = setInterval(() => {
+              socket?.emit(SOCKET_EVENTS.HEARTBEAT);
+            }, 10000);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to initialize socket:', error);
+      }
+
+      return () => {
+        if (socket) {
+          socket.off(SOCKET_EVENTS.CONNECT, onConnect);
+          socket.off(SOCKET_EVENTS.DISCONNECT, onDisconnect);
+        }
+
+        // Clear heartbeat interval on cleanup
+        if (heartbeatIntervalRef.current) {
+          clearInterval(heartbeatIntervalRef.current);
+          heartbeatIntervalRef.current = null;
+        }
+      };
+    } else {
+      setIsConnected(socket.connected);
+
+      // Ensure heartbeat is running if socket exists and is connected
+      if (socket.connected && !heartbeatIntervalRef.current) {
+        heartbeatIntervalRef.current = setInterval(() => {
+          socket?.emit(SOCKET_EVENTS.HEARTBEAT);
+        }, 10000);
+      }
     }
   }, []);
 
   // Request sync from server
   const requestSync = useCallback(() => {
-    if (socketRef.current?.connected) {
-      socketRef.current.emit(SOCKET_EVENTS.SYNC_REQUEST);
+    if (socket?.connected) {
+      socket.emit(SOCKET_EVENTS.SYNC_REQUEST);
     }
   }, []);
 
   // Send chat message
-  const sendChatMessage = useCallback((content: string, type: 'user' | 'system' | 'ai' = 'user') => {
-    if (socketRef.current?.connected) {
-      socketRef.current.emit(SOCKET_EVENTS.CHAT_MESSAGE, { content, type });
+  const sendChatMessage = useCallback((content: string, options: { isPrivate?: boolean } = {}) => {
+    if (socket?.connected) {
+      socket.emit(SOCKET_EVENTS.CHAT_MESSAGE, {
+        content,
+        type: 'user',
+        isPrivate: options.isPrivate
+      });
     }
   }, []);
 
   // Vote for track
   const voteForTrack = useCallback((trackId: string) => {
-    if (socketRef.current?.connected) {
-      socketRef.current.emit(SOCKET_EVENTS.PLAYLIST_VOTE, trackId);
+    if (socket?.connected) {
+      socket.emit(SOCKET_EVENTS.PLAYLIST_VOTE, trackId);
     }
   }, []);
 
   return {
-    socket: socketRef.current,
+    socket: socket,
     isConnected,
+    userId, // Return the userId
     requestSync,
     sendChatMessage,
     voteForTrack,
@@ -183,35 +245,112 @@ export function usePlaybackSync() {
  */
 export function useChat() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const { socket, sendChatMessage } = useSocket();
+  const [aiMessageBuffers, setAiMessageBuffers] = useState<Record<string, string>>({});
+  const [isLoadingAI, setIsLoadingAI] = useState<boolean>(false);
+  const { socket } = useSocket();
 
   useEffect(() => {
     if (!socket) return;
 
-    // Handle new messages
+    // Handle new user messages (already includes full AI messages for history)
     const onChatMessage = (message: ChatMessage) => {
-      setMessages((prev) => [...prev, message]);
+      setMessages((prev) => [...prev.filter(m => m.id !== message.id), message]);
+      if (message.type === 'user') {
+        setIsLoadingAI(true);
+      }
+    };
+
+    // Handle AI message chunks (streaming effect)
+    const onAIMessageChunk = ({ chunk, messageId }: { chunk: string; messageId: string }) => {
+      setAiMessageBuffers((prev) => {
+        const newContent = (prev[messageId] || '') + chunk;
+        // Update the messages list with the streaming AI message
+        setMessages((prevMessages) => {
+          const existingAiMessageIndex = prevMessages.findIndex(
+            (m) => m.id === messageId && m.type === 'ai'
+          );
+          if (existingAiMessageIndex > -1) {
+            const newMessages = [...prevMessages];
+            newMessages[existingAiMessageIndex] = {
+              ...newMessages[existingAiMessageIndex],
+              content: newContent,
+            };
+            return newMessages;
+          } else {
+            // Add a new AI message if it doesn't exist yet
+            return [
+              ...prevMessages,
+              {
+                id: messageId,
+                userId: 'ai',
+                username: 'Lofine',
+                content: newContent,
+                timestamp: Date.now(),
+                type: 'ai',
+              },
+            ];
+          }
+        });
+        return { ...prev, [messageId]: newContent };
+      });
+    };
+
+    // Handle AI message completion
+    const onAIMessageComplete = ({ messageId }: { messageId: string }) => {
+      setIsLoadingAI(false);
+      setAiMessageBuffers((prev) => {
+        const { [messageId]: completedMessage, ...rest } = prev;
+        // The full message is already in the `messages` state from the last chunk update
+        // We just need to clear the buffer and ensure the message is finalized.
+        // The server sends the full message in the final chatMessage event.
+        return rest;
+      });
+    };
+
+    // Handle DJ announcements
+    const onDJAnnouncement = ({ message, track }: { message: string; track?: Track }) => {
+      const announcementMessage: ChatMessage = {
+        id: nanoid(), // Unique ID for the announcement
+        userId: 'dj',
+        username: 'Lofine',
+        content: message,
+        timestamp: Date.now(),
+        type: 'system', // Or 'ai'
+        // Optionally add track info
+        meta: track ? { title: track.title, artist: track.artist, artworkUrl: track.artworkUrl } : undefined,
+      };
+      setMessages((prev) => [...prev, announcementMessage]);
     };
 
     // Handle chat history
     const onChatHistory = (data: { messages: ChatMessage[] }) => {
-      setMessages(data.messages);
+      // Filter out any temporary AI messages if a full history sync occurs
+      const filteredHistory = data.messages.filter(msg =>
+        !aiMessageBuffers[msg.id] // Don't include messages still being buffered
+      );
+      setMessages(filteredHistory);
     };
 
     // Register event listeners
     socket.on(SOCKET_EVENTS.CHAT_MESSAGE, onChatMessage);
+    socket.on(SOCKET_EVENTS.AI_MESSAGE_CHUNK, onAIMessageChunk);
+    socket.on(SOCKET_EVENTS.AI_MESSAGE_COMPLETE, onAIMessageComplete);
+    socket.on(SOCKET_EVENTS.DJ_ANNOUNCEMENT, onDJAnnouncement);
     socket.on(SOCKET_EVENTS.CHAT_HISTORY, onChatHistory);
 
     // Cleanup
     return () => {
       socket.off(SOCKET_EVENTS.CHAT_MESSAGE, onChatMessage);
+      socket.off(SOCKET_EVENTS.AI_MESSAGE_CHUNK, onAIMessageChunk);
+      socket.off(SOCKET_EVENTS.AI_MESSAGE_COMPLETE, onAIMessageComplete);
+      socket.off(SOCKET_EVENTS.DJ_ANNOUNCEMENT, onDJAnnouncement);
       socket.off(SOCKET_EVENTS.CHAT_HISTORY, onChatHistory);
     };
-  }, [socket]);
+  }, [socket, aiMessageBuffers]); // Include aiMessageBuffers in dependency array
 
   return {
     messages,
-    sendMessage: sendChatMessage,
+    isLoadingAI,
   };
 }
 

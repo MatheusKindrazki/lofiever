@@ -1,163 +1,145 @@
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, Track } from '@prisma/client';
+import * as fs from 'node:fs/promises';
+import * as path from 'node:path';
+import * as mm from 'music-metadata';
+import { R2Lib } from '../src/lib/r2';
+import { config } from '../src/lib/config';
+
+type SeedMode = 'dev' | 'prod' | 'local-prod';
 
 const prisma = new PrismaClient();
+const musicDir = path.join(process.cwd(), 'public', 'music');
 
-const sampleTracks = [
-  {
-    title: "Midnight Coffee",
-    artist: "Sleepy Beats",
-    sourceType: "local",
-    sourceId: "example.mp3",
-    duration: 180,
-    bpm: 75,
-    mood: "calm",
-  },
-  {
-    title: "Urban Rain",
-    artist: "City Lofi",
-    sourceType: "local", 
-    sourceId: "example.mp3",
-    duration: 195,
-    bpm: 80,
-    mood: "melancholic",
-  },
-  {
-    title: "Study Break",
-    artist: "Chill Academia",
-    sourceType: "local",
-    sourceId: "example.mp3", 
-    duration: 210,
-    bpm: 70,
-    mood: "focused",
-  },
-  {
-    title: "Empty Streets",
-    artist: "Night Walker",
-    sourceType: "local",
-    sourceId: "example.mp3",
-    duration: 225,
-    bpm: 65,
-    mood: "atmospheric",
-  },
-  {
-    title: "Morning Pages",
-    artist: "Ambient Thoughts",
-    sourceType: "local",
-    sourceId: "example.mp3",
-    duration: 190,
-    bpm: 85,
-    mood: "inspired",
-  },
-  {
-    title: "Lazy Sunday",
-    artist: "Weekend Vibes",
-    sourceType: "local",
-    sourceId: "example.mp3",
-    duration: 205,
-    bpm: 72,
-    mood: "relaxed",
-  },
-  {
-    title: "Neon Dreams",
-    artist: "Synthwave Lofi",
-    sourceType: "local",
-    sourceId: "example.mp3",
-    duration: 188,
-    bpm: 78,
-    mood: "nostalgic",
-  },
-  {
-    title: "Coffee Shop",
-    artist: "Acoustic Chill",
-    sourceType: "local",
-    sourceId: "example.mp3",
-    duration: 172,
-    bpm: 68,
-    mood: "cozy",
-  }
-];
-
-async function main(): Promise<void> {
-  console.log('🌱 Seeding database...');
-
-  // Limpar dados existentes
-  await prisma.playlistTrack.deleteMany();
-  await prisma.playlist.deleteMany();
-  await prisma.playbackHistory.deleteMany();
-  await prisma.feedback.deleteMany();
-  await prisma.chatMessage.deleteMany();
-  await prisma.track.deleteMany();
-
-  console.log('🗑️  Cleared existing data');
-
-  // Criar faixas
-  const tracks = [];
-  for (const trackData of sampleTracks) {
-    const track = await prisma.track.create({
-      data: trackData,
-    });
-    tracks.push(track);
-    console.log(`✅ Created track: ${track.title} by ${track.artist}`);
+async function seed(mode: SeedMode) {
+  if (mode === 'dev') {
+    console.log('🌱 Iniciando seed em modo de desenvolvimento (limpando o banco)...');
+    await prisma.playlistTrack.deleteMany();
+    await prisma.playlist.deleteMany();
+    await prisma.playbackHistory.deleteMany();
+    await prisma.feedback.deleteMany();
+    await prisma.chatMessage.deleteMany();
+    await prisma.track.deleteMany();
+    console.log('🗑️  Dados existentes foram limpos.');
+  } else {
+    console.log(`🌱 Iniciando seed em modo '${mode}' (apenas adicionando novas faixas)...`);
   }
 
-  // Criar playlist ativa
-  const playlist = await prisma.playlist.create({
-    data: {
-      version: 1,
-      active: true,
-      tracks: {
-        create: tracks.map((track, index) => ({
-          trackId: track.id,
-          position: index,
-        })),
+  const newTracks = await processMusicFiles(mode);
+
+  if (newTracks.length === 0) {
+    console.log('✅ Nenhuma nova faixa para adicionar.');
+    return;
+  }
+
+  if (mode === 'dev') {
+    const playlist = await prisma.playlist.create({
+      data: {
+        version: 1,
+        active: true,
+        tracks: { create: newTracks.map((track, index) => ({ trackId: track.id, position: index })) },
       },
-    },
-    include: {
-      tracks: {
-        include: {
-          track: true,
-        },
-      },
-    },
-  });
-
-  console.log(`🎵 Created playlist with ${playlist.tracks.length} tracks`);
-
-  // Criar algumas mensagens de chat de exemplo
-  const chatMessages = [
-    {
-      userId: 'system',
-      content: 'Welcome to Lofiever! Enjoy the music 🎵',
-      type: 'system',
-    },
-    {
-      userId: 'user1',
-      content: 'Love this track! Perfect for studying',
-      type: 'user',
-    },
-    {
-      userId: 'user2', 
-      content: 'This playlist is amazing 🔥',
-      type: 'user',
-    },
-  ];
-
-  for (const messageData of chatMessages) {
-    await prisma.chatMessage.create({
-      data: messageData,
+      include: { tracks: true },
     });
+    console.log(`🎵 Playlist de desenvolvimento criada com ${playlist.tracks.length} faixas.`);
   }
 
-  console.log('💬 Created sample chat messages');
+  console.log(`🎉 Seed concluído! ${newTracks.length} novas faixas foram processadas.`);
+}
 
-  console.log('🎉 Database seeded successfully!');
+async function processMusicFiles(mode: SeedMode): Promise<Track[]> {
+  const newTracks: Track[] = [];
+  const files = await fs.readdir(musicDir);
+
+  for (const file of files) {
+    const filePath = path.join(musicDir, file);
+    if ((await fs.stat(filePath)).isDirectory()) continue;
+
+    try {
+      console.log(`🎵 Processando ${file}...`);
+      const metadata = await mm.parseFile(filePath);
+      const { common, format } = metadata;
+      if (!format.duration) continue;
+
+      const title = common.title || path.parse(file).name;
+      const artist = common.artist || 'Artista Desconhecido';
+
+      const existingTrack = await prisma.track.findFirst({ where: { title, artist } });
+      if (existingTrack) {
+        console.log(`⏩ Pulando "${title} - ${artist}", já existe.`);
+        continue;
+      }
+
+      let sourceId = file;
+      let sourceType = 'local';
+      let artworkKey: string | null = null;
+      const trackId = crypto.randomUUID();
+
+      if (mode === 'prod') {
+        sourceType = 's3';
+        const musicKey = `music/${trackId}-${file}`;
+        console.log(`⏫ Fazendo upload de ${musicKey} para o R2...`);
+        sourceId = await R2Lib.uploadFile(filePath, musicKey);
+
+        if (common.picture?.[0]) {
+          const picture = common.picture[0];
+          artworkKey = `covers/${trackId}.jpg`;
+          console.log(`⏫ Fazendo upload de ${artworkKey} para o R2...`);
+          await R2Lib.uploadBuffer(Buffer.from(picture.data), artworkKey, picture.format);
+        }
+      } else if (mode === 'local-prod') {
+        // Simula a estrutura de produção, mas sem fazer upload.
+        sourceType = 's3';
+        sourceId = `music/mock/${file}`; // Placeholder
+        artworkKey = `covers/mock/${trackId}.jpg`; // Placeholder
+        console.log(`📦 Criando mock de produção para ${file}.`);
+      }
+
+      const trackData = {
+        id: trackId,
+        title,
+        artist,
+        sourceType,
+        sourceId,
+        artworkKey,
+        duration: Math.round(format.duration),
+        bpm: common.bpm || null,
+        mood: common.genre?.[0] || null,
+      };
+      
+      const newTrack = await prisma.track.create({ data: trackData });
+      newTracks.push(newTrack);
+      console.log(`✍️  Faixa criada no banco: ${newTrack.title}`);
+
+    } catch (error) {
+      console.error(`❌ Erro ao processar ${file}:`, error);
+    }
+  }
+  return newTracks;
+}
+
+async function main() {
+  const args = process.argv.slice(2);
+  const modeArg = args.find(arg => arg.startsWith('--mode='));
+  const mode = modeArg ? modeArg.split('=')[1] as SeedMode : 'dev';
+
+  if (!['dev', 'prod', 'local-prod'].includes(mode)) {
+    console.error("Modo inválido. Use '--mode=dev', '--mode=prod', ou '--mode=local-prod'.");
+    process.exit(1);
+  }
+  
+  if (mode === 'prod' && !config.r2.bucket) {
+    console.error("Erro: O modo 'prod' requer as variáveis de ambiente do R2.");
+    process.exit(1);
+  }
+
+  await seed(mode);
 }
 
 main()
   .catch((e) => {
-    console.error('❌ Error seeding database:', e);
+    console.error('❌ Erro fatal no script de seed:', e);
     process.exit(1);
   })
   .finally(async () => {
     await prisma.$disconnect();
-  }); 
+  });

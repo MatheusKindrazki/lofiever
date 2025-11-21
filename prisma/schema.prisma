@@ -18,19 +18,21 @@ model Track {
   id          String    @id @default(uuid())
   title       String
   artist      String
-  sourceType  String    // "spotify", "youtube", "local", "s3", "free-api"
-  sourceId    String    // URL, path, ID específico da fonte
-  duration    Int         // em segundos
-  bpm         Int?        // batidas por minuto (opcional)
-  mood        String?     // ambiente da música (opcional)
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
+  sourceType  String    // "spotify", "youtube", "local", "s3"
+  sourceId    String    // URL, path, ID or R2 key
+  artworkKey  String?   // R2 key for cover art
+  duration    Int       // em segundos
+  bpm         Int?      // batidas por minuto (opcional)
+  mood        String?   // ambiente da música (opcional)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
   lastPlayed  DateTime?
   
   // Relations
   playlists   PlaylistTrack[]
   feedback    Feedback[]
   history     PlaybackHistory[]
+  requests    TrackRequest[]
 
   @@map("tracks")
 }
@@ -98,9 +100,71 @@ model PlaybackHistory {
   endedAt       DateTime?
   listenersPeak Int?
   version       Int
-  
+
   // Relations
   track         Track    @relation(fields: [trackId], references: [id])
 
   @@map("playback_history")
+}
+
+// Track requests from users (moderation queue)
+model TrackRequest {
+  id          String   @id @default(uuid())
+  trackId     String?  // null if track not found
+  userId      String
+  username    String
+  query       String   // original user query
+  status      String   @default("pending") // pending, approved, rejected, auto_approved, not_found
+  reason      String?  // reason for rejection or auto-approval rule
+  processedAt DateTime?
+  processedBy String?  // "auto" or moderator id
+  createdAt   DateTime @default(now())
+
+  // Relations
+  track       Track?   @relation(fields: [trackId], references: [id])
+
+  @@map("track_requests")
+}
+
+// Moderation rules for auto-moderation
+model ModerationRule {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  type        String   // rate_limit, duplicate_check, cooldown, blacklist
+  config      Json     // rule-specific configuration
+  enabled     Boolean  @default(true)
+  priority    Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("moderation_rules")
+}
+
+// User moderation stats for rate limiting
+model UserModerationStats {
+  id                String   @id @default(uuid())
+  userId            String   @unique
+  requestsToday     Int      @default(0)
+  requestsThisHour  Int      @default(0)
+  lastRequestAt     DateTime?
+  totalRequests     Int      @default(0)
+  approvedRequests  Int      @default(0)
+  rejectedRequests  Int      @default(0)
+  lastResetDaily    DateTime @default(now())
+  lastResetHourly   DateTime @default(now())
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@map("user_moderation_stats")
+}
+
+// Proactive engagement messages history
+model ProactiveMessage {
+  id          String   @id @default(uuid())
+  type        String   // track_announcement, engagement, mood_comment, question
+  content     String
+  metadata    Json?    // additional context (trackId, mood, etc)
+  sentAt      DateTime @default(now())
+
+  @@map("proactive_messages")
 }

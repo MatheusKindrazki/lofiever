@@ -30,15 +30,19 @@ export const config = {
     playlistSize: 100,
     maxCacheAge: 60 * 60 * 24, // 24 hours
   },
+// ... (código existente) ...
+  liquidsoap: {
+    musicDir: process.env.LIQUIDSOAP_MUSIC_DIR || '/music',
+    fallback: 'example.mp3',
+  },
+  r2: {
+    accessKeyId: process.env.R2_ACCESS_KEY_ID || '',
+    secretAccessKey: process.env.R2_SECRET_ACCESS_KEY || '',
+    endpoint: process.env.R2_ENDPOINT || '', // Ex: https://<account_id>.r2.cloudflarestorage.com
+    bucket: process.env.R2_BUCKET_NAME || '',
+    publicUrl: process.env.R2_PUBLIC_URL || '', // Ex: https://pub-<bucket_id>.r2.dev
+  },
 } as const;
 
 // Create a separate type declaration file for environment variables
-export interface Env {
-  NEXT_PUBLIC_APP_URL?: string;
-  DATABASE_URL: string;
-  REDIS_URL?: string;
-  AUTH_SECRET: string;
-  GITHUB_CLIENT_ID?: string;
-  GITHUB_CLIENT_SECRET?: string;
-  NODE_ENV: 'development' | 'production' | 'test';
-} 
+// ... (código existente) ... 

@@ -20,15 +20,16 @@ interface StreamData {
   nextUp: SongInfo[];
 }
 
-interface AIRecommendation {
+export interface AIRecommendation {
   title: string;
   artist: string;
   mood: string;
   bpm: number;
   duration: number;
+  description?: string;
 }
 
-interface AIRecommendationResponse {
+export interface AIRecommendationResponse {
   recommendations: AIRecommendation[];
 }
 
@@ -100,9 +101,4 @@ export async function getAIRecommendations(prompt: string): Promise<AIRecommenda
   }
 }
 
-// Default prompt for AI curation if none is provided
-export const defaultCurationPrompt = 
-  "Generate a playlist of lofi music for a streaming service. " +
-  "Focus on music that's great for studying or relaxing. " +
-  "Include a mix of moods, but keep the BPM between 65-85 for a consistent vibe. " +
-  "Avoid recommending the same artists repeatedly."; 
+export { defaultCurationPrompt } from '@/lib/prompts';

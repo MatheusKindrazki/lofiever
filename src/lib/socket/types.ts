@@ -5,30 +5,31 @@ export const SOCKET_EVENTS = {
   // Connection events
   CONNECT: 'connect',
   DISCONNECT: 'disconnect',
-  
+
   // Playback events
   PLAYBACK_START: 'playback:start',
   PLAYBACK_PAUSE: 'playback:pause',
   TRACK_CHANGE: 'track:change',
   SYNC_REQUEST: 'sync:request',
   SYNC_RESPONSE: 'sync:response',
-  
+
   // Chat events
   CHAT_MESSAGE: 'chat:message',
   CHAT_REACTION: 'chat:reaction',
   CHAT_HISTORY: 'chat:history',
-  
+
   // Playlist events
   PLAYLIST_UPDATE: 'playlist:update',
   PLAYLIST_VOTE: 'playlist:vote',
   PLAYLIST_VOTE_UPDATE: 'playlist:vote:update',
-  
+
   // Analytics events
   LISTENERS_UPDATE: 'listeners:update',
-  
+  HEARTBEAT: 'heartbeat',
+
   // System events
   ERROR: 'error',
-  
+
   // AI Chat events
   AI_MESSAGE_CHUNK: 'ai:message:chunk',
   AI_MESSAGE_COMPLETE: 'ai:message:complete',
@@ -57,8 +58,9 @@ export interface ServerToClientEvents {
 
 export interface ClientToServerEvents {
   [SOCKET_EVENTS.SYNC_REQUEST]: () => void;
-  [SOCKET_EVENTS.CHAT_MESSAGE]: (message: { content: string; type: 'user' | 'system' | 'ai' }) => void;
+  [SOCKET_EVENTS.CHAT_MESSAGE]: (message: { content: string; type: 'user' | 'system' | 'ai'; isPrivate?: boolean }) => void;
   [SOCKET_EVENTS.PLAYLIST_VOTE]: (trackId: string) => void;
+  [SOCKET_EVENTS.HEARTBEAT]: () => void;
 }
 
 // Using the ChatMessage interface from Redis

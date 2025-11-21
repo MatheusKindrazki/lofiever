@@ -19,7 +19,7 @@ app.prepare().then(() => {
 
     if (req.method === 'GET' && parsedUrl.pathname === '/api/next-track') {
       try {
-        const trackUrl = await LiquidsoapIntegrationService.handleNextTrackRequest();
+        const trackUrl = await LiquidsoapIntegrationService.getNextTrackUri();
         res.statusCode = 200;
         res.setHeader('Content-Type', 'text/plain');
         res.end(trackUrl);

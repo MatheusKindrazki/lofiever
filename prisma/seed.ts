@@ -196,22 +196,33 @@ async function seedDatabase(): Promise<void> {
     const freeCreated = await processTrackList(freeMusicTracks, 'Bensound Collection');
     
     totalCreated = lofiCreated + freeCreated;
-    
-    // Criar uma playlist ativa com todas as músicas se houver novas músicas
-    if (totalCreated > 0) {
+
+    // Verificar se existe uma playlist ativa
+    const existingPlaylist = await prisma.playlist.findFirst({
+      where: { active: true },
+    });
+
+    // Criar uma playlist ativa com todas as músicas se não existir uma
+    if (!existingPlaylist) {
       console.log('\n⏳ Criando playlist ativa...');
-      
+
       // Obter todos os IDs de faixas
       const tracks = await prisma.track.findMany({
         select: { id: true },
       });
-      
-      const trackIds = tracks.map((t: { id: string }) => t.id);
-      
-      // Criar nova playlist
-      const playlist = await DatabaseService.createNewPlaylist(trackIds);
-      
-      console.log(`✅ Playlist ativa criada com ${playlist.tracks.length} músicas!`);
+
+      if (tracks.length > 0) {
+        const trackIds = tracks.map((t: { id: string }) => t.id);
+
+        // Criar nova playlist
+        const playlist = await DatabaseService.createNewPlaylist(trackIds);
+
+        console.log(`✅ Playlist ativa criada com ${playlist.tracks.length} músicas!`);
+      } else {
+        console.log('⚠️ Nenhuma música disponível para criar playlist.');
+      }
+    } else {
+      console.log(`\n✅ Playlist ativa já existe (ID: ${existingPlaylist.id})`);
     }
     
     const finalCount = await prisma.track.count();

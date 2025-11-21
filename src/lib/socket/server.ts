@@ -8,6 +8,14 @@ import { redis, redisHelpers, KEYS } from '../redis';
 import { config } from '../config';
 import { Redis } from 'ioredis';
 import type { ChatMessage as RedisChatMessage, Track as RedisTrack } from '../redis';
+import { ProactiveEngagementService } from '@/services/moderation/proactive-engagement.service';
+
+const AI_HISTORY_LIMIT = 12;
+const PROACTIVE_MESSAGE_INTERVAL = 5 * 60 * 1000; // 5 minutes
+const LISTENER_CLEANUP_INTERVAL = 15 * 1000; // 15 seconds
+const LISTENER_TIMEOUT = 30 * 1000; // 30 seconds
+const ANNOUNCEMENT_FREQUENCY = 10; // Announce every 10 tracks (reduced from 5)
+type AIMessagesPayload = Array<{ role: 'user' | 'assistant'; content: string }>;
 
 // Generate short, unique IDs for clients
 const nanoid = customAlphabet('1234567890abcdefghijklmnopqrstuvwxyz', 10);
@@ -15,6 +23,8 @@ const nanoid = customAlphabet('1234567890abcdefghijklmnopqrstuvwxyz', 10);
 // Track active Socket.IO instances to prevent duplicates
 let io: SocketIOServer<ClientToServerEvents, ServerToClientEvents> | null = null;
 let redisSubscriber: Redis | null = null;
+let proactiveMessageInterval: NodeJS.Timeout | null = null;
+let listenerCleanupInterval: NodeJS.Timeout | null = null;
 
 export function createSocketServer(httpServer: HTTPServer): SocketIOServer<ClientToServerEvents, ServerToClientEvents> {
   // Return existing instance if already created
@@ -43,9 +53,15 @@ export function createSocketServer(httpServer: HTTPServer): SocketIOServer<Clien
 
   // Setup Redis Subscriber for proactive announcements
   setupRedisSubscriber(io);
-  
+
+  // Setup proactive engagement messages
+  setupProactiveMessaging(io);
+
+  // Setup periodic listener cleanup
+  setupListenerCleanup(io);
+
   console.log('Socket.IO server initialized');
-  
+
   return io;
 }
 
@@ -53,8 +69,18 @@ export function createSocketServer(httpServer: HTTPServer): SocketIOServer<Clien
 function setupMiddleware(io: SocketIOServer<ClientToServerEvents, ServerToClientEvents>): void {
   io.use(async (socket, next) => {
     try {
-      socket.data.userId = socket.handshake.auth.userId || nanoid();
-      socket.data.username = socket.handshake.auth.username || `user_${socket.data.userId.substring(0, 5)}`;
+      const userId = socket.handshake.auth.userId || nanoid();
+
+      // Try to get persisted username from Redis first
+      const persistedName = await redisHelpers.getUserName(userId);
+      const username = persistedName || (socket.handshake.auth.username as string) || `user_${userId.substring(0, 5)}`;
+
+      console.log(`[Connection] UserId: ${userId}, PersistedName: ${persistedName}, HandshakeName: ${socket.handshake.auth.username}, FinalUsername: ${username}`);
+
+      // Store user info in socket data
+      socket.data.userId = userId;
+      socket.data.username = username;
+
       next();
     } catch (error) {
       console.error('Socket middleware error:', error);
@@ -68,25 +94,30 @@ function setupEventHandlers(io: SocketIOServer<ClientToServerEvents, ServerToCli
   io.on('connection', async (socket) => {
     const userId = socket.data.userId as string;
     const username = socket.data.username as string;
-    
+
     console.log(`Client connected: ${socket.id} (${username})`);
-    
+
     try {
-      const listenersCount = await redisHelpers.incrementListeners();
+      const listenersCount = await redisHelpers.addListener(socket.id);
       console.log(`Active listeners: ${listenersCount}`);
-      
+
       await redisHelpers.markUserActive(userId);
-      
+
       await syncClientState(socket);
-      
+
       io.emit(SOCKET_EVENTS.LISTENERS_UPDATE, { count: listenersCount });
+
+      // Check if new user and trigger welcome
+      if (username.startsWith('user_')) {
+        handleNewUserWelcome(socket);
+      }
     } catch (error) {
       console.error('Error during client connection setup:', error);
       socket.emit(SOCKET_EVENTS.ERROR, { message: 'Failed to initialize connection' });
     }
-    
+
     // --- Event Handlers --- //
-    
+
     socket.on(SOCKET_EVENTS.SYNC_REQUEST, async () => {
       try {
         await syncClientState(socket);
@@ -99,6 +130,7 @@ function setupEventHandlers(io: SocketIOServer<ClientToServerEvents, ServerToCli
     socket.on(SOCKET_EVENTS.CHAT_MESSAGE, async (message) => {
       const userMessageId = nanoid();
       const aiMessageId = nanoid(); // Unique ID for AI's response
+      const isPrivate = message.isPrivate || false;
 
       try {
         // 1. Store and broadcast user's message
@@ -109,20 +141,43 @@ function setupEventHandlers(io: SocketIOServer<ClientToServerEvents, ServerToCli
           content: message.content,
           timestamp: Date.now(),
           type: 'user',
+          isPrivate,
         };
-        
+
         await redisHelpers.addChatMessage(chatMessage);
-        io.emit(SOCKET_EVENTS.CHAT_MESSAGE, chatMessage); // Broadcast user's message
+
+        if (isPrivate) {
+          // If private, only send back to the sender
+          socket.emit(SOCKET_EVENTS.CHAT_MESSAGE, chatMessage);
+        } else {
+          // If public, broadcast to everyone
+          io.emit(SOCKET_EVENTS.CHAT_MESSAGE, chatMessage);
+        }
 
         // 2. Forward message to AI agent
+        // For private messages, we only want history relevant to this user or general context
+        // But for simplicity, we'll use the general history but mark this interaction as private context if needed
+        // Ideally, private chat history should be separate, but for now we'll filter in the frontend
+        const conversationMessages = await buildAIConversationHistory();
+        if (
+          conversationMessages.length === 0 ||
+          conversationMessages[conversationMessages.length - 1]?.role !== 'user'
+        ) {
+          conversationMessages.push({ role: 'user', content: message.content });
+        }
+
+        if (conversationMessages.length > AI_HISTORY_LIMIT) {
+          conversationMessages.splice(0, conversationMessages.length - AI_HISTORY_LIMIT);
+        }
+
         const aiResponse = await fetch(`${config.app.url}/api/curation/process-message`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            messages: [{ role: 'user', content: message.content }], // Pass user message to AI
-            data: { userId },
+            messages: conversationMessages,
+            data: { userId, username, isPrivate },
           }),
         });
 
@@ -139,18 +194,22 @@ function setupEventHandlers(io: SocketIOServer<ClientToServerEvents, ServerToCli
         let aiFullContent = '';
         const reader = aiResponse.body.getReader();
         const decoder = new TextDecoder();
-        
+
         while (true) {
           const { value, done } = await reader.read();
           if (done) break;
-          
+
           const chunk = decoder.decode(value, { stream: true });
           aiFullContent += chunk;
 
           // Broadcast each chunk to clients
-          io.emit(SOCKET_EVENTS.AI_MESSAGE_CHUNK, { chunk, messageId: aiMessageId });
+          if (isPrivate) {
+            socket.emit(SOCKET_EVENTS.AI_MESSAGE_CHUNK, { chunk, messageId: aiMessageId });
+          } else {
+            io.emit(SOCKET_EVENTS.AI_MESSAGE_CHUNK, { chunk, messageId: aiMessageId });
+          }
         }
-        
+
         // 4. Store full AI message and broadcast completion
         const aiChatMessage: RedisChatMessage = {
           id: aiMessageId,
@@ -159,9 +218,16 @@ function setupEventHandlers(io: SocketIOServer<ClientToServerEvents, ServerToCli
           content: aiFullContent,
           timestamp: Date.now(),
           type: 'ai',
+          isPrivate,
+          targetUserId: isPrivate ? userId : undefined,
         };
         await redisHelpers.addChatMessage(aiChatMessage);
-        io.emit(SOCKET_EVENTS.AI_MESSAGE_COMPLETE, { messageId: aiMessageId });
+
+        if (isPrivate) {
+          socket.emit(SOCKET_EVENTS.AI_MESSAGE_COMPLETE, { messageId: aiMessageId });
+        } else {
+          io.emit(SOCKET_EVENTS.AI_MESSAGE_COMPLETE, { messageId: aiMessageId });
+        }
 
       } catch (error) {
         console.error('Chat AI integration error:', error);
@@ -174,9 +240,9 @@ function setupEventHandlers(io: SocketIOServer<ClientToServerEvents, ServerToCli
         const key = `${KEYS.PLAYLIST_VOTE}:${trackId}`;
         await redis.sadd(key, userId);
         const votesCount = await redis.scard(key);
-        
+
         console.log(`Vote for track ${trackId} by ${userId}. Total votes: ${votesCount}`);
-        
+
         io.emit(SOCKET_EVENTS.PLAYLIST_VOTE_UPDATE, { trackId, votes: votesCount });
       } catch (error) {
         console.error('Vote error:', error);
@@ -184,10 +250,19 @@ function setupEventHandlers(io: SocketIOServer<ClientToServerEvents, ServerToCli
       }
     });
 
+    socket.on(SOCKET_EVENTS.HEARTBEAT, async () => {
+      try {
+        // Refresh listener timestamp to keep connection alive
+        await redisHelpers.refreshListener(socket.id);
+      } catch (error) {
+        console.error('Heartbeat error:', error);
+      }
+    });
+
     socket.on('disconnect', async (reason) => {
       try {
         console.log(`Client disconnected: ${socket.id} (${username}). Reason: ${reason}`);
-        const listenersCount = await redisHelpers.decrementListeners();
+        const listenersCount = await redisHelpers.removeListener(socket.id);
         io.emit(SOCKET_EVENTS.LISTENERS_UPDATE, { count: listenersCount });
       } catch (error) {
         console.error('Error during client disconnection:', error);
@@ -214,33 +289,197 @@ function setupRedisSubscriber(io: SocketIOServer<ClientToServerEvents, ServerToC
     console.log('Subscribed to lofi-ever:new-track channel');
   });
 
-  redisSubscriber.on('message', (channel, message) => {
+  redisSubscriber.subscribe('lofi-ever:queue-update', (err) => {
+    if (err) {
+      console.error('Failed to subscribe to Redis channel:', err);
+      return;
+    }
+    console.log('Subscribed to lofi-ever:queue-update channel');
+  });
+
+  redisSubscriber.subscribe('lofi-ever:user-update', (err) => {
+    if (err) {
+      console.error('Failed to subscribe to Redis channel:', err);
+      return;
+    }
+    console.log('Subscribed to lofi-ever:user-update channel');
+  });
+
+  redisSubscriber.on('message', async (channel, message) => {
     if (channel === 'lofi-ever:new-track') {
       try {
         const track: RedisTrack = JSON.parse(message);
-        const djAnnouncementMessageId = nanoid();
-        const announcementContent = `Agora tocando: "${track.title}" por ${track.artist}. Aproveitem a vibe!`;
-        
-        // Broadcast DJ announcement
-        io.emit(SOCKET_EVENTS.DJ_ANNOUNCEMENT, { message: announcementContent, track });
 
-        // Store as a chat message
-        const djChatMessage: RedisChatMessage = {
-          id: djAnnouncementMessageId,
-          userId: 'dj', // Use a special ID for DJ
-          username: 'Lofine',
-          content: announcementContent,
-          timestamp: Date.now(),
-          type: 'system', // Or 'ai' if preferred for announcements
-        };
-        redisHelpers.addChatMessage(djChatMessage);
+        // Determine if we should announce this track
+        let shouldAnnounce = false;
+        let announcementContent = '';
 
-        console.log(`DJ Announcement: ${announcementContent}`);
+        // 1. Always announce user requests
+        if (track.addedBy && track.addedBy !== 'ai-curator' && track.addedBy !== 'system') {
+          shouldAnnounce = true;
+          announcementContent = `Tocando agora: "${track.title}" de ${track.artist}. Pedido especial de @${track.addedBy}! 🎧`;
+        } else {
+          // 2. For regular tracks, announce only every 10th track
+          const counter = await redis.incr('lofiever:announcement_counter');
+          if (counter % ANNOUNCEMENT_FREQUENCY === 0) {
+            shouldAnnounce = true;
+            // Use the standard proactive announcement generation
+            const announcement = ProactiveEngagementService.generateTrackAnnouncement(track as any);
+            announcementContent = announcement.content;
+          }
+        }
+
+        // Broadcast track change event regardless of announcement
+        io.emit(SOCKET_EVENTS.TRACK_CHANGE, track);
+
+        if (shouldAnnounce) {
+          const djAnnouncementMessageId = nanoid();
+
+          // Broadcast DJ announcement
+          io.emit(SOCKET_EVENTS.DJ_ANNOUNCEMENT, { message: announcementContent, track });
+
+          // Store as a chat message
+          const djChatMessage: RedisChatMessage = {
+            id: djAnnouncementMessageId,
+            userId: 'dj',
+            username: 'Lofine',
+            content: announcementContent,
+            timestamp: Date.now(),
+            type: 'system',
+          };
+          await redisHelpers.addChatMessage(djChatMessage);
+
+          // Save to proactive messages history if it was generated by the service
+          // We construct a message object to save
+          await ProactiveEngagementService.saveProactiveMessage({
+            type: 'track_announcement',
+            content: announcementContent,
+            metadata: {
+              trackId: track.id,
+              trackTitle: track.title,
+              trackArtist: track.artist,
+              mood: track.mood,
+              addedBy: track.addedBy
+            }
+          });
+        }
       } catch (error) {
         console.error('Error processing new track message from Redis:', error);
       }
+    } else if (channel === 'lofi-ever:queue-update') {
+      // When queue updates, notify all clients to refresh their playlist view
+      // We don't send the full playlist here to save bandwidth, just the signal to fetch/refresh
+      io.emit(SOCKET_EVENTS.PLAYLIST_UPDATE, []);
+    } else if (channel === 'lofi-ever:user-update') {
+      try {
+        const { userId, username } = JSON.parse(message);
+        console.log(`Received user update for ${userId}: ${username}`);
+
+        // Find the socket for this user
+        const sockets = await io.fetchSockets();
+        const userSocket = sockets.find(s => s.data.userId === userId);
+
+        if (userSocket) {
+          // Update socket data
+          userSocket.data.username = username;
+
+          // Notify the specific client to update their local storage/state
+          // We need a new event for this. Let's use a generic 'user:update' or reuse 'error' for info?
+          // Better to add a specific event.
+          userSocket.emit('user:update' as any, { username });
+        }
+      } catch (error) {
+        console.error('Error processing user update:', error);
+      }
     }
   });
+}
+
+// Setup proactive engagement messaging
+function setupProactiveMessaging(io: SocketIOServer<ClientToServerEvents, ServerToClientEvents>): void {
+  if (proactiveMessageInterval) return; // Only setup once
+
+  proactiveMessageInterval = setInterval(async () => {
+    try {
+      // Check if there are active listeners
+      const listenersCount = await redisHelpers.getListenersCount();
+      if (listenersCount === 0) {
+        return; // Don't send messages if no one is listening
+      }
+
+      // Check if enough time has passed since last proactive message
+      const shouldSend = await ProactiveEngagementService.shouldSendProactiveMessage(5);
+      if (!shouldSend) {
+        return;
+      }
+
+      // Get and send next proactive message
+      const message = await ProactiveEngagementService.getNextProactiveMessage();
+      const messageId = nanoid();
+
+      // Broadcast engagement message
+      const chatMessage: RedisChatMessage = {
+        id: messageId,
+        userId: 'dj',
+        username: 'Lofine',
+        content: message.content,
+        timestamp: Date.now(),
+        type: 'ai',
+      };
+
+      await redisHelpers.addChatMessage(chatMessage);
+      await ProactiveEngagementService.saveProactiveMessage(message);
+
+      io.emit(SOCKET_EVENTS.CHAT_MESSAGE, chatMessage);
+
+      console.log(`Proactive engagement: ${message.content}`);
+    } catch (error) {
+      console.error('Error sending proactive message:', error);
+    }
+  }, PROACTIVE_MESSAGE_INTERVAL);
+
+  console.log('Proactive messaging system initialized');
+}
+
+// Setup periodic listener cleanup
+function setupListenerCleanup(io: SocketIOServer<ClientToServerEvents, ServerToClientEvents>): void {
+  if (listenerCleanupInterval) return; // Only setup once
+
+  listenerCleanupInterval = setInterval(async () => {
+    try {
+      // Clean up inactive listeners (no heartbeat in last 30 seconds)
+      const removedCount = await redisHelpers.cleanupInactiveListeners(LISTENER_TIMEOUT);
+
+      if (removedCount > 0) {
+        console.log(`Cleaned up ${removedCount} inactive listener(s)`);
+
+        // Broadcast updated listener count
+        const listenersCount = await redisHelpers.getListenersCount();
+        io.emit(SOCKET_EVENTS.LISTENERS_UPDATE, { count: listenersCount });
+      }
+    } catch (error) {
+      console.error('Error cleaning up inactive listeners:', error);
+    }
+  }, LISTENER_CLEANUP_INTERVAL);
+
+  console.log('Listener cleanup system initialized');
+}
+
+async function buildAIConversationHistory(): Promise<AIMessagesPayload> {
+  const rawHistory = await redisHelpers.getChatMessages(AI_HISTORY_LIMIT * 2);
+
+  const chronological = rawHistory
+    .filter((msg) => msg.type === 'user' || msg.type === 'ai')
+    .reverse();
+
+  const trimmed = chronological.length > AI_HISTORY_LIMIT
+    ? chronological.slice(-AI_HISTORY_LIMIT)
+    : chronological;
+
+  return trimmed.map((msg) => ({
+    role: msg.type === 'ai' ? 'assistant' : 'user',
+    content: msg.content,
+  }));
 }
 
 // Helper function to sync client state
@@ -250,11 +489,11 @@ async function syncClientState(socket: Socket<ClientToServerEvents, ServerToClie
     redisHelpers.getPlaybackState(),
     redisHelpers.getChatMessages(50),
   ]);
-  
-  const position = playbackState.isPlaying 
+
+  const position = playbackState.isPlaying
     ? (Date.now() - (playbackState.startedAt || 0)) % (currentTrack?.duration || 0)
     : playbackState.position;
-  
+
   if (currentTrack) {
     socket.emit(SOCKET_EVENTS.SYNC_RESPONSE, {
       track: currentTrack,
@@ -262,17 +501,98 @@ async function syncClientState(socket: Socket<ClientToServerEvents, ServerToClie
       isPlaying: playbackState.isPlaying,
     });
   }
-  
+
   if (chatMessages.length > 0) {
     // Filter out only relevant messages for initial sync
-    const relevantChatMessages = chatMessages.filter(msg => 
-      msg.type === 'user' || msg.type === 'ai' || msg.type === 'system'
-    );
+    // AND ensure private messages are only sent to the involved parties
+    const relevantChatMessages = chatMessages.filter(msg => {
+      // 1. Must be a valid type
+      if (msg.type !== 'user' && msg.type !== 'ai' && msg.type !== 'system') return false;
+
+      // 2. If private, only show to sender or recipient
+      if (msg.isPrivate) {
+        const socketUserId = socket.data.userId;
+        return msg.userId === socketUserId || msg.targetUserId === socketUserId;
+      }
+
+      // 3. Public messages are shown to everyone
+      return true;
+    });
+
     socket.emit(SOCKET_EVENTS.CHAT_HISTORY, { messages: relevantChatMessages });
   }
-  
+
   const listenersCount = await redisHelpers.getListenersCount();
   socket.emit(SOCKET_EVENTS.LISTENERS_UPDATE, { count: listenersCount });
+}
+
+// Handle welcome message for new users
+async function handleNewUserWelcome(socket: Socket<ClientToServerEvents, ServerToClientEvents>): Promise<void> {
+  const userId = socket.data.userId;
+  const username = socket.data.username;
+  const aiMessageId = nanoid();
+
+  console.log(`Triggering welcome for new user: ${userId}`);
+
+  try {
+    // We simulate a "system" prompt to the AI to welcome the user
+    // We use the same process-message endpoint but with a specific context
+    const conversationMessages = [
+      {
+        role: 'system' as const,
+        content: 'O usuário acabou de entrar na rádio pela primeira vez. Dê as boas-vindas e pergunte como ele quer ser chamado (nickname). Seja breve e "chill".'
+      }
+    ];
+
+    const aiResponse = await fetch(`${config.app.url}/api/curation/process-message`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        messages: conversationMessages,
+        data: { userId, username, isPrivate: true }, // Force private
+      }),
+    });
+
+    if (!aiResponse.ok) {
+      throw new Error(`AI welcome response error: ${aiResponse.status}`);
+    }
+
+    if (!aiResponse.body) return;
+
+    let aiFullContent = '';
+    const reader = aiResponse.body.getReader();
+    const decoder = new TextDecoder();
+
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+
+      const chunk = decoder.decode(value, { stream: true });
+      aiFullContent += chunk;
+
+      socket.emit(SOCKET_EVENTS.AI_MESSAGE_CHUNK, { chunk, messageId: aiMessageId });
+    }
+
+    // Store and complete
+    const aiChatMessage: RedisChatMessage = {
+      id: aiMessageId,
+      userId: 'ai',
+      username: 'Lofine',
+      content: aiFullContent,
+      timestamp: Date.now(),
+      type: 'ai',
+      isPrivate: true,
+      targetUserId: userId,
+    };
+
+    await redisHelpers.addChatMessage(aiChatMessage);
+    socket.emit(SOCKET_EVENTS.AI_MESSAGE_COMPLETE, { messageId: aiMessageId });
+
+  } catch (error) {
+    console.error('Error sending welcome message:', error);
+  }
 }
 
 // Export server for testing
@@ -282,6 +602,16 @@ export function getIO(): SocketIOServer<ClientToServerEvents, ServerToClientEven
 
 // Manually close socket server (for testing/shutdown)
 export async function closeSocketServer(): Promise<void> {
+  if (proactiveMessageInterval) {
+    clearInterval(proactiveMessageInterval);
+    proactiveMessageInterval = null;
+  }
+
+  if (listenerCleanupInterval) {
+    clearInterval(listenerCleanupInterval);
+    listenerCleanupInterval = null;
+  }
+
   if (io) {
     await new Promise<void>((resolve) => {
       const server = io;
