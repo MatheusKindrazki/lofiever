@@ -6,6 +6,7 @@ import { SOCKET_EVENTS } from './types';
 import { config } from '../config';
 import type { Track, ChatMessage } from '../redis';
 import { customAlphabet } from 'nanoid';
+import { useUserSession } from '@/hooks/useUserSession';
 
 const nanoid = customAlphabet('1234567890abcdefghijklmnopqrstuvwxyz', 10);
 
@@ -15,7 +16,10 @@ let socket: Socket<ServerToClientEvents, ClientToServerEvents> | null = null;
 /**
  * Initialize socket connection (should be called only once)
  */
-export function initializeSocket(auth: { userId?: string; username?: string } = {}): Socket<ServerToClientEvents, ClientToServerEvents> {
+/**
+ * Initialize socket connection (should be called only once)
+ */
+export function initializeSocket(auth: { token: string; userId?: string; username?: string }): Socket<ServerToClientEvents, ClientToServerEvents> {
   if (!socket) {
     socket = io({
       path: config.socket.path,
@@ -58,16 +62,30 @@ export function getSocket(): Socket<ServerToClientEvents, ClientToServerEvents> 
  */
 export function useSocket() {
   const [isConnected, setIsConnected] = useState(false);
-  const [userId, setUserId] = useState<string>('');
+  const [socketInstance, setSocketInstance] = useState<Socket<ServerToClientEvents, ClientToServerEvents> | null>(socket);
   const heartbeatIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const initializingRef = useRef(false);
+
+  // Use the new session hook
+  const { session, loginAsGuest, isLoading: isSessionLoading } = useUserSession();
+  const currentTokenRef = useRef<string | null>(null);
 
   useEffect(() => {
     // Initialize socket on client side
     if (typeof window === 'undefined') return;
 
-    // Get or create userId
-    const storedUserId = localStorage.getItem('userId') || nanoid();
-    setUserId(storedUserId);
+    // Check if we need to re-initialize due to token change
+    const newToken = session?.token;
+    const tokenChanged = newToken && currentTokenRef.current && newToken !== currentTokenRef.current;
+
+    if (tokenChanged && socket) {
+      console.log('[Client] Token changed, reconnecting socket...');
+      socket.disconnect();
+      socket = null;
+      setSocketInstance(null);
+      setIsConnected(false);
+      initializingRef.current = false;
+    }
 
     if (!socket) {
       // Set up connection event listeners
@@ -94,36 +112,76 @@ export function useSocket() {
       };
 
       try {
-        const username = localStorage.getItem('username') || `user_${storedUserId.substring(0, 5)}`;
+        const init = async () => {
+          if (initializingRef.current || isSessionLoading) return;
+          initializingRef.current = true;
 
-        // Save to local storage for future sessions
-        localStorage.setItem('userId', storedUserId);
-        localStorage.setItem('username', username);
+          let token = session?.token;
 
-        console.log('[Client] Initializing socket with:', { userId: storedUserId, username });
-        socket = initializeSocket({ userId: storedUserId, username });
+          // If no session, try to restore or create one
+          if (!token) {
+            // If we have a stored session in localStorage (handled by useUserSession), use it.
+            // If not, we might need to wait for the user to log in via the UI.
+            // However, for the socket to connect initially, we might want a guest session.
+            // But wait, if we force a guest session here, we might overwrite a manual login?
+            // The requirement is: "refresh page -> stay logged in".
+            // useUserSession handles the "refresh page" part by loading from localStorage.
+            // So if session is null here, it means really no session.
 
-        socket.on(SOCKET_EVENTS.CONNECT, onConnect);
-        socket.on(SOCKET_EVENTS.DISCONNECT, onDisconnect);
+            // If we want to auto-login as guest if no session exists (e.g. first visit):
+            // We can check if we should auto-create a guest session.
+            // For now, let's assume the UI handles the "Welcome" screen if no session.
+            // BUT, the socket needs a token to connect.
+            // If we don't have a token, we can't connect authenticated.
+            // Maybe we connect unauthenticated first? Or wait?
+            // The original code auto-created a guest token.
 
-        if (socket.connected) {
-          setIsConnected(true);
-          // Start heartbeat if already connected
-          if (!heartbeatIntervalRef.current) {
-            heartbeatIntervalRef.current = setInterval(() => {
-              socket?.emit(SOCKET_EVENTS.HEARTBEAT);
-            }, 10000);
+            // Let's keep the auto-creation for now if no session exists, 
+            // but use the loginAsGuest from the hook to persist it.
+            if (!session) {
+              try {
+                // Check if we have a username stored separately or just generate one
+                const storedUsername = localStorage.getItem('username'); // Legacy check?
+                const newSession = await loginAsGuest(storedUsername || undefined);
+                token = newSession.token;
+              } catch (e) {
+                console.error('Failed to auto-login guest', e);
+              }
+            }
           }
-        }
+
+          if (token) {
+            console.log('[Client] Initializing socket with token', { userId: session?.userId, username: session?.username });
+            currentTokenRef.current = token;
+            socket = initializeSocket({
+              token,
+              userId: session?.userId,
+              username: session?.username
+            });
+            setSocketInstance(socket);
+
+            socket.on(SOCKET_EVENTS.CONNECT, onConnect);
+            socket.on(SOCKET_EVENTS.DISCONNECT, onDisconnect);
+
+            if (socket.connected) {
+              onConnect();
+            } else {
+              socket.connect();
+            }
+          }
+          initializingRef.current = false;
+        };
+
+        init();
       } catch (error) {
         console.error('Failed to initialize socket:', error);
       }
 
       return () => {
-        if (socket) {
-          socket.off(SOCKET_EVENTS.CONNECT, onConnect);
-          socket.off(SOCKET_EVENTS.DISCONNECT, onDisconnect);
-        }
+        // We don't disconnect on unmount, as socket is singleton
+        // But we should remove listeners if we were the ones adding them?
+        // Actually, for a singleton, we should be careful about adding listeners multiple times.
+        // But here we only add them if !socket (creation time).
 
         // Clear heartbeat interval on cleanup
         if (heartbeatIntervalRef.current) {
@@ -132,7 +190,14 @@ export function useSocket() {
         }
       };
     } else {
-      setIsConnected(socket.connected);
+      // Socket already exists
+      if (socketInstance !== socket) {
+        setSocketInstance(socket);
+      }
+
+      if (socket.connected !== isConnected) {
+        setIsConnected(socket.connected);
+      }
 
       // Ensure heartbeat is running if socket exists and is connected
       if (socket.connected && !heartbeatIntervalRef.current) {
@@ -141,7 +206,10 @@ export function useSocket() {
         }, 10000);
       }
     }
-  }, []);
+  }, [session, isSessionLoading, loginAsGuest, socketInstance, isConnected]); // Re-run if session changes
+
+  // ... rest of the hook
+
 
   // Request sync from server
   const requestSync = useCallback(() => {
@@ -169,9 +237,9 @@ export function useSocket() {
   }, []);
 
   return {
-    socket: socket,
+    socket: socketInstance,
     isConnected,
-    userId, // Return the userId
+    userId: session?.userId || '', // Return the userId from session
     requestSync,
     sendChatMessage,
     voteForTrack,

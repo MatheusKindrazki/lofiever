@@ -1,6 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import type { Track } from '@prisma/client';
-import { redis, redisHelpers } from '@/lib/redis';
+import { redis, redisHelpers, type ChatMessage } from '@/lib/redis';
 import { recommendNextTrack } from './ai-recommendation.service';
 
 /**
@@ -42,88 +42,105 @@ export const PlaylistManagerService = {
    */
   async refillQueue(): Promise<void> {
     const QUEUE_KEY = 'lofiever:playlist:upcoming';
-    const MIN_QUEUE_SIZE = 2;
+    const REFILL_THRESHOLD = 3; // Refill when queue drops to this size
+    const BATCH_SIZE = 5; // Add this many tracks at once
 
-    // 1. Verificar tamanho atual da fila
-    const queueSize = await redis.llen(QUEUE_KEY);
-
-    if (queueSize >= MIN_QUEUE_SIZE) {
-      return;
-    }
-
-    console.log(`📉 Fila baixa (${queueSize}/${MIN_QUEUE_SIZE}). Reabastecendo...`);
-
-    // 2. Buscar pedidos de usuários aprovados e pendentes
-    // Processamos pedidos um por um para garantir a ordem
+    // 1. Processar pedidos de usuários (Prioridade Máxima)
+    // Buscamos pedidos aprovados e colocamos no INÍCIO da fila (LPOP/LPUSH logic)
     const pendingRequests = await prisma.trackRequest.findMany({
       where: { status: 'approved' },
-      orderBy: { createdAt: 'asc' },
-      take: MIN_QUEUE_SIZE - queueSize,
+      orderBy: { createdAt: 'asc' }, // FIFO: O mais antigo primeiro
       include: { track: true },
     });
 
-    for (const req of pendingRequests) {
-      if (req.track) {
-        // Adiciona à fila do Redis
+    if (pendingRequests.length > 0) {
+      console.log(`🗣️ Encontrados ${pendingRequests.length} pedidos pendentes. Injetando na fila...`);
+
+      // Para manter a ordem FIFO ao usar LPUSH (que inverte), precisamos iterar do último para o primeiro
+      // Ex: Pedidos [A, B, C]. Queremos fila: [A, B, C, ...].
+      // LPUSH C -> [C, ...]
+      // LPUSH B -> [B, C, ...]
+      // LPUSH A -> [A, B, C, ...]
+      const reversedRequests = [...pendingRequests].reverse();
+
+      for (const req of reversedRequests) {
+        if (!req.track) continue;
+
         const queueItem = {
           ...req.track,
-          addedBy: req.username, // Metadado importante para o frontend
+          addedBy: req.username,
+          addedByUserId: req.userId, // Store userId for dynamic name resolution
           requestId: req.id,
         };
-        await redis.rpush(QUEUE_KEY, JSON.stringify(queueItem));
 
-        // Marca o pedido como "queued" ou deleta (vamos marcar como processed no momento do play ou agora?)
-        // Melhor marcar agora como 'queued' para não pegar de novo, mas o status 'approved' é o que usamos.
-        // Vamos mudar o status para 'queued' para evitar duplicidade se o refill rodar de novo.
+        // Injeta no início da fila (fura fila)
+        await redis.lpush(QUEUE_KEY, JSON.stringify(queueItem));
+
         await prisma.trackRequest.update({
           where: { id: req.id },
           data: { status: 'queued' },
         });
 
-        console.log(`🗣️ Pedido de ${req.username} ("${req.track.title}") movido para a fila.`);
+        console.log(`🗣️ Pedido de ${req.username} ("${req.track.title}") furou a fila (prioridade).`);
       }
     }
 
-    // 3. Se ainda precisar de faixas, usar a IA
-    const newQueueSize = await redis.llen(QUEUE_KEY);
-    const needed = MIN_QUEUE_SIZE - newQueueSize;
+    // Notificar update imediatamente pois a fila mudou drasticamente
+    await redis.publish('lofi-ever:queue-update', 'updated');
 
-    if (needed > 0) {
-      // Get current queue tracks to avoid duplicates
-      const currentQueueJson = await redis.lrange(QUEUE_KEY, 0, -1);
-      const currentQueueIds = currentQueueJson.map(item => {
-        try {
-          return JSON.parse(item).id;
-        } catch {
-          return null;
-        }
-      }).filter(id => id !== null);
 
-      // Get recent chat messages for context
-      const chatMessages = await redisHelpers.getChatMessages(20);
-      const chatContext = chatMessages.map((m: any) => `${m.username}: ${m.content}`);
+    // 2. Verificar tamanho atual da fila e preencher com IA se necessário
+    const queueSize = await redis.llen(QUEUE_KEY);
 
-      const generatedIds: string[] = [];
+    if (queueSize > REFILL_THRESHOLD) {
+      return;
+    }
 
-      for (let i = 0; i < needed; i++) {
-        try {
-          // Pass both current queue and newly generated IDs to avoid immediate repeats
-          // Also pass chat context for mood analysis
-          const recommendedTrack = await recommendNextTrack(undefined, [...currentQueueIds, ...generatedIds], chatContext);
+    console.log(`📉 Fila baixa (${queueSize}/${REFILL_THRESHOLD}). Adicionando lote de ${BATCH_SIZE} músicas...`);
 
-          const queueItem = {
-            ...recommendedTrack,
-            addedBy: 'ai-curator',
-          };
-          await redis.rpush(QUEUE_KEY, JSON.stringify(queueItem));
-          generatedIds.push(recommendedTrack.id);
-        } catch (err) {
-          console.error('Erro ao gerar recomendação para a fila:', err);
-        }
+    // 3. Se precisar de faixas, usar a IA (RPUSH - fim da fila)
+    // Get current queue tracks to avoid duplicates
+    const currentQueueJson = await redis.lrange(QUEUE_KEY, 0, -1);
+    const currentQueueIds = currentQueueJson.map(item => {
+      try {
+        return JSON.parse(item).id;
+      } catch {
+        return null;
+      }
+    }).filter(id => id !== null);
+
+    // Get recent chat messages for context
+    const chatMessages = await redisHelpers.getChatMessages(20);
+    const chatContext = chatMessages.map((m: ChatMessage) => `${m.username}: ${m.content}`);
+
+    // Determine mood ONCE for the whole batch
+    const { determineMoodFromChat } = await import('./ai-recommendation.service');
+    const batchMood = await determineMoodFromChat(chatContext);
+
+    if (batchMood) {
+      console.log(`🧠 Mood definido para o lote: ${batchMood}`);
+    }
+
+    const generatedIds: string[] = [];
+
+    for (let i = 0; i < BATCH_SIZE; i++) {
+      try {
+        // Pass both current queue and newly generated IDs to avoid immediate repeats
+        // Pass the pre-determined batchMood
+        const recommendedTrack = await recommendNextTrack(batchMood, [...currentQueueIds, ...generatedIds], []); // Empty chatContext because we already determined mood
+
+        const queueItem = {
+          ...recommendedTrack,
+          addedBy: 'ai-curator',
+        };
+        await redis.rpush(QUEUE_KEY, JSON.stringify(queueItem));
+        generatedIds.push(recommendedTrack.id);
+      } catch (err) {
+        console.error('Erro ao gerar recomendação para a fila:', err);
       }
     }
 
-    // Notificar frontend que a fila mudou (opcional, via pub/sub)
+    // Notificar frontend que a fila mudou
     await redis.publish('lofi-ever:queue-update', 'updated');
   },
 
@@ -162,7 +179,7 @@ export const PlaylistManagerService = {
    * Adiciona uma faixa diretamente à fila (furar fila ou prioridade).
    * Útil para comandos de admin ou eventos especiais.
    */
-  async queueTrack(trackId: string, addedBy: string, priority: boolean = false): Promise<void> {
+  async queueTrack(trackId: string, addedBy: string, priority: boolean = false, userId?: string): Promise<void> {
     const QUEUE_KEY = 'lofiever:playlist:upcoming';
 
     const track = await prisma.track.findUnique({ where: { id: trackId } });
@@ -171,6 +188,7 @@ export const PlaylistManagerService = {
     const queueItem = {
       ...track,
       addedBy,
+      addedByUserId: userId,
     };
 
     if (priority) {
@@ -183,7 +201,7 @@ export const PlaylistManagerService = {
   },
 
   // Mantendo compatibilidade com código antigo se necessário, mas redirecionando
-  async addTrackToPlaylist(trackId: string, addedBy: string): Promise<void> {
-    return this.queueTrack(trackId, addedBy, false);
+  async addTrackToPlaylist(trackId: string, addedBy: string, userId?: string): Promise<void> {
+    return this.queueTrack(trackId, addedBy, false, userId);
   },
 };

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useMemo } from 'react';
 import { useSession } from 'next-auth/react';
 import { useChat as useSocketChat, useSocket, usePlaybackSync } from '../lib/socket/client';
+import { SOCKET_EVENTS } from '../lib/socket/types';
 import type { ChatMessage } from '../lib/redis';
 
 export default function ChatRoom() {
@@ -52,10 +53,10 @@ export default function ChatRoom() {
       localStorage.setItem('username', data.username);
     };
 
-    socket.on('user:update', handleUserUpdate);
+    socket.on(SOCKET_EVENTS.USER_UPDATE, handleUserUpdate);
 
     return () => {
-      socket.off('user:update', handleUserUpdate);
+      socket.off(SOCKET_EVENTS.USER_UPDATE, handleUserUpdate);
     };
   }, [socket]);
 
@@ -96,12 +97,14 @@ export default function ChatRoom() {
   // - Show public messages
   // - Show private messages ONLY if they are sent by me or sent to me
   const filteredMessages = useMemo(() => {
-    return messages.filter(msg => {
-      if (!msg.isPrivate) return true; // Public messages always shown
+    return messages
+      .filter(msg => {
+        if (!msg.isPrivate) return true; // Public messages always shown
 
-      // Private messages: show if I sent it OR if it's sent to me
-      return msg.userId === userId || msg.targetUserId === userId;
-    });
+        // Private messages: show if I sent it OR if it's sent to me
+        return msg.userId === userId || msg.targetUserId === userId;
+      })
+      .sort((a, b) => a.timestamp - b.timestamp);
   }, [messages, userId]);
 
   // Group messages by time (within 2 minutes)

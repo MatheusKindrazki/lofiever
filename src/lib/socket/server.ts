@@ -9,6 +9,9 @@ import { config } from '../config';
 import { Redis } from 'ioredis';
 import type { ChatMessage as RedisChatMessage, Track as RedisTrack } from '../redis';
 import { ProactiveEngagementService } from '@/services/moderation/proactive-engagement.service';
+import { ContentModerationService } from '@/services/moderation/content-moderation.service';
+import { Track } from '@prisma/client';
+import { prisma } from '@/lib/prisma';
 
 const AI_HISTORY_LIMIT = 12;
 const PROACTIVE_MESSAGE_INTERVAL = 5 * 60 * 1000; // 5 minutes
@@ -81,6 +84,12 @@ function setupMiddleware(io: SocketIOServer<ClientToServerEvents, ServerToClient
       socket.data.userId = userId;
       socket.data.username = username;
 
+      // Persist username in Redis to ensure it's available for dynamic resolution
+      // This handles cases where Redis data might have been lost/expired but client still has the session
+      if (username) {
+        await redisHelpers.setUserName(userId, username);
+      }
+
       next();
     } catch (error) {
       console.error('Socket middleware error:', error);
@@ -107,10 +116,8 @@ function setupEventHandlers(io: SocketIOServer<ClientToServerEvents, ServerToCli
 
       io.emit(SOCKET_EVENTS.LISTENERS_UPDATE, { count: listenersCount });
 
-      // Check if new user and trigger welcome
-      if (username.startsWith('user_')) {
-        handleNewUserWelcome(socket);
-      }
+      // Handle user connection (tracking and greeting)
+      handleUserConnection(socket);
     } catch (error) {
       console.error('Error during client connection setup:', error);
       socket.emit(SOCKET_EVENTS.ERROR, { message: 'Failed to initialize connection' });
@@ -127,12 +134,22 @@ function setupEventHandlers(io: SocketIOServer<ClientToServerEvents, ServerToCli
       }
     });
 
+
+
     socket.on(SOCKET_EVENTS.CHAT_MESSAGE, async (message) => {
       const userMessageId = nanoid();
       const aiMessageId = nanoid(); // Unique ID for AI's response
       const isPrivate = message.isPrivate || false;
 
       try {
+        // 0. Moderate content
+        const moderation = await ContentModerationService.validateMessage(message.content);
+        if (!moderation.safe) {
+          console.log(`Blocked offensive message from ${username}: ${message.content}`);
+          socket.emit(SOCKET_EVENTS.ERROR, { message: `Mensagem bloqueada: ${moderation.reason}` });
+          return;
+        }
+
         // 1. Store and broadcast user's message
         const chatMessage: RedisChatMessage = {
           id: userMessageId,
@@ -155,9 +172,6 @@ function setupEventHandlers(io: SocketIOServer<ClientToServerEvents, ServerToCli
         }
 
         // 2. Forward message to AI agent
-        // For private messages, we only want history relevant to this user or general context
-        // But for simplicity, we'll use the general history but mark this interaction as private context if needed
-        // Ideally, private chat history should be separate, but for now we'll filter in the frontend
         const conversationMessages = await buildAIConversationHistory();
         if (
           conversationMessages.length === 0 ||
@@ -308,7 +322,7 @@ function setupRedisSubscriber(io: SocketIOServer<ClientToServerEvents, ServerToC
   redisSubscriber.on('message', async (channel, message) => {
     if (channel === 'lofi-ever:new-track') {
       try {
-        const track: RedisTrack = JSON.parse(message);
+        const track: RedisTrack & { addedByUserId?: string } = JSON.parse(message);
 
         // Determine if we should announce this track
         let shouldAnnounce = false;
@@ -317,15 +331,30 @@ function setupRedisSubscriber(io: SocketIOServer<ClientToServerEvents, ServerToC
         // 1. Always announce user requests
         if (track.addedBy && track.addedBy !== 'ai-curator' && track.addedBy !== 'system') {
           shouldAnnounce = true;
-          announcementContent = `Tocando agora: "${track.title}" de ${track.artist}. Pedido especial de @${track.addedBy}! 🎧`;
+
+          // Resolve current username if userId is available
+          let announcerName = track.addedBy;
+          if (track.addedByUserId) {
+            const currentName = await redisHelpers.getUserName(track.addedByUserId);
+            if (currentName) {
+              announcerName = currentName;
+            }
+          }
+
+          announcementContent = `Tocando agora: "${track.title}" de ${track.artist}. Pedido especial de @${announcerName}! 🎧`;
         } else {
           // 2. For regular tracks, announce only every 10th track
-          const counter = await redis.incr('lofiever:announcement_counter');
-          if (counter % ANNOUNCEMENT_FREQUENCY === 0) {
-            shouldAnnounce = true;
-            // Use the standard proactive announcement generation
-            const announcement = ProactiveEngagementService.generateTrackAnnouncement(track as any);
-            announcementContent = announcement.content;
+          // AND only if there are listeners connected
+          const listenersCount = await redisHelpers.getListenersCount();
+
+          if (listenersCount > 0) {
+            const counter = await redis.incr('lofiever:announcement_counter');
+            if (counter % ANNOUNCEMENT_FREQUENCY === 0) {
+              shouldAnnounce = true;
+              // Use the standard proactive announcement generation
+              const announcement = ProactiveEngagementService.generateTrackAnnouncement(track as unknown as Track);
+              announcementContent = announcement.content;
+            }
           }
         }
 
@@ -384,9 +413,7 @@ function setupRedisSubscriber(io: SocketIOServer<ClientToServerEvents, ServerToC
           userSocket.data.username = username;
 
           // Notify the specific client to update their local storage/state
-          // We need a new event for this. Let's use a generic 'user:update' or reuse 'error' for info?
-          // Better to add a specific event.
-          userSocket.emit('user:update' as any, { username });
+          userSocket.emit(SOCKET_EVENTS.USER_UPDATE, { username });
         }
       } catch (error) {
         console.error('Error processing user update:', error);
@@ -424,22 +451,22 @@ function setupProactiveMessaging(io: SocketIOServer<ClientToServerEvents, Server
         username: 'Lofine',
         content: message.content,
         timestamp: Date.now(),
-        type: 'ai',
+        type: 'system',
       };
 
       await redisHelpers.addChatMessage(chatMessage);
-      await ProactiveEngagementService.saveProactiveMessage(message);
-
       io.emit(SOCKET_EVENTS.CHAT_MESSAGE, chatMessage);
 
-      console.log(`Proactive engagement: ${message.content}`);
+      // Save to history
+      await ProactiveEngagementService.saveProactiveMessage(message);
+
     } catch (error) {
-      console.error('Error sending proactive message:', error);
+      console.error('Proactive messaging error:', error);
     }
   }, PROACTIVE_MESSAGE_INTERVAL);
-
-  console.log('Proactive messaging system initialized');
 }
+
+
 
 // Setup periodic listener cleanup
 function setupListenerCleanup(io: SocketIOServer<ClientToServerEvents, ServerToClientEvents>): void {
@@ -526,39 +553,113 @@ async function syncClientState(socket: Socket<ClientToServerEvents, ServerToClie
   socket.emit(SOCKET_EVENTS.LISTENERS_UPDATE, { count: listenersCount });
 }
 
-// Handle welcome message for new users
-async function handleNewUserWelcome(socket: Socket<ClientToServerEvents, ServerToClientEvents>): Promise<void> {
+
+
+// Update handleNewUserWelcome to handle returning users too
+async function handleUserConnection(socket: Socket<ClientToServerEvents, ServerToClientEvents>): Promise<void> {
   const userId = socket.data.userId;
   const username = socket.data.username;
-  const aiMessageId = nanoid();
 
-  console.log(`Triggering welcome for new user: ${userId}`);
+  // Ignore temporary/guest users if needed, but for now track everyone
+  if (!userId) return;
 
   try {
-    // We simulate a "system" prompt to the AI to welcome the user
-    // We use the same process-message endpoint but with a specific context
-    const conversationMessages = [
-      {
-        role: 'system' as const,
-        content: 'O usuário acabou de entrar na rádio pela primeira vez. Dê as boas-vindas e pergunte como ele quer ser chamado (nickname). Seja breve e "chill".'
-      }
-    ];
+    // 1. Update User Stats in DB
+    const user = await prisma.user.upsert({
+      where: { id: userId },
+      update: {
+        lastSeenAt: new Date(),
+        visitCount: { increment: 1 },
+        username: username, // Update username if changed
+      },
+      create: {
+        id: userId,
+        username: username,
+        firstSeenAt: new Date(),
+        lastSeenAt: new Date(),
+        visitCount: 1,
+      },
+    });
+
+    console.log(`[User Memory] User ${username} (${userId}) connected. Visit count: ${user.visitCount}`);
+
+    // 2. Decide on Greeting
+    // Only greet if they haven't been seen in the last 1 hour to avoid spamming on reconnects
+    // const ONE_HOUR = 60 * 60 * 1000;
+    // const timeSinceLastSeen = new Date().getTime() - user.lastSeenAt.getTime();
+
+    // If it's a brand new user (visitCount === 1) OR they've been away for a while
+    // Note: upsert updates lastSeenAt, so we might need to check if it WAS long ago.
+    // Actually, since we just updated it, we can't check the *previous* lastSeenAt easily without a separate read first.
+    // For simplicity/performance, let's just check visitCount.
+
+    if (user.visitCount === 1) {
+      // New User Greeting
+      await triggerAIGreeting(socket, userId, username, 'new_user');
+    } else {
+      // Returning User Greeting
+      // We can check if we should greet based on random chance or session gap if we tracked sessions better.
+      // For now, let's greet returning users if they are "user_..." (meaning they might need a name) 
+      // OR just give a warm "welcome back" to everyone but maybe throttled?
+      // Let's just greet everyone for now as requested, but maybe add a small check to not be annoying?
+      // The user asked: "lembre deles ... assim ele pode dar algumas saudações quando ouvintes conectarem"
+
+      // Let's fetch their last request to add context
+      const lastRequest = await prisma.trackRequest.findFirst({
+        where: { userId: userId },
+        orderBy: { createdAt: 'desc' },
+        include: { track: true }
+      });
+
+      const context = {
+        visitCount: user.visitCount,
+        lastRequest: lastRequest?.track ? `${lastRequest.track.title} by ${lastRequest.track.artist}` : null
+      };
+
+      await triggerAIGreeting(socket, userId, username, 'returning_user', context);
+    }
+
+  } catch (error) {
+    console.error('Error handling user connection:', error);
+  }
+}
+
+async function triggerAIGreeting(
+  socket: Socket<ClientToServerEvents, ServerToClientEvents>,
+  userId: string,
+  username: string,
+  type: 'new_user' | 'returning_user',
+  context?: any
+): Promise<void> {
+  const aiMessageId = nanoid();
+
+  let systemPrompt = '';
+  if (type === 'new_user') {
+    systemPrompt = 'O usuário acabou de entrar na rádio pela primeira vez. Dê as boas-vindas de forma calorosa e breve. Seja "chill" e faça ele se sentir em casa.';
+  } else {
+    systemPrompt = `O usuário ${username} retornou à rádio. Esta é a visita número ${context.visitCount} dele.`;
+    if (context.lastRequest) {
+      systemPrompt += ` A última música que ele pediu foi "${context.lastRequest}".`;
+      systemPrompt += ` Mencione isso sutilmente ("Que bom te ver de novo! Ainda curtindo ${context.lastRequest}?").`;
+    } else {
+      systemPrompt += ` Dê um "oi" caloroso de boas-vindas de volta.`;
+    }
+    systemPrompt += ` Seja breve, amigável e "cool".`;
+  }
+
+  try {
+    const conversationMessages = [{ role: 'system' as const, content: systemPrompt }];
 
     const aiResponse = await fetch(`${config.app.url}/api/curation/process-message`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         messages: conversationMessages,
-        data: { userId, username, isPrivate: true }, // Force private
+        data: { userId, username, isPrivate: true }, // Force private greeting
       }),
     });
 
-    if (!aiResponse.ok) {
-      throw new Error(`AI welcome response error: ${aiResponse.status}`);
-    }
-
+    if (!aiResponse.ok) throw new Error(`AI greeting response error: ${aiResponse.status}`);
     if (!aiResponse.body) return;
 
     let aiFullContent = '';
@@ -568,14 +669,11 @@ async function handleNewUserWelcome(socket: Socket<ClientToServerEvents, ServerT
     while (true) {
       const { value, done } = await reader.read();
       if (done) break;
-
       const chunk = decoder.decode(value, { stream: true });
       aiFullContent += chunk;
-
       socket.emit(SOCKET_EVENTS.AI_MESSAGE_CHUNK, { chunk, messageId: aiMessageId });
     }
 
-    // Store and complete
     const aiChatMessage: RedisChatMessage = {
       id: aiMessageId,
       userId: 'ai',
@@ -591,9 +689,10 @@ async function handleNewUserWelcome(socket: Socket<ClientToServerEvents, ServerT
     socket.emit(SOCKET_EVENTS.AI_MESSAGE_COMPLETE, { messageId: aiMessageId });
 
   } catch (error) {
-    console.error('Error sending welcome message:', error);
+    console.error('Error sending AI greeting:', error);
   }
 }
+
 
 // Export server for testing
 export function getIO(): SocketIOServer<ClientToServerEvents, ServerToClientEvents> | null {

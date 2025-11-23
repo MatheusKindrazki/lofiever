@@ -15,10 +15,10 @@
   </limits>
 
   <authentication>
-    <source-password>source_password</source-password>
-    <relay-password>relay_password</relay-password>
+    <source-password>hackme</source-password>
+    <relay-password>hackme</relay-password>
     <admin-user>admin</admin-user>
-    <admin-password>admin_password</admin-password>
+    <admin-password>hackme</admin-password>
   </authentication>
 
   <hostname>localhost</hostname>

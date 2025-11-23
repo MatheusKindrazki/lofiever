@@ -36,6 +36,9 @@ export const SOCKET_EVENTS = {
 
   // DJ Announcement events
   DJ_ANNOUNCEMENT: 'dj:announcement',
+
+  // User events
+  USER_UPDATE: 'user:update',
 } as const;
 
 export type SocketEvents = typeof SOCKET_EVENTS;
@@ -54,6 +57,7 @@ export interface ServerToClientEvents {
   [SOCKET_EVENTS.AI_MESSAGE_CHUNK]: (data: { chunk: string; messageId: string }) => void;
   [SOCKET_EVENTS.AI_MESSAGE_COMPLETE]: (data: { messageId: string }) => void;
   [SOCKET_EVENTS.DJ_ANNOUNCEMENT]: (data: { message: string; track?: Track }) => void;
+  [SOCKET_EVENTS.USER_UPDATE]: (data: { username: string }) => void;
 }
 
 export interface ClientToServerEvents {

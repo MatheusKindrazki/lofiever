@@ -1,38 +1,16 @@
 import { NextResponse } from 'next/server';
 import { DatabaseService } from '@/services/database';
-import { redisHelpers } from '@/lib/redis';
+import { redisHelpers, redis } from '@/lib/redis';
 import { handleApiError } from '@/lib/api-utils';
-import type { Track as PrismaTrack } from '@prisma/client';
-import { R2Lib } from '@/lib/r2';
-
-// Helper para formatar uma faixa do Prisma para a estrutura esperada pelo frontend
-async function formatSongInfo(track: PrismaTrack) {
-  let artworkUrl = '/default-cover.jpg'; // Fallback padrão
-  if (track.artworkKey) {
-    try {
-      artworkUrl = await R2Lib.getPresignedUrl(track.artworkKey, 3600); // URL válida por 1 hora
-    } catch (error) {
-      console.error(`Erro ao gerar URL pré-assinada para artworkKey ${track.artworkKey}:`, error);
-    }
-  }
-
-  return {
-    id: track.id,
-    title: track.title,
-    artist: track.artist,
-    duration: track.duration,
-    artworkUrl: artworkUrl,
-  };
-}
 
 // GET - Obter dados da stream atual
 export async function GET(): Promise<NextResponse> {
   try {
     // Obter dados em paralelo
-    const [currentRedisTrack, playlist, streamStats] = await Promise.all([
+    const [currentRedisTrack, streamStats, bufferTracks] = await Promise.all([
       redisHelpers.getCurrentTrack(),
-      DatabaseService.getActivePlaylist(),
       DatabaseService.getStreamStats(),
+      redis.lrange("lofiever:liquidsoap:buffer", 0, 4), // Get first 5 buffered tracks
     ]);
 
     if (!currentRedisTrack) {
@@ -41,40 +19,25 @@ export async function GET(): Promise<NextResponse> {
         { status: 404 }
       );
     }
-    
-    const currentTrack = await prisma.track.findUnique({ where: { id: currentRedisTrack.id }});
 
-    if (!currentTrack) {
-      return NextResponse.json(
-        { error: 'A faixa ativa não foi encontrada no banco de dados.', code: 'NOT_FOUND' },
-        { status: 404 }
-      );
-    }
-
-    const sortedTracks = playlist?.tracks.sort((a, b) => a.position - b.position) || [];
-    const currentIndex = sortedTracks.findIndex(pt => pt.trackId === currentTrack.id);
-
-    let nextUpDbTracks: PrismaTrack[] = [];
-    if (currentIndex !== -1 && sortedTracks.length > 1) {
-        const nextIndex1 = (currentIndex + 1) % sortedTracks.length;
-        const nextIndex2 = (currentIndex + 2) % sortedTracks.length;
-        nextUpDbTracks = [sortedTracks[nextIndex1].track, sortedTracks[nextIndex2].track]
-            .filter(t => t.id !== currentTrack.id).slice(0, 2);
-    }
-
-    // Formatar a resposta usando o helper assíncrono
-    const formattedCurrentSong = await formatSongInfo(currentTrack);
-    const formattedNextUp = await Promise.all(nextUpDbTracks.map(formatSongInfo));
+    // Build nextUp from the Liquidsoap buffer (what will ACTUALLY play next)
+    const nextUp = bufferTracks.map((trackJson: string) => {
+      try {
+        return JSON.parse(trackJson);
+      } catch {
+        return null;
+      }
+    }).filter(Boolean);
 
     const streamData = {
       currentSong: {
-        ...formattedCurrentSong,
+        ...currentRedisTrack,
         streamUrl: '/api/stream/audio-stream?proxy=true',
       },
       listeners: streamStats.currentListeners,
       daysActive: streamStats.daysActive,
       songsPlayed: streamStats.totalTracksPlayed,
-      nextUp: formattedNextUp,
+      nextUp, // This now shows what Liquidsoap has buffered, not the DB playlist order
     };
 
     return NextResponse.json(streamData, { status: 200 });
@@ -82,4 +45,3 @@ export async function GET(): Promise<NextResponse> {
     return handleApiError(error);
   }
 }
- 

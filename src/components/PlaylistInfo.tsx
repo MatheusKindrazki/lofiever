@@ -1,85 +1,12 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { usePlaybackSync, useSocket, useListeners } from '../lib/socket/client';
-
-interface QueueTrack {
-  id: string;
-  title: string;
-  artist: string;
-  mood?: string;
-  duration: number;
-  addedBy?: string;
-}
-
-interface PlaylistData {
-  current: QueueTrack | null;
-  upcoming: QueueTrack[];
-  history: QueueTrack[];
-}
+import { usePlaybackSync, useListeners } from '../lib/socket/client';
+import { usePlaylistQueue } from '@/hooks/usePlaylistQueue';
 
 export default function PlaylistInfo() {
   const { currentTrack } = usePlaybackSync();
-  const { socket } = useSocket();
   const { listenersCount } = useListeners();
-  const [playlistData, setPlaylistData] = useState<PlaylistData>({
-    current: null,
-    upcoming: [],
-    history: [],
-  });
-  const [isLoading, setIsLoading] = useState(true);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-
-  useEffect(() => {
-    fetchPlaylistData();
-    // Refresh every 30 seconds
-    const interval = setInterval(fetchPlaylistData, 30000);
-    return () => clearInterval(interval);
-  }, []);
-
-  // Refresh when track changes
-  useEffect(() => {
-    if (currentTrack) {
-      fetchPlaylistData();
-    }
-  }, [currentTrack]);
-
-  // Listen for playlist updates via socket
-  useEffect(() => {
-    if (!socket) return;
-
-    const onPlaylistUpdate = () => {
-      fetchPlaylistData();
-    };
-
-    socket.on('playlist:update', onPlaylistUpdate);
-    socket.on('track:change', onPlaylistUpdate);
-
-    return () => {
-      socket.off('playlist:update', onPlaylistUpdate);
-      socket.off('track:change', onPlaylistUpdate);
-    };
-  }, [socket]);
-
-  async function fetchPlaylistData(showRefresh = false) {
-    try {
-      if (showRefresh) setIsRefreshing(true);
-      const response = await fetch('/api/playlist/queue');
-      if (response.ok) {
-        const data = await response.json();
-        setPlaylistData(data);
-      }
-    } catch (error) {
-      console.error('Failed to fetch playlist data:', error);
-    } finally {
-      setIsLoading(false);
-      setIsRefreshing(false);
-    }
-  }
-
-  const handleRefresh = () => {
-    fetchPlaylistData(true);
-  };
+  const { data: playlistData, isLoading, refetch, isFetching } = usePlaylistQueue();
 
   const formatDuration = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -98,6 +25,9 @@ export default function PlaylistInfo() {
       </div>
     );
   }
+
+  const upcoming = playlistData?.upcoming || [];
+  const history = playlistData?.history || [];
 
   return (
     <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg overflow-hidden h-full flex flex-col">
@@ -121,14 +51,14 @@ export default function PlaylistInfo() {
               <span>{listenersCount}</span>
             </div>
             <button
-              onClick={handleRefresh}
-              disabled={isRefreshing}
+              onClick={() => refetch()}
+              disabled={isFetching}
               className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
               title="Atualizar fila"
             >
               <svg
                 xmlns="http://www.w3.org/2000/svg"
-                className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`}
+                className={`h-4 w-4 ${isFetching ? 'animate-spin' : ''}`}
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
@@ -175,12 +105,12 @@ export default function PlaylistInfo() {
               Próximas
             </span>
             <span className="text-xs text-gray-400">
-              {playlistData.upcoming.length} na fila
+              {upcoming.length} na fila
             </span>
           </div>
-          {playlistData.upcoming.length > 0 ? (
+          {upcoming.length > 0 ? (
             <div className="space-y-2">
-              {playlistData.upcoming.slice(0, 5).map((track, index) => (
+              {upcoming.slice(0, 5).map((track, index) => (
                 <div
                   key={track.id}
                   className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
@@ -212,9 +142,9 @@ export default function PlaylistInfo() {
           <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">
             Tocadas recentemente
           </span>
-          {playlistData.history.length > 0 ? (
+          {history.length > 0 ? (
             <div className="mt-3 space-y-2">
-              {playlistData.history.slice(0, 5).map((track) => (
+              {history.slice(0, 5).map((track) => (
                 <div
                   key={track.id}
                   className="flex items-center gap-3 p-2 rounded-lg opacity-60"

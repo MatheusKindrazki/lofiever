@@ -45,7 +45,8 @@ export const ModerationService = {
   async processTrackRequest(
     userId: string,
     username: string,
-    query: string
+    query: string,
+    options: { ignoreCooldown?: boolean } = {}
   ): Promise<ModerationResult> {
     // 1. Find the track
     const track = await this.findTrackByQuery(query);
@@ -80,11 +81,11 @@ export const ModerationService = {
     }
 
     // 4. Apply moderation rules
-    const moderationResult = await this.applyModerationRules(userId, track, request.id);
+    const moderationResult = await this.applyModerationRules(userId, track, request.id, options);
 
     // 5. If approved, add to playlist
     if (moderationResult.approved) {
-      await PlaylistManagerService.addTrackToPlaylist(track.id, `user:${userId}`);
+      await PlaylistManagerService.addTrackToPlaylist(track.id, `user:${userId}`, userId);
 
       await prisma.trackRequest.update({
         where: { id: request.id },
@@ -165,7 +166,8 @@ export const ModerationService = {
   async applyModerationRules(
     userId: string,
     track: Track,
-    requestId: string
+    requestId: string,
+    options: { ignoreCooldown?: boolean } = {}
   ): Promise<ModerationResult> {
     // Get enabled rules from database, or use defaults
     const rules = await prisma.moderationRule.findMany({
@@ -180,9 +182,11 @@ export const ModerationService = {
     }
 
     // Check cooldown
-    const cooldownResult = await this.checkCooldown(userId);
-    if (!cooldownResult.approved) {
-      return cooldownResult;
+    if (!options.ignoreCooldown) {
+      const cooldownResult = await this.checkCooldown(userId);
+      if (!cooldownResult.approved) {
+        return cooldownResult;
+      }
     }
 
     // Check for duplicates

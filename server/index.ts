@@ -2,7 +2,6 @@ import { createServer } from 'node:http';
 import { parse } from 'node:url';
 import next from 'next';
 import { createSocketServer } from '../src/lib/socket/server';
-import { LiquidsoapIntegrationService } from '../src/services/playlist/liquidsoap-integration.service';
 
 const dev = process.env.NODE_ENV !== 'production';
 const hostname = 'localhost';
@@ -17,20 +16,7 @@ app.prepare().then(() => {
   const server = createServer(async (req, res) => {
     const parsedUrl = parse(req.url || '', true);
 
-    if (req.method === 'GET' && parsedUrl.pathname === '/api/next-track') {
-      try {
-        const trackUrl = await LiquidsoapIntegrationService.getNextTrackUri();
-        res.statusCode = 200;
-        res.setHeader('Content-Type', 'text/plain');
-        res.end(trackUrl);
-      } catch (err) {
-        res.statusCode = 500;
-        res.setHeader('Content-Type', 'text/plain');
-        res.end('');
-      }
-      return;
-    }
-
+    // Let Next.js handle all routes, including /api/next-track
     handle(req, res, parsedUrl);
   });
 

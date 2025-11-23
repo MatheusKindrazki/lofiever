@@ -124,6 +124,12 @@ export async function POST(req: Request) {
           execute: async ({ query }) => {
             console.log('[Tool: request_track] Executing with query:', query);
 
+            // 0. Check cooldown first (once for the whole interaction)
+            const cooldownCheck = await ModerationService.checkCooldown(userId);
+            if (!cooldownCheck.approved) {
+              return `❌ ${cooldownCheck.reason}`;
+            }
+
             // 1. Search for multiple candidates to allow for retries/alternatives
             const candidates = await prisma.track.findMany({
               where: {
@@ -155,7 +161,9 @@ export async function POST(req: Request) {
               }
 
               // Try to add the valid candidate
-              const result = await ModerationService.processTrackRequest(userId, username, track.title);
+              // We ignore cooldown here because we already checked it at the start,
+              // and we don't want retries (due to other reasons) to be blocked by the cooldown update from a failed attempt.
+              const result = await ModerationService.processTrackRequest(userId, username, track.title, { ignoreCooldown: true });
 
               if (result.approved) {
                 const response = `✅ Adicionei "${result.trackTitle}" de ${result.trackArtist} na fila! Logo mais ela toca.`;
@@ -163,7 +171,11 @@ export async function POST(req: Request) {
                 return response;
               } else {
                 // If rejected for rate limit, stop immediately
-                if (result.reason.includes('limite') || result.reason.includes('Aguarde')) {
+                if (result.reason.includes('limite')) {
+                  return `❌ ${result.reason}`;
+                }
+                // If rejected for cooldown (shouldn't happen with ignoreCooldown, but safe to keep)
+                if (result.reason.includes('Aguarde')) {
                   return `❌ ${result.reason}`;
                 }
               }
@@ -187,6 +199,12 @@ export async function POST(req: Request) {
           execute: async ({ mood, count = 1 }) => {
             try {
               console.log('[Tool: request_tracks_by_mood] Executing with mood:', mood, 'count:', count);
+
+              // 0. Check cooldown first (once for the whole interaction)
+              const cooldownCheck = await ModerationService.checkCooldown(userId);
+              if (!cooldownCheck.approved) {
+                return `❌ ${cooldownCheck.reason}`;
+              }
 
               // Fetch a larger pool of candidates to allow for retries (duplicates)
               const poolSize = 50; // Fixed large pool size to handle small catalog/duplicates
@@ -238,16 +256,17 @@ export async function POST(req: Request) {
                 }
 
                 console.log('[Tool: request_tracks_by_mood] Processing track:', track.title);
-                const result = await ModerationService.processTrackRequest(userId, username, track.title);
+                // Ignore cooldown for individual tracks in the batch/retry loop
+                const result = await ModerationService.processTrackRequest(userId, username, track.title, { ignoreCooldown: true });
 
                 if (result.approved) {
                   added.push(`"${track.title}"`);
                 } else {
                   lastFailureReason = result.reason;
 
-                  // Check if we should stop trying (Rate Limit / Cooldown)
-                  if (result.reason.includes('limite') || result.reason.includes('Aguarde')) {
-                    console.log('[Tool: request_tracks_by_mood] Aborting due to rate limit/cooldown');
+                  // Check if we should stop trying (Rate Limit)
+                  if (result.reason.includes('limite')) {
+                    console.log('[Tool: request_tracks_by_mood] Aborting due to rate limit');
 
                     if (added.length > 0) {
                       return `✅ Adicionei ${added.length} música(s) (${added.join(', ')}), mas você atingiu seu limite de pedidos por enquanto! Aproveita essas.`;
@@ -265,7 +284,7 @@ export async function POST(req: Request) {
 
               if (added.length === 0) {
                 // If we failed to add any tracks after trying the whole pool
-                if (lastFailureReason && (lastFailureReason.includes('limite') || lastFailureReason.includes('Aguarde'))) {
+                if (lastFailureReason && lastFailureReason.includes('limite')) {
                   return `❌ ${lastFailureReason}`;
                 }
                 return `⚠️ Todas as sugestões que encontrei já estão na fila! A rádio tá bombando hoje. Tenta pedir uma específica!`;

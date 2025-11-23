@@ -12,17 +12,17 @@ export default {
     extend: {
       colors: {
         'lofi': {
-          50: '#f7f5fb',
-          100: '#eae4f6',
-          200: '#d7cbee',
-          300: '#bca6e0',
-          400: '#9c7bd0',
-          500: '#8459c0',
-          600: '#7045a8',
-          700: '#5d3889',
-          800: '#4c3071',
-          900: '#41295d',
-          950: '#28173b',
+          50: 'var(--color-lofi-50)',
+          100: 'var(--color-lofi-100)',
+          200: 'var(--color-lofi-200)',
+          300: 'var(--color-lofi-300)',
+          400: 'var(--color-lofi-400)',
+          500: 'var(--color-lofi-500)',
+          600: 'var(--color-lofi-600)',
+          700: 'var(--color-lofi-700)',
+          800: 'var(--color-lofi-800)',
+          900: 'var(--color-lofi-900)',
+          950: 'var(--color-lofi-950)',
         },
       },
       animation: {

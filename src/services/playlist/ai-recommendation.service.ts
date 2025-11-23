@@ -59,7 +59,10 @@ export async function processChatMessageAndAddTrack(
 /**
  * Analisa o contexto do chat para determinar o melhor mood.
  */
-async function determineMoodFromChat(chatMessages: string[]): Promise<string | undefined> {
+/**
+ * Analisa o contexto do chat para determinar o melhor mood.
+ */
+export async function determineMoodFromChat(chatMessages: string[]): Promise<string | undefined> {
   if (!chatMessages || chatMessages.length === 0) return undefined;
 
   try {
@@ -109,13 +112,13 @@ export async function recommendNextTrack(
       targetMood = await determineMoodFromChat(chatContext);
     }
 
-    // 2. Obter histórico da última hora para evitar repetições
-    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+    // 2. Obter histórico das últimas 24 horas para evitar repetições
+    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
     const recentHistory = await prisma.playbackHistory.findMany({
       where: {
         startedAt: {
-          gte: oneHourAgo,
+          gte: oneDayAgo,
         },
       },
       select: { trackId: true },

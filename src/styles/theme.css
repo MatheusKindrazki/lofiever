@@ -1,0 +1,26 @@
+:root {
+  /* Lofi Palette */
+  --color-lofi-50: #f7f5fb;
+  --color-lofi-100: #eae4f6;
+  --color-lofi-200: #d7cbee;
+  --color-lofi-300: #bca6e0;
+  --color-lofi-400: #9c7bd0;
+  --color-lofi-500: #8459c0;
+  --color-lofi-600: #7045a8;
+  --color-lofi-700: #5d3889;
+  --color-lofi-800: #4c3071;
+  --color-lofi-900: #41295d;
+  --color-lofi-950: #28173b;
+
+  /* Semantic Colors (can be mapped to lofi palette) */
+  --color-primary: var(--color-lofi-500);
+  --color-primary-foreground: #ffffff;
+  
+  --color-background: var(--color-lofi-50);
+  --color-foreground: var(--color-lofi-950);
+}
+
+.dark {
+  --color-background: var(--color-lofi-950);
+  --color-foreground: var(--color-lofi-50);
+}

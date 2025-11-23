@@ -1,12 +1,23 @@
-import { NextResponse } from 'next/server';
+import { NextResponse, NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { redisHelpers, redis } from '@/lib/redis';
 import { PlaylistManagerService } from '@/services/playlist/playlist-manager.service';
+import { validateRequest, RATE_LIMITS } from '@/lib/api-security';
+
+// Force Node.js runtime
+export const runtime = 'nodejs';
 
 const UPCOMING_LIMIT = 10;
 const HISTORY_LIMIT = 5;
 
-export async function GET() {
+// Handler implementation
+export async function GET(request: NextRequest): Promise<NextResponse> {
+  // Security Check
+  const securityError = await validateRequest(request, {
+    rateLimit: RATE_LIMITS.api,
+  });
+  if (securityError) return securityError;
+
   try {
     // Get current track from Redis
     const currentTrack = await redisHelpers.getCurrentTrack();
@@ -21,17 +32,47 @@ export async function GET() {
     // Get upcoming tracks from Redis Queue
     const queueRaw = await redis.lrange('lofiever:playlist:upcoming', 0, UPCOMING_LIMIT - 1);
 
-    const upcoming = queueRaw.map((item) => {
-      const track = JSON.parse(item);
-      return {
-        id: track.id,
-        title: track.title,
-        artist: track.artist,
-        mood: track.mood,
-        duration: track.duration,
-        addedBy: track.addedBy,
-      };
-    });
+    // Get tracks currently buffered in Liquidsoap (these will play BEFORE the queue)
+    const bufferRaw = await redis.lrange('lofiever:liquidsoap:buffer', 0, 4);
+
+    // Parse buffer tracks
+    const bufferTracks = bufferRaw.map(item => {
+      try {
+        const track = JSON.parse(item);
+        return {
+          id: track.id,
+          title: track.title,
+          artist: track.artist,
+          mood: track.mood,
+          duration: track.duration,
+          addedBy: track.addedBy,
+          isBuffered: true // Flag to indicate this is already in Liquidsoap
+        };
+      } catch (e) {
+        return null;
+      }
+    }).filter(Boolean);
+
+    // Parse queue tracks
+    const queueTracks = queueRaw.map((item) => {
+      try {
+        const track = JSON.parse(item);
+        return {
+          id: track.id,
+          title: track.title,
+          artist: track.artist,
+          mood: track.mood,
+          duration: track.duration,
+          addedBy: track.addedBy,
+        };
+      } catch (e) {
+        return null;
+      }
+    }).filter(Boolean);
+
+    // Combine buffer + queue for the true "Upcoming" list
+    // Filter out any duplicates if necessary (though buffer should be distinct from queue)
+    const upcoming = [...bufferTracks, ...queueTracks].slice(0, UPCOMING_LIMIT);
 
     // Get playback history from database
     const playbackHistory = await prisma.playbackHistory.findMany({
@@ -74,9 +115,6 @@ export async function GET() {
     });
   } catch (error) {
     console.error('Error fetching playlist queue:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch playlist queue' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Failed to fetch playlist data' }, { status: 500 });
   }
 }

@@ -168,3 +168,14 @@ model ProactiveMessage {
 
   @@map("proactive_messages")
 }
+
+// User tracking for personalized experience
+model User {
+  id            String    @id // The userId from socket/auth
+  username      String
+  firstSeenAt   DateTime  @default(now())
+  lastSeenAt    DateTime  @default(now())
+  visitCount    Int       @default(1)
+  
+  @@map("users")
+}

@@ -3,6 +3,13 @@
 import { SessionProvider } from "next-auth/react";
 import ReactQueryProvider from "./ReactQueryProvider";
 import React from "react";
+import { usePlaylistSync } from "@/hooks/usePlaylistSync";
+
+// Wrapper component to use hooks inside providers
+function PlaylistSyncProvider({ children }: { children: React.ReactNode }) {
+    usePlaylistSync(); // This hook listens to WebSocket and invalidates queries
+    return <>{children}</>;
+}
 
 export default function AppProviders({
     children
@@ -12,8 +19,11 @@ export default function AppProviders({
     return (
         <SessionProvider>
             <ReactQueryProvider>
-                {children}
+                <PlaylistSyncProvider>
+                    {children}
+                </PlaylistSyncProvider>
             </ReactQueryProvider>
         </SessionProvider>
     );
 }
+

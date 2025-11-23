@@ -1,8 +1,15 @@
 import { NextResponse } from "next/server";
-import { DatabaseService } from "@/services/database";
-import { redisHelpers, redis } from "@/lib/redis";
+import { PlaylistManagerService } from "@/services/playlist/playlist-manager.service";
+import { redis } from "@/lib/redis";
 import { prisma } from "@/lib/prisma";
 import { R2Lib } from "@/lib/r2";
+import { Track } from "@prisma/client";
+
+interface QueueTrack extends Track {
+  addedBy?: string;
+  addedByUserId?: string;
+  requestId?: string;
+}
 
 /**
  * GET - Endpoint para o Liquidsoap obter a próxima faixa
@@ -10,47 +17,29 @@ import { R2Lib } from "@/lib/r2";
  */
 export async function GET(): Promise<NextResponse> {
   try {
-    // Obter playlist ativa
-    const playlist = await DatabaseService.getActivePlaylist();
+    // 1. Obter a próxima faixa da fila dinâmica (Redis)
+    // Isso já lida com refill automático via IA e prioridade de pedidos
+    const nextTrack = (await PlaylistManagerService.getNextTrack()) as QueueTrack;
 
-    if (!playlist || playlist.tracks.length === 0) {
-      console.log("[Next Track] No active playlist, returning fallback");
+    if (!nextTrack) {
+      console.error("[Next Track] Failed to get next track from PlaylistManager");
       return new NextResponse("/music/example.mp3", {
         status: 200,
         headers: { "Content-Type": "text/plain" },
       });
     }
 
-    // Obter posição atual da playlist do Redis
-    const currentPositionStr = await redis.get("lofiever:playlist:position");
-    let currentPosition = currentPositionStr
-      ? parseInt(currentPositionStr, 10)
-      : -1;
-
-    // Calcular próxima posição (circular)
-    const nextPosition = (currentPosition + 1) % playlist.tracks.length;
-    const nextTrackItem = playlist.tracks[nextPosition];
-
-    if (!nextTrackItem || !nextTrackItem.track) {
-      console.error("[Next Track] No track found at position", nextPosition);
-      return new NextResponse("/music/example.mp3", {
-        status: 200,
-        headers: { "Content-Type": "text/plain" },
-      });
-    }
-
-    const nextTrack = nextTrackItem.track;
-
-    // Atualizar posição no Redis
-    await redis.set("lofiever:playlist:position", nextPosition.toString());
-
-    // Registrar no histórico de playback
+    // 2. Registrar no histórico de playback (Prisma)
     try {
+      // Obter versão da playlist (opcional, mantendo compatibilidade)
+      const versionStr = await redis.get("lofiever:playlist:version");
+      const version = versionStr ? parseInt(versionStr, 10) : 1;
+
       await prisma.playbackHistory.create({
         data: {
           trackId: nextTrack.id,
           startedAt: new Date(),
-          version: playlist.version,
+          version: version,
         },
       });
       console.log(
@@ -61,40 +50,11 @@ export async function GET(): Promise<NextResponse> {
       console.error("[Next Track] Failed to record history:", historyError);
     }
 
-    // Construir artwork URL
-    let artworkUrl = "/images/default-cover.jpg";
-    if (nextTrack.artworkKey) {
-      artworkUrl = nextTrack.artworkKey;
-    }
+    // NOTE: We do NOT update currentTrack here anymore!
+    // The track will be updated when Liquidsoap calls /api/track-started
+    // This prevents pre-buffering desync issues
 
-    // Atualizar faixa atual no Redis
-    await redisHelpers.setCurrentTrack({
-      id: nextTrack.id,
-      title: nextTrack.title,
-      artist: nextTrack.artist,
-      sourceType: nextTrack.sourceType as "spotify" | "youtube",
-      sourceId: nextTrack.sourceId,
-      duration: nextTrack.duration,
-      bpm: nextTrack.bpm || undefined,
-      mood: nextTrack.mood || undefined,
-      artworkUrl,
-    });
-
-    // Publicar evento de nova track para os clientes
-    await redis.publish(
-      "lofi-ever:new-track",
-      JSON.stringify({
-        id: nextTrack.id,
-        title: nextTrack.title,
-        artist: nextTrack.artist,
-        duration: nextTrack.duration,
-        artworkUrl,
-        mood: nextTrack.mood,
-        bpm: nextTrack.bpm,
-      }),
-    );
-
-    // Construir URL do arquivo baseado no sourceType
+    // 4. Construir URL do arquivo para o Liquidsoap
     let trackUrl = "";
 
     switch (nextTrack.sourceType) {
@@ -114,14 +74,61 @@ export async function GET(): Promise<NextResponse> {
     }
 
     console.log(
-      `[Next Track] Position ${nextPosition}: "${nextTrack.title}" by ${nextTrack.artist}`,
+      `[Next Track] Serving: "${nextTrack.title}" by ${nextTrack.artist} (ID: ${nextTrack.id})`,
     );
     console.log(`[Next Track] URL: ${trackUrl.substring(0, 100)}...`);
 
-    // Retornar URL da faixa como texto simples (formato esperado pelo Liquidsoap)
-    return new NextResponse(trackUrl, {
+    // Store this track as "last-requested" for the track-started callback
+    // Construct artwork URL
+    let artworkUrl = "/images/default-cover.jpg";
+    if (nextTrack.artworkKey) {
+      try {
+        // Generate presigned URL valid for 1 hour
+        artworkUrl = await R2Lib.getPresignedUrl(nextTrack.artworkKey, 3600);
+      } catch (error) {
+        console.error(`[Next Track] Failed to generate presigned artwork URL:`, error);
+        // Fallback to default if generation fails
+        artworkUrl = "/images/default-cover.jpg";
+      }
+    }
+
+    const trackForBuffer = {
+      id: nextTrack.id,
+      title: nextTrack.title,
+      artist: nextTrack.artist,
+      sourceType: nextTrack.sourceType,
+      sourceId: nextTrack.sourceId,
+      duration: nextTrack.duration,
+      bpm: nextTrack.bpm || undefined,
+      mood: nextTrack.mood || undefined,
+      artworkUrl,
+    };
+
+    await redis.set(
+      "lofiever:last-requested-track",
+      JSON.stringify(trackForBuffer),
+      "EX",
+      600 // Expire after 10 minutes
+    );
+
+    // Add track to Liquidsoap buffer (this represents what Liquidsoap has buffered to play)
+    await redis.rpush(
+      "lofiever:liquidsoap:buffer",
+      JSON.stringify(trackForBuffer)
+    );
+
+    console.log(`[Next Track] Added to Liquidsoap buffer: ${nextTrack.title}`);
+
+    // Retornar URL da faixa como texto simples
+    // Também incluímos metadados no header para o Liquidsoap usar no callback
+    return new NextResponse(trackUrl.trim(), {
       status: 200,
-      headers: { "Content-Type": "text/plain" },
+      headers: {
+        "Content-Type": "text/plain; charset=utf-8",
+        "X-Track-Id": nextTrack.id,
+        "X-Track-Title": nextTrack.title,
+        "X-Track-Artist": nextTrack.artist,
+      },
     });
   } catch (error) {
     console.error("Error getting next track:", error);
