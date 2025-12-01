@@ -19,6 +19,18 @@ RUN npx prisma generate
 # Copy source files
 COPY . .
 
+# Build-time environment variables (dummy values for build)
+ENV NEXT_TELEMETRY_DISABLED=1
+ENV DATABASE_URL="postgresql://postgres:postgres@localhost:5432/postgres"
+ENV REDIS_URL="redis://localhost:6379"
+ENV AUTH_SECRET="build-time-secret"
+ENV OPENAI_API_KEY="build-time-key"
+ENV R2_ACCESS_KEY_ID=""
+ENV R2_SECRET_ACCESS_KEY=""
+ENV R2_ENDPOINT=""
+ENV R2_BUCKET_NAME=""
+ENV R2_PUBLIC_URL=""
+
 # Build Next.js application
 RUN npm run build
 
@@ -28,6 +40,7 @@ FROM node:20-alpine AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
 
 # Create non-root user for security
 RUN addgroup --system --gid 1001 nodejs
