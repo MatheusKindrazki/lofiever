@@ -77,13 +77,14 @@ services:
       - ICECAST_RELAY_PASSWORD=${ICECAST_RELAY_PASSWORD:-hackme}
       - ICECAST_ADMIN_USER=${ICECAST_ADMIN_USER:-admin}
       - ICECAST_HOSTNAME=${ICECAST_HOSTNAME:-localhost}
-    volumes:
-      - ./streaming/icecast/icecast.xml:/etc/icecast.xml:ro
+      - ICECAST_MAX_CLIENTS=100
+      - ICECAST_MAX_SOURCES=2
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost:8000/status-json.xsl"]
       interval: 30s
       timeout: 10s
-      retries: 3
+      retries: 5
+      start_period: 30s
 
   liquidsoap:
     image: savonet/liquidsoap:v2.3.3
