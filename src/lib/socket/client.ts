@@ -19,7 +19,7 @@ let socket: Socket<ServerToClientEvents, ClientToServerEvents> | null = null;
 /**
  * Initialize socket connection (should be called only once)
  */
-export function initializeSocket(auth: { token: string; userId?: string; username?: string }): Socket<ServerToClientEvents, ClientToServerEvents> {
+export function initializeSocket(auth: { token: string; userId?: string; username?: string; locale?: 'pt' | 'en' }): Socket<ServerToClientEvents, ClientToServerEvents> {
   if (!socket) {
     socket = io({
       path: config.socket.path,
@@ -151,12 +151,18 @@ export function useSocket() {
           }
 
           if (token) {
-            console.log('[Client] Initializing socket with token', { userId: session?.userId, username: session?.username });
+            const pathLocale = typeof window !== 'undefined'
+              ? window.location.pathname.split('/')[1]
+              : null;
+            const preferredLocale: 'pt' | 'en' = pathLocale === 'en' ? 'en' : 'pt';
+
+            console.log('[Client] Initializing socket with token', { userId: session?.userId, username: session?.username, preferredLocale });
             currentTokenRef.current = token;
             socket = initializeSocket({
               token,
               userId: session?.userId,
-              username: session?.username
+              username: session?.username,
+              locale: preferredLocale
             });
             setSocketInstance(socket);
 
@@ -219,12 +225,13 @@ export function useSocket() {
   }, []);
 
   // Send chat message
-  const sendChatMessage = useCallback((content: string, options: { isPrivate?: boolean } = {}) => {
+  const sendChatMessage = useCallback((content: string, options: { isPrivate?: boolean; locale?: 'pt' | 'en' } = {}) => {
     if (socket?.connected) {
       socket.emit(SOCKET_EVENTS.CHAT_MESSAGE, {
         content,
         type: 'user',
-        isPrivate: options.isPrivate
+        isPrivate: options.isPrivate,
+        locale: options.locale
       });
     }
   }, []);
@@ -285,6 +292,15 @@ export function usePlaybackSync() {
       setPosition(0);
     };
 
+    // Re-sync when tab becomes visible (browser may have missed events)
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && isConnected) {
+        requestSync();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
     // Register event listeners
     socket.on(SOCKET_EVENTS.SYNC_RESPONSE, onSyncResponse);
     socket.on(SOCKET_EVENTS.PLAYBACK_START, onPlaybackStart);
@@ -293,6 +309,7 @@ export function usePlaybackSync() {
 
     // Cleanup
     return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
       socket.off(SOCKET_EVENTS.SYNC_RESPONSE, onSyncResponse);
       socket.off(SOCKET_EVENTS.PLAYBACK_START, onPlaybackStart);
       socket.off(SOCKET_EVENTS.PLAYBACK_PAUSE, onPlaybackPause);
@@ -308,22 +325,95 @@ export function usePlaybackSync() {
   };
 }
 
+// Extended ChatMessage with pending state
+export interface PendingChatMessage extends ChatMessage {
+  isPending?: boolean;
+  isFailed?: boolean;
+  tempId?: string;
+}
+
 /**
  * Hook to listen for chat messages
  */
 export function useChat() {
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [messages, setMessages] = useState<PendingChatMessage[]>([]);
   const [aiMessageBuffers, setAiMessageBuffers] = useState<Record<string, string>>({});
   const [isLoadingAI, setIsLoadingAI] = useState<boolean>(false);
-  const { socket } = useSocket();
+  const [pendingMessageId, setPendingMessageId] = useState<string | null>(null);
+  const { socket, userId } = useSocket();
+
+  // Add a pending message (optimistic update)
+  const addPendingMessage = useCallback((content: string, options: { isPrivate?: boolean; username?: string }) => {
+    const tempId = `pending-${nanoid()}`;
+    const pendingMessage: PendingChatMessage = {
+      id: tempId,
+      tempId,
+      userId: userId || 'anonymous',
+      username: options.username || 'You',
+      content,
+      timestamp: Date.now(),
+      type: 'user',
+      isPrivate: options.isPrivate,
+      isPending: true,
+    };
+
+    setMessages((prev) => [...prev, pendingMessage]);
+    setPendingMessageId(tempId);
+
+    // Set timeout to mark as failed if no confirmation
+    setTimeout(() => {
+      setMessages((prev) =>
+        prev.map(m =>
+          m.tempId === tempId && m.isPending
+            ? { ...m, isPending: false, isFailed: true }
+            : m
+        )
+      );
+      setPendingMessageId((current) => current === tempId ? null : current);
+    }, 15000); // 15 second timeout
+
+    return tempId;
+  }, [userId]);
+
+  // Clear pending state when message is confirmed
+  const confirmPendingMessage = useCallback((tempId: string, confirmedMessage: ChatMessage) => {
+    setMessages((prev) =>
+      prev.map(m =>
+        m.tempId === tempId
+          ? { ...confirmedMessage, isPending: false, isFailed: false }
+          : m
+      )
+    );
+    setPendingMessageId((current) => current === tempId ? null : current);
+  }, []);
 
   useEffect(() => {
     if (!socket) return;
 
     // Handle new user messages (already includes full AI messages for history)
     const onChatMessage = (message: ChatMessage) => {
-      setMessages((prev) => [...prev.filter(m => m.id !== message.id), message]);
-      if (message.type === 'user') {
+      // Check if this confirms a pending message
+      const isPendingConfirmation = message.userId === userId && message.type === 'user';
+
+      if (isPendingConfirmation && pendingMessageId) {
+        // Find the pending message with similar content
+        setMessages((prev) => {
+          const pendingIdx = prev.findIndex(m => m.isPending && m.userId === userId);
+          if (pendingIdx !== -1) {
+            // Replace pending with confirmed
+            const newMessages = [...prev];
+            newMessages[pendingIdx] = { ...message, isPending: false, isFailed: false };
+            return newMessages;
+          }
+          // No pending found, just add
+          return [...prev.filter(m => m.id !== message.id), message];
+        });
+        setPendingMessageId(null);
+      } else {
+        setMessages((prev) => [...prev.filter(m => m.id !== message.id), message]);
+      }
+
+      if (message.type === 'user' && message.userId === userId) {
         setIsLoadingAI(true);
       }
     };
@@ -414,11 +504,14 @@ export function useChat() {
       socket.off(SOCKET_EVENTS.DJ_ANNOUNCEMENT, onDJAnnouncement);
       socket.off(SOCKET_EVENTS.CHAT_HISTORY, onChatHistory);
     };
-  }, [socket, aiMessageBuffers]); // Include aiMessageBuffers in dependency array
+  }, [socket, aiMessageBuffers, userId, pendingMessageId]); // Include aiMessageBuffers in dependency array
 
   return {
     messages,
     isLoadingAI,
+    hasPendingMessage: !!pendingMessageId,
+    addPendingMessage,
+    confirmPendingMessage,
   };
 }
 

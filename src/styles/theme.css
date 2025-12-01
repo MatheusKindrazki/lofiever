@@ -1,26 +1,48 @@
 :root {
-  /* Lofi Palette */
-  --color-lofi-50: #f7f5fb;
-  --color-lofi-100: #eae4f6;
-  --color-lofi-200: #d7cbee;
-  --color-lofi-300: #bca6e0;
-  --color-lofi-400: #9c7bd0;
-  --color-lofi-500: #8459c0;
-  --color-lofi-600: #7045a8;
-  --color-lofi-700: #5d3889;
-  --color-lofi-800: #4c3071;
-  --color-lofi-900: #41295d;
-  --color-lofi-950: #28173b;
+  /* Lofi Palette - Warmer, softer tones */
+  --color-lofi-50: #faf8fc;
+  --color-lofi-100: #f3eef8;
+  --color-lofi-200: #e7ddf1;
+  --color-lofi-300: #d4c2e5;
+  --color-lofi-400: #b795d4;
+  --color-lofi-500: #9c6fc4;
+  --color-lofi-600: #8555b3;
+  --color-lofi-700: #6d4494;
+  --color-lofi-800: #583979;
+  --color-lofi-900: #4a3166;
+  --color-lofi-950: #2d1d3e;
 
-  /* Semantic Colors (can be mapped to lofi palette) */
+  /* Accent colors for warmth */
+  --color-accent-pink: #e8a5c5;
+  --color-accent-blue: #7fb3d5;
+  --color-accent-peach: #f5c0a0;
+
+  /* Semantic Colors */
   --color-primary: var(--color-lofi-500);
+  --color-primary-hover: var(--color-lofi-600);
   --color-primary-foreground: #ffffff;
-  
-  --color-background: var(--color-lofi-50);
+
+  --color-background: #fefefe;
+  --color-background-subtle: var(--color-lofi-50);
   --color-foreground: var(--color-lofi-950);
+  --color-muted: var(--color-lofi-200);
+  --color-border: var(--color-lofi-200);
+
+  /* Glass morphism */
+  --glass-bg: rgba(255, 255, 255, 0.7);
+  --glass-border: rgba(156, 111, 196, 0.2);
+  --glass-shadow: 0 8px 32px 0 rgba(156, 111, 196, 0.1);
 }
 
 .dark {
-  --color-background: var(--color-lofi-950);
+  --color-background: #1a1625;
+  --color-background-subtle: var(--color-lofi-950);
   --color-foreground: var(--color-lofi-50);
+  --color-muted: var(--color-lofi-800);
+  --color-border: var(--color-lofi-800);
+
+  /* Dark mode glass */
+  --glass-bg: rgba(42, 30, 56, 0.6);
+  --glass-border: rgba(156, 111, 196, 0.3);
+  --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.4);
 }

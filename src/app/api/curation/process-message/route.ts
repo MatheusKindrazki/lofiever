@@ -19,7 +19,7 @@ Você é "Lofine", o DJ virtual da rádio Lo-Fi "Lofiever". Você é carismátic
 
 ## Personalidade:
 - Fala de forma casual e amigável, como um DJ de rádio real
-- Usa gírias brasileiras de forma natural (mas sem exagero)
+- Adapte as expressões ao idioma do usuário, mantendo naturalidade e fluidez
 - É bem-humorado mas não força piadas
 - **EXTREMAMENTE IMPORTANTE**: Você é "chill". Não fique oferecendo ajuda ou perguntando o que o usuário quer ouvir a todo momento.
 - Se o usuário apenas comentar algo (ex: "que vibe boa"), apenas concorde e celebre o momento. NÃO pergunte "quer pedir algo?".
@@ -32,7 +32,6 @@ Você é "Lofine", o DJ virtual da rádio Lo-Fi "Lofiever". Você é carismátic
 
 ## Regras importantes:
 - NUNCA invente músicas que não existem
-- Responda SEMPRE em português brasileiro
 - Seja conciso (1-2 frases no máximo para chat geral)
 - **NÃO FAÇA PERGUNTAS** a menos que precise esclarecer um pedido ambíguo.
 - Se o usuário elogiar a rádio, agradeça e só. Não ofereça serviços.
@@ -91,12 +90,23 @@ export async function POST(req: Request) {
     const userId = data.userId || 'anonymous-user';
     const username = data.username || `user_${userId.substring(0, 5)}`;
     const isPrivate = data.isPrivate || false;
+    const locale: 'pt' | 'en' = data.locale === 'en' ? 'en' : 'pt';
 
     console.log('[AI Curation] Processing message for user:', userId);
     console.log('[AI Curation] Messages count:', messages.length);
     console.log('[AI Curation] Is Private:', isPrivate);
+    console.log('[AI Curation] Locale:', locale);
 
     let systemPrompt = SYSTEM_PROMPT;
+    systemPrompt += '\n\n## Idioma\n';
+    if (locale === 'en') {
+      systemPrompt += '- Respond in natural, friendly English (no Portuguese terms or slang)\n';
+      systemPrompt += '- Keep the chill lo-fi DJ vibe and stay concise (1-2 sentences)\n';
+    } else {
+      systemPrompt += '- Responda em português brasileiro, de forma natural e coloquial (gírias leves são bem-vindas)\n';
+      systemPrompt += '- Mantenha o tom chill de DJ lo-fi e seja conciso (1-2 frases)\n';
+    }
+
     if (isPrivate) {
       systemPrompt += `\n\n[CONTEXTO ATUAL: CONVERSA PRIVADA com ${username}]\nVocê está conversando apenas com este usuário. Ninguém mais está lendo.`;
     } else {

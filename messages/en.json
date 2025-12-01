@@ -1,0 +1,71 @@
+{
+    "common": {
+        "appName": "Lofiever",
+        "appTagline": "24/7 Lofi streaming with virtual DJ",
+        "footer": {
+            "copyright": "© {year} Lofiever. All rights reserved.",
+            "madeWith": "Built with ❤️ using Next.js, React, and AI"
+        }
+    },
+    "player": {
+        "nowPlaying": "Now Playing",
+        "live": "Live",
+        "paused": "Paused",
+        "listeners": "listeners",
+        "volume": "Volume",
+        "tabs": {
+            "upcoming": "Upcoming",
+            "history": "History"
+        },
+        "emptyQueue": "Queue is empty - request songs in chat!",
+        "emptyHistory": "No songs played on this day",
+        "songs": "songs",
+        "minutes": "min",
+        "loadingHistory": "Loading history...",
+        "zenMode": {
+            "activate": "Zen Mode",
+            "exit": "Exit Zen"
+        }
+    },
+    "chat": {
+        "djName": "Lofine DJ",
+        "djStatus": "Online • Ready to help",
+        "welcome": {
+            "title": "Hello! I'm Lofine",
+            "description": "Your virtual DJ. Request songs, suggest a mood, or just chat about the playlist!"
+        },
+        "input": {
+            "placeholder": "Request a song or chat...",
+            "placeholderPrivate": "Private chat with Lofine...",
+            "placeholderLoading": "Lofine is thinking...",
+            "placeholderModerating": "Sending message...",
+            "send": "Send"
+        },
+        "privateMode": {
+            "toggle": "Private conversation with DJ",
+            "togglePublic": "Public conversation",
+            "warning": "You're talking <b>only with the DJ</b>. To talk to everyone, uncheck the option below.",
+            "exitButton": "Exit private mode",
+            "toast": "🔒 Chat switched to private mode automatically."
+        },
+        "quickActions": {
+            "study": "🎓 Study",
+            "energy": "⚡ Energy",
+            "relax": "🌙 Relax",
+            "queue": "📋 Queue",
+            "myRequests": "📊 My requests"
+        },
+        "quickActionsMessages": {
+            "study": "I want something relaxing to study",
+            "energy": "Play something upbeat for energy",
+            "relax": "I want calm and relaxing music",
+            "queue": "Show me the upcoming songs in the queue",
+            "myRequests": "How many requests do I still have?"
+        }
+    },
+    "language": {
+        "name": "English",
+        "code": "en",
+        "switchTo": "Switch to Portuguese"
+    }
+}

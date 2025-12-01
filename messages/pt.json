@@ -1,0 +1,71 @@
+{
+    "common": {
+        "appName": "Lofiever",
+        "appTagline": "24/7 Lofi streaming com DJ virtual",
+        "footer": {
+            "copyright": "© {year} Lofiever. All rights reserved.",
+            "madeWith": "Built with ❤️ using Next.js, React, and AI"
+        }
+    },
+    "player": {
+        "nowPlaying": "Tocando Agora",
+        "live": "Ao vivo",
+        "paused": "Pausado",
+        "listeners": "ouvintes",
+        "volume": "Volume",
+        "tabs": {
+            "upcoming": "Próximas",
+            "history": "Histórico"
+        },
+        "emptyQueue": "Fila vazia - peça músicas no chat!",
+        "emptyHistory": "Nenhuma música tocou neste dia",
+        "songs": "músicas",
+        "minutes": "min",
+        "loadingHistory": "Carregando histórico...",
+        "zenMode": {
+            "activate": "Modo Zen",
+            "exit": "Sair do Zen"
+        }
+    },
+    "chat": {
+        "djName": "Lofine DJ",
+        "djStatus": "Online • Pronto pra ajudar",
+        "welcome": {
+            "title": "Olá! Eu sou a Lofine",
+            "description": "Sua DJ virtual. Me peça músicas, sugira um mood, ou só bata um papo sobre a playlist!"
+        },
+        "input": {
+            "placeholder": "Peça uma música ou converse...",
+            "placeholderPrivate": "Conversando em privado com Lofine...",
+            "placeholderLoading": "Lofine está pensando...",
+            "placeholderModerating": "Enviando mensagem...",
+            "send": "Enviar"
+        },
+        "privateMode": {
+            "toggle": "Conversa privada com DJ",
+            "togglePublic": "Conversa pública",
+            "warning": "Você está falando <b>apenas com o DJ</b>. Para falar com todos, desmarque a opção abaixo.",
+            "exitButton": "Sair do privado",
+            "toast": "🔒 O chat mudou para privado automaticamente."
+        },
+        "quickActions": {
+            "study": "🎓 Estudar",
+            "energy": "⚡ Energia",
+            "relax": "🌙 Relaxar",
+            "queue": "📋 Fila",
+            "myRequests": "📊 Meus pedidos"
+        },
+        "quickActionsMessages": {
+            "study": "Quero algo relaxante pra estudar",
+            "energy": "Coloca algo mais animado pra dar energia",
+            "relax": "Quero músicas calmas e relaxantes",
+            "queue": "Me mostra as próximas músicas da fila",
+            "myRequests": "Quantos pedidos eu ainda tenho?"
+        }
+    },
+    "language": {
+        "name": "Português",
+        "code": "pt",
+        "switchTo": "Mudar para Inglês"
+    }
+}

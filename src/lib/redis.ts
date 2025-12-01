@@ -77,6 +77,7 @@ export interface ChatMessage {
     artist?: string;
     artworkUrl?: string;
   };
+  locale?: 'pt' | 'en';
 }
 
 // Redis client singleton
@@ -310,6 +311,19 @@ export const redisHelpers = {
     const username = await redis.hget(key, 'username');
     console.log(`[Redis] Getting username for ${userId} (Key: ${key}) -> ${username}`);
     return username;
+  },
+
+  async setUserLocale(userId: string, locale: 'pt' | 'en'): Promise<void> {
+    const key = `${KEYS.USER_PREFERENCES}:${userId}`;
+    console.log(`[Redis] Setting locale for ${userId} (Key: ${key}) to ${locale}`);
+    await redis.hset(key, { locale });
+  },
+
+  async getUserLocale(userId: string): Promise<'pt' | 'en' | null> {
+    const key = `${KEYS.USER_PREFERENCES}:${userId}`;
+    const locale = await redis.hget(key, 'locale');
+    console.log(`[Redis] Getting locale for ${userId} (Key: ${key}) -> ${locale}`);
+    return locale === 'pt' || locale === 'en' ? locale : null;
   },
 
   // Cache related helpers

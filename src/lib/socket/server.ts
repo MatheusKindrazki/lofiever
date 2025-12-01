@@ -19,6 +19,7 @@ const LISTENER_CLEANUP_INTERVAL = 15 * 1000; // 15 seconds
 const LISTENER_TIMEOUT = 30 * 1000; // 30 seconds
 const ANNOUNCEMENT_FREQUENCY = 10; // Announce every 10 tracks (reduced from 5)
 type AIMessagesPayload = Array<{ role: 'user' | 'assistant'; content: string }>;
+const normalizeLocale = (locale?: string | null): 'pt' | 'en' => (locale === 'en' ? 'en' : 'pt');
 
 // Generate short, unique IDs for clients
 const nanoid = customAlphabet('1234567890abcdefghijklmnopqrstuvwxyz', 10);
@@ -77,17 +78,25 @@ function setupMiddleware(io: SocketIOServer<ClientToServerEvents, ServerToClient
       // Try to get persisted username from Redis first
       const persistedName = await redisHelpers.getUserName(userId);
       const username = persistedName || (socket.handshake.auth.username as string) || `user_${userId.substring(0, 5)}`;
+      const handshakeLocale = socket.handshake.auth?.locale as string | undefined;
+      const parsedHandshakeLocale = handshakeLocale === 'en' ? 'en' : handshakeLocale === 'pt' ? 'pt' : null;
+      const persistedLocale = await redisHelpers.getUserLocale(userId);
+      const activeLocale = persistedLocale || parsedHandshakeLocale || 'pt';
 
       console.log(`[Connection] UserId: ${userId}, PersistedName: ${persistedName}, HandshakeName: ${socket.handshake.auth.username}, FinalUsername: ${username}`);
 
       // Store user info in socket data
       socket.data.userId = userId;
       socket.data.username = username;
+      socket.data.locale = activeLocale;
 
       // Persist username in Redis to ensure it's available for dynamic resolution
       // This handles cases where Redis data might have been lost/expired but client still has the session
       if (username) {
         await redisHelpers.setUserName(userId, username);
+      }
+      if (parsedHandshakeLocale && parsedHandshakeLocale !== persistedLocale) {
+        await redisHelpers.setUserLocale(userId, parsedHandshakeLocale);
       }
 
       next();
@@ -140,6 +149,9 @@ function setupEventHandlers(io: SocketIOServer<ClientToServerEvents, ServerToCli
       const userMessageId = nanoid();
       const aiMessageId = nanoid(); // Unique ID for AI's response
       const isPrivate = message.isPrivate || false;
+      const incomingLocale = message.locale === 'en' ? 'en' : message.locale === 'pt' ? 'pt' : null;
+      const locale = normalizeLocale(incomingLocale || (socket.data.locale as string | null));
+      socket.data.locale = locale;
 
       try {
         // 0. Moderate content
@@ -150,6 +162,9 @@ function setupEventHandlers(io: SocketIOServer<ClientToServerEvents, ServerToCli
           return;
         }
 
+        // Persist locale preference for future interactions
+        await redisHelpers.setUserLocale(userId, locale);
+
         // 1. Store and broadcast user's message
         const chatMessage: RedisChatMessage = {
           id: userMessageId,
@@ -159,6 +174,7 @@ function setupEventHandlers(io: SocketIOServer<ClientToServerEvents, ServerToCli
           timestamp: Date.now(),
           type: 'user',
           isPrivate,
+          locale,
         };
 
         await redisHelpers.addChatMessage(chatMessage);
@@ -191,7 +207,7 @@ function setupEventHandlers(io: SocketIOServer<ClientToServerEvents, ServerToCli
           },
           body: JSON.stringify({
             messages: conversationMessages,
-            data: { userId, username, isPrivate },
+            data: { userId, username, isPrivate, locale },
           }),
         });
 
@@ -234,6 +250,7 @@ function setupEventHandlers(io: SocketIOServer<ClientToServerEvents, ServerToCli
           type: 'ai',
           isPrivate,
           targetUserId: isPrivate ? userId : undefined,
+          locale,
         };
         await redisHelpers.addChatMessage(aiChatMessage);
 
@@ -559,6 +576,8 @@ async function syncClientState(socket: Socket<ClientToServerEvents, ServerToClie
 async function handleUserConnection(socket: Socket<ClientToServerEvents, ServerToClientEvents>): Promise<void> {
   const userId = socket.data.userId;
   const username = socket.data.username;
+  const locale = normalizeLocale(socket.data.locale as string | null);
+  socket.data.locale = locale;
 
   // Ignore temporary/guest users if needed, but for now track everyone
   if (!userId) return;
@@ -595,7 +614,7 @@ async function handleUserConnection(socket: Socket<ClientToServerEvents, ServerT
 
     if (user.visitCount === 1) {
       // New User Greeting
-      await triggerAIGreeting(socket, userId, username, 'new_user');
+      await triggerAIGreeting(socket, userId, username, 'new_user', undefined, locale);
     } else {
       // Returning User Greeting
       // We can check if we should greet based on random chance or session gap if we tracked sessions better.
@@ -616,7 +635,7 @@ async function handleUserConnection(socket: Socket<ClientToServerEvents, ServerT
         lastRequest: lastRequest?.track ? `${lastRequest.track.title} by ${lastRequest.track.artist}` : null
       };
 
-      await triggerAIGreeting(socket, userId, username, 'returning_user', context);
+      await triggerAIGreeting(socket, userId, username, 'returning_user', context, locale);
     }
 
   } catch (error) {
@@ -629,7 +648,8 @@ async function triggerAIGreeting(
   userId: string,
   username: string,
   type: 'new_user' | 'returning_user',
-  context?: any
+  context?: any,
+  locale: 'pt' | 'en' = 'pt'
 ): Promise<void> {
   const aiMessageId = nanoid();
 
@@ -655,7 +675,7 @@ async function triggerAIGreeting(
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         messages: conversationMessages,
-        data: { userId, username, isPrivate: true }, // Force private greeting
+        data: { userId, username, isPrivate: true, locale }, // Force private greeting
       }),
     });
 
@@ -683,6 +703,7 @@ async function triggerAIGreeting(
       type: 'ai',
       isPrivate: true,
       targetUserId: userId,
+      locale,
     };
 
     await redisHelpers.addChatMessage(aiChatMessage);

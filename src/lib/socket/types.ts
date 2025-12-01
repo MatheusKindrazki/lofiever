@@ -62,7 +62,7 @@ export interface ServerToClientEvents {
 
 export interface ClientToServerEvents {
   [SOCKET_EVENTS.SYNC_REQUEST]: () => void;
-  [SOCKET_EVENTS.CHAT_MESSAGE]: (message: { content: string; type: 'user' | 'system' | 'ai'; isPrivate?: boolean }) => void;
+  [SOCKET_EVENTS.CHAT_MESSAGE]: (message: { content: string; type: 'user' | 'system' | 'ai'; isPrivate?: boolean; locale?: 'pt' | 'en' }) => void;
   [SOCKET_EVENTS.PLAYLIST_VOTE]: (trackId: string) => void;
   [SOCKET_EVENTS.HEARTBEAT]: () => void;
 }
