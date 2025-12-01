@@ -1,48 +1,97 @@
-name: lofiever-dev
+name: lofiever
 
 services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      - SERVICE_FQDN_APP_3000
+      - NODE_ENV=production
+      - PORT=3000
+      - DATABASE_URL=postgresql://${SERVICE_USER_POSTGRES:-postgres}:${SERVICE_PASSWORD_POSTGRES:-postgres}@postgres:5432/${POSTGRES_DB:-lofiever}
+      - REDIS_URL=redis://redis:6379
+      - NEXTAUTH_URL=${SERVICE_FQDN_APP_3000:-http://localhost:3000}
+      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_REGION=${AWS_REGION:-us-east-1}
+      - AWS_S3_BUCKET=${AWS_S3_BUCKET}
+      - ICECAST_URL=${ICECAST_URL:-http://icecast:8000}
+      - ICECAST_STREAM_URL=${ICECAST_STREAM_URL:-http://icecast:8000/stream}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    volumes:
+      - app-uploads:/app/public/uploads
+
   redis:
-    image: redis:latest
-    ports:
-      - 6379:6379
+    image: redis:7-alpine
     volumes:
       - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   postgres:
     image: postgres:16-alpine
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: postgres
+      - POSTGRES_USER=${SERVICE_USER_POSTGRES:-postgres}
+      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRES:-postgres}
+      - POSTGRES_DB=${POSTGRES_DB:-lofiever}
     volumes:
       - postgres-data:/var/lib/postgresql/data
-    ports:
-      - 5432:5432
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${SERVICE_USER_POSTGRES:-postgres} -d ${POSTGRES_DB:-lofiever}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   icecast:
     image: moul/icecast
-    ports:
-      - "${ICECAST_PORT:-8000}:8000"
     environment:
-      - ICECAST_SOURCE_PASSWORD=${ICECAST_SOURCE_PASSWORD:-hackme}
-      - ICECAST_ADMIN_PASSWORD=${ICECAST_ADMIN_PASSWORD:-hackme}
-      - ICECAST_RELAY_PASSWORD=${ICECAST_RELAY_PASSWORD:-hackme}
+      - SERVICE_FQDN_ICECAST_8000
+      - ICECAST_SOURCE_PASSWORD=${ICECAST_SOURCE_PASSWORD}
+      - ICECAST_ADMIN_PASSWORD=${ICECAST_ADMIN_PASSWORD}
+      - ICECAST_RELAY_PASSWORD=${ICECAST_RELAY_PASSWORD}
       - ICECAST_ADMIN_USER=${ICECAST_ADMIN_USER:-admin}
       - ICECAST_HOSTNAME=${ICECAST_HOSTNAME:-localhost}
     volumes:
       - ./streaming/icecast/icecast.xml:/etc/icecast.xml:ro
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8000/status-json.xsl"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
   liquidsoap:
     image: savonet/liquidsoap:v2.3.3
     depends_on:
-      - icecast
+      icecast:
+        condition: service_healthy
     environment:
-      - ICECAST_SOURCE_PASSWORD=${ICECAST_SOURCE_PASSWORD:-hackme}
+      - ICECAST_SOURCE_PASSWORD=${ICECAST_SOURCE_PASSWORD}
       - ICECAST_HOST=icecast
       - ICECAST_PORT=8000
-      - API_HOST=host.docker.internal
+      - API_HOST=app
+      - API_PORT=3000
     volumes:
-      - ./streaming/liquidsoap:/radio
-      - ./public/music:/music
-    command: [ "/radio/radio.liq" ]
+      - ./streaming/liquidsoap:/radio:ro
+      - music-data:/music
 
 volumes:
   redis-data:
   postgres-data:
+  app-uploads:
+  music-data:
