@@ -1,230 +1,260 @@
-# 🎵 Lofiever - Lo-fi 24/7 Radio Stream
+# Lofiever - 24/7 Lo-fi Radio Stream
 
-Uma plataforma de streaming de música lo-fi 24/7 com sincronização em tempo real e playlists dinâmicas geradas por IA.
+A 24/7 lo-fi music streaming platform with real-time synchronization, AI-powered curation, live chat, and an immersive Zen Mode experience.
 
-## 🚀 Quick Start
+## Features
 
-### 1. Subir toda a aplicação
+- **24/7 Live Radio Stream** - Continuous lo-fi music streaming via Icecast + Liquidsoap
+- **Real-time Synchronization** - All listeners hear the same music at the same time
+- **AI DJ Curation** - OpenAI-powered music recommendations and chat moderation
+- **Live Chat** - Real-time chat with AI moderation
+- **Zen Mode** - Fullscreen immersive experience with animated backgrounds and audio visualizer
+- **Multi-language Support** - English and Portuguese (next-intl)
+- **Dynamic Playlists** - AI-curated playlists that evolve continuously
+
+## Quick Start
+
+### 1. Start all services
+
 ```bash
 npm run setup
 ```
 
-Este comando irá:
-- ✅ Subir todos os containers Docker (Icecast, Liquidsoap, PostgreSQL, Redis)
-- ✅ Verificar se todos os serviços estão funcionando
-- ✅ Mostrar o status do stream de áudio
-- ✅ Exibir URLs e interfaces disponíveis
+This will:
+- Start all Docker containers (Icecast, Liquidsoap, PostgreSQL, Redis)
+- Verify all services are running
+- Display stream status and available URLs
 
-### 2. Iniciar o frontend e backend
-```bash
-# Terminal 1 - Frontend Next.js
-npm run dev:next
-
-# Terminal 2 - Servidor backend 
-npm run dev:server
-```
-
-## 📊 Monitoramento
-
-### Verificar status do stream
-```bash
-npm run stream:monitor
-```
-
-### Monitoramento contínuo (atualiza a cada 5s)
-```bash
-npm run stream:watch
-```
-
-### Status JSON do Icecast
-```bash
-npm run stream:test
-```
-
-## 🔧 Comandos Docker
+### 2. Start the application
 
 ```bash
-# Subir containers
-npm run docker:up
+# Development (both frontend and backend)
+npm run dev
 
-# Parar containers
-npm run docker:down
-
-# Ver logs em tempo real
-npm run docker:logs
-
-# Reiniciar containers
-npm run docker:restart
+# Or separately:
+npm run dev:next    # Frontend only
+npm run dev:server  # Backend only
 ```
 
-## 🌐 Interfaces Disponíveis
+## Architecture
 
-- **Stream de Áudio**: http://localhost:8000/stream
-- **Icecast Admin**: http://localhost:8000/admin/
-  - Usuário: `admin`
-  - Senha: `admin_password`
-- **Frontend Next.js**: http://localhost:3000 (quando iniciado)
-- **PostgreSQL**: localhost:5432
-- **Redis**: localhost:6379
+### Tech Stack
 
-## 🏗️ Arquitetura
+| Layer | Technology |
+|-------|------------|
+| Frontend | Next.js 15, React 19, TypeScript |
+| Styling | Tailwind CSS 4 |
+| State Management | Zustand, React Query |
+| Real-time | Socket.IO |
+| Database | PostgreSQL + Prisma ORM |
+| Cache | Redis |
+| Streaming | Icecast + Liquidsoap |
+| AI | OpenAI API |
+| Storage | AWS S3 / Cloudflare R2 |
 
-### Serviços Docker
-- **Icecast**: Servidor de streaming de áudio
-- **Liquidsoap**: Engine de processamento e geração de playlist
-- **PostgreSQL**: Banco de dados principal
-- **Redis**: Cache e sessões
+### Services (Docker)
 
-### Stack da Aplicação
-- **Frontend**: Next.js 15 com React 19
-- **Backend**: Node.js com TypeScript
-- **Streaming**: Icecast + Liquidsoap
-- **Database**: PostgreSQL + Prisma ORM
-- **Cache**: Redis + ioredis
+- **Icecast** - Audio streaming server (port 8000)
+- **Liquidsoap** - Audio processing and playlist engine
+- **PostgreSQL** - Primary database (port 5432)
+- **Redis** - Cache and real-time data (port 6379)
 
-## 📁 Estrutura do Projeto
+## Project Structure
 
 ```
 lofiever/
-├── src/                    # Código da aplicação Next.js
-├── server/                 # Servidor backend Node.js
-├── streaming/              # Configurações Icecast + Liquidsoap
-├── scripts/                # Scripts de automação
-├── public/music/           # Biblioteca de músicas
-├── docker-compose.yml      # Orquestração dos serviços
-└── package.json            # Scripts e dependências
+├── src/
+│   ├── app/              # Next.js App Router
+│   │   └── api/          # API routes
+│   ├── components/       # React components
+│   ├── lib/              # Core libraries
+│   │   └── socket/       # Socket.IO client/server
+│   ├── services/         # Business logic
+│   └── types/            # TypeScript definitions
+├── server/               # Custom Node.js server (Socket.IO)
+├── streaming/            # Icecast + Liquidsoap configs
+├── prisma/               # Database schema and migrations
+├── messages/             # i18n translations
+├── i18n/                 # Internationalization config
+└── public/music/         # Music library
 ```
 
-## 🎯 Status da Implementação
+## Available Scripts
 
-Conforme o [TODO.md](./TODO.md), a **Fase 1** está completamente implementada:
+### Development
 
-- ✅ **1.1. Icecast configurado e rodando**
-- ✅ **1.2. Liquidsoap integrado com Icecast**
-- ✅ **1.3. Sincronização NTP implementada**
-- ✅ **1.4. Protocolo DASH preparado**
-
-### Próximas Fases
-- 🔄 **Fase 2**: Playlist dinâmica com IA
-- 🔄 **Fase 3**: Motor de recomendação IA
-- 🔄 **Fase 4**: Integração frontend/backend
-- 🔄 **Fase 5**: Deploy e monitoramento
-
-## 🛠️ Desenvolvimento
-
-### Instalar dependências
 ```bash
-npm install
+npm run dev          # Full dev server (Socket.IO + Next.js)
+npm run dev:next     # Next.js only (with Turbopack)
+npm run dev:server   # Socket.IO server only
+npm run build        # Production build
+npm run start        # Production server
+npm run lint         # ESLint check
 ```
 
-### Comandos de desenvolvimento
+### Docker
+
 ```bash
-npm run dev          # Servidor backend
-npm run dev:next     # Frontend Next.js
-npm run dev:server   # Apenas backend
-npm run build        # Build de produção
-npm run lint         # Verificar código
+npm run docker:up       # Start containers
+npm run docker:down     # Stop containers
+npm run docker:logs     # View logs
+npm run docker:restart  # Restart containers
 ```
 
-### Testes
+### Database
+
 ```bash
-npm run test:redis   # Testar conexão Redis
+npm run db:seed         # Seed database
+npm run db:migrate      # Run migrations
+npm run db:generate     # Generate Prisma client
 ```
 
-## 🐳 Docker
+### Stream Monitoring
 
-### Configuração dos containers
-O `docker-compose.yml` define:
-- **Icecast**: Porta 8000, senhas configuradas
-- **Liquidsoap**: Conecta ao Icecast, lê de `/music`
-- **PostgreSQL**: Porta 5432, usuário `postgres`
-- **Redis**: Porta 6379
-
-### Volumes
-- `./streaming/liquidsoap:/radio` - Scripts Liquidsoap
-- `./public/music:/music` - Biblioteca de músicas
-- `postgres-data` e `redis-data` - Persistência de dados
-
-## 📝 Scripts Utilitários
-
-### `scripts/start-app.sh`
-Script principal que sobe tudo e verifica o status
-
-### `scripts/monitor-stream.sh`
-Monitora o status do stream e serviços em tempo real
-
-## 🔐 Configurações de Segurança
-
-### Icecast
-- Source password: `source_password`
-- Admin password: `admin_password`
-- Relay password: `relay_password`
-
-### Banco de Dados
-- PostgreSQL: `postgres`/`postgres`
-- Redis: Sem senha (desenvolvimento)
-
-## 📋 Troubleshooting
-
-### Stream não funciona
 ```bash
-# Verificar containers
-docker-compose ps
-
-# Ver logs
-npm run docker:logs
-
-# Reiniciar tudo
-npm run docker:restart
-npm run setup
+npm run stream:test     # Check stream status (JSON)
+npm run stream:monitor  # Monitor stream
+npm run stream:watch    # Continuous monitoring (5s interval)
 ```
 
-### Problemas de porta
-Certifique-se que as portas estão livres:
-- 8000 (Icecast)
-- 5432 (PostgreSQL)  
-- 6379 (Redis)
-- 3000 (Next.js)
+### Utilities
 
-### Logs detalhados
 ```bash
-# Logs específicos do Liquidsoap
-docker-compose logs liquidsoap
-
-# Logs específicos do Icecast  
-docker-compose logs icecast
+npm run test:redis       # Test Redis connection
+npm run chat:clear       # Clear chat messages
+npm run session:clear    # Clear sessions
+npm run listeners:reset  # Reset listener count
+npm run playlist:reset   # Reset playlist
 ```
 
-## 🎵 Testando o Stream
+## Environment Variables
 
-### Via browser
-Abra http://localhost:8000/stream em um player de áudio
+Copy `.env.example` to `.env` and configure:
 
-### Via VLC
+```bash
+# Database
+DATABASE_URL="postgresql://postgres:postgres@localhost:5432/lofiever"
+
+# Redis
+REDIS_URL="redis://localhost:6379"
+
+# NextAuth
+NEXTAUTH_URL="http://localhost:3000"
+NEXTAUTH_SECRET="your-secret"
+
+# OpenAI (AI DJ)
+OPENAI_API_KEY="sk-your-key"
+
+# AWS S3 (music storage)
+AWS_ACCESS_KEY_ID="your-key"
+AWS_SECRET_ACCESS_KEY="your-secret"
+AWS_REGION="us-east-1"
+AWS_S3_BUCKET="your-bucket"
+
+# Icecast
+ICECAST_SOURCE_PASSWORD="your-password"
+ICECAST_ADMIN_PASSWORD="your-password"
+```
+
+See [ENV_VARIABLES.md](./ENV_VARIABLES.md) for complete documentation.
+
+## Available Endpoints
+
+| URL | Description |
+|-----|-------------|
+| http://localhost:3000 | Web application |
+| http://localhost:8000/stream | Audio stream |
+| http://localhost:8000/admin/ | Icecast admin panel |
+
+## Docker Deployment (Coolify)
+
+The project includes production-ready Docker configuration:
+
+- `Dockerfile` - Multi-stage build for Next.js with custom server
+- `docker-compose.yml` - Production configuration for Coolify
+- `docker-compose.dev.yml` - Local development configuration
+
+### Deploy to Coolify
+
+1. Create a new service in Coolify
+2. Connect your Git repository
+3. Configure environment variables
+4. Deploy using docker-compose
+
+## API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/health` | GET | Health check |
+| `/api/stream` | GET | Current stream data |
+| `/api/playlist` | GET | Active playlist |
+| `/api/tracks` | GET | Available tracks |
+| `/api/stats` | GET | Stream statistics |
+| `/api/curation/process-message` | POST | AI chat processing |
+| `/api/next-track` | GET | Get next track (Liquidsoap) |
+
+## Testing the Stream
+
+### Browser
+Open http://localhost:8000/stream in any audio player
+
+### VLC
 ```bash
 vlc http://localhost:8000/stream
 ```
 
-### Via curl
+### cURL
 ```bash
 curl -I http://localhost:8000/stream
 ```
 
-## 📚 Documentação Adicional
+## Troubleshooting
 
-- [TODO.md](./TODO.md) - Roadmap de implementação
-- [docs/relatorio-tecnico.md](./docs/relatorio-tecnico.md) - Relatório técnico detalhado
-- [Liquidsoap Documentation](https://www.liquidsoap.info/)
-- [Icecast Documentation](https://icecast.org/docs/)
+### Stream not working
 
-## 🤝 Contribuição
+```bash
+# Check containers
+docker-compose ps
 
-1. Fork o projeto
-2. Crie uma branch para sua feature
-3. Commit suas mudanças
-4. Push para a branch
-5. Abra um Pull Request
+# View logs
+npm run docker:logs
 
-## 📄 Licença
+# Restart everything
+npm run docker:restart
+npm run setup
+```
 
-Este projeto está sob a licença MIT. Veja o arquivo LICENSE para mais detalhes.
+### Port conflicts
+
+Ensure these ports are available:
+- 8000 (Icecast)
+- 5432 (PostgreSQL)
+- 6379 (Redis)
+- 3000 (Next.js)
+
+### Detailed logs
+
+```bash
+# Liquidsoap logs
+docker-compose logs liquidsoap
+
+# Icecast logs
+docker-compose logs icecast
+```
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Commit your changes
+4. Push to the branch
+5. Open a Pull Request
+
+## License
+
+This project is under the MIT License. See the LICENSE file for details.
+
+---
+
+**Author**: Matheus Kindrazki
+**Version**: 0.1.0
