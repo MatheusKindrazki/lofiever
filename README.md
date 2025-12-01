@@ -50,7 +50,7 @@ npm run dev:server  # Backend only
 | Cache | Redis |
 | Streaming | Icecast + Liquidsoap |
 | AI | OpenAI API |
-| Storage | AWS S3 / Cloudflare R2 |
+| Storage | Cloudflare R2 |
 
 ### Services (Docker)
 
@@ -133,27 +133,30 @@ Copy `.env.example` to `.env` and configure:
 
 ```bash
 # Database
-DATABASE_URL="postgresql://postgres:postgres@localhost:5432/lofiever"
+DATABASE_URL="postgresql://postgres:postgres@localhost:5432/postgres?schema=public"
 
 # Redis
 REDIS_URL="redis://localhost:6379"
 
-# NextAuth
-NEXTAUTH_URL="http://localhost:3000"
-NEXTAUTH_SECRET="your-secret"
+# Cloudflare R2 (music storage)
+R2_ACCESS_KEY_ID=""
+R2_SECRET_ACCESS_KEY=""
+R2_ENDPOINT="https://<account_id>.r2.cloudflarestorage.com"
+R2_BUCKET_NAME="lofiever"
+R2_PUBLIC_URL="https://cdn.lofiever.dev"
 
 # OpenAI (AI DJ)
-OPENAI_API_KEY="sk-your-key"
-
-# AWS S3 (music storage)
-AWS_ACCESS_KEY_ID="your-key"
-AWS_SECRET_ACCESS_KEY="your-secret"
-AWS_REGION="us-east-1"
-AWS_S3_BUCKET="your-bucket"
+OPENAI_API_KEY=""
 
 # Icecast
-ICECAST_SOURCE_PASSWORD="your-password"
-ICECAST_ADMIN_PASSWORD="your-password"
+ICECAST_SOURCE_PASSWORD=""
+ICECAST_ADMIN_PASSWORD=""
+ICECAST_RELAY_PASSWORD=""
+
+# Auth & Security
+AUTH_SECRET=""
+API_SECRET_KEY=""
+ALLOWED_ORIGINS="http://localhost:3000"
 ```
 
 See [ENV_VARIABLES.md](./ENV_VARIABLES.md) for complete documentation.

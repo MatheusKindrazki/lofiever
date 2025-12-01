@@ -6,20 +6,33 @@ services:
       context: .
       dockerfile: Dockerfile
     environment:
+      # Coolify auto-generates SERVICE_FQDN_APP_3000
       - SERVICE_FQDN_APP_3000
       - NODE_ENV=production
       - PORT=3000
-      - DATABASE_URL=postgresql://${SERVICE_USER_POSTGRES:-postgres}:${SERVICE_PASSWORD_POSTGRES:-postgres}@postgres:5432/${POSTGRES_DB:-lofiever}
+      # Database (Coolify generates SERVICE_USER/PASSWORD_POSTGRES)
+      - DATABASE_URL=postgresql://$SERVICE_USER_POSTGRES:$SERVICE_PASSWORD_POSTGRES@postgres:5432/$POSTGRES_DB?schema=public
+      # Redis
       - REDIS_URL=redis://redis:6379
-      - NEXTAUTH_URL=${SERVICE_FQDN_APP_3000:-http://localhost:3000}
-      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
-      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
-      - AWS_REGION=${AWS_REGION:-us-east-1}
-      - AWS_S3_BUCKET=${AWS_S3_BUCKET}
-      - ICECAST_URL=${ICECAST_URL:-http://icecast:8000}
-      - ICECAST_STREAM_URL=${ICECAST_STREAM_URL:-http://icecast:8000/stream}
+      # Auth
+      - NEXTAUTH_URL=$SERVICE_FQDN_APP_3000
+      - AUTH_SECRET
+      # OpenAI
+      - OPENAI_API_KEY
+      # Cloudflare R2
+      - R2_ACCESS_KEY_ID
+      - R2_SECRET_ACCESS_KEY
+      - R2_ENDPOINT
+      - R2_BUCKET_NAME
+      - R2_PUBLIC_URL
+      # Icecast
+      - ICECAST_URL=http://icecast:8000
+      - ICECAST_STREAM_URL=http://icecast:8000/stream
+      - ICECAST_SOURCE_PASSWORD
+      # API Security
+      - API_SECRET_KEY
+      - ALLOWED_ORIGINS
+      - RATE_LIMIT_ENABLED=true
     depends_on:
       postgres:
         condition: service_healthy
@@ -47,13 +60,14 @@ services:
   postgres:
     image: postgres:16-alpine
     environment:
-      - POSTGRES_USER=${SERVICE_USER_POSTGRES:-postgres}
-      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRES:-postgres}
-      - POSTGRES_DB=${POSTGRES_DB:-lofiever}
+      # Coolify auto-generates these
+      - POSTGRES_USER=$SERVICE_USER_POSTGRES
+      - POSTGRES_PASSWORD=$SERVICE_PASSWORD_POSTGRES
+      - POSTGRES_DB
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${SERVICE_USER_POSTGRES:-postgres} -d ${POSTGRES_DB:-lofiever}"]
+      test: ["CMD-SHELL", "pg_isready -U $SERVICE_USER_POSTGRES -d $POSTGRES_DB"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -61,12 +75,13 @@ services:
   icecast:
     image: moul/icecast
     environment:
+      # Coolify auto-generates SERVICE_FQDN_ICECAST_8000
       - SERVICE_FQDN_ICECAST_8000
-      - ICECAST_SOURCE_PASSWORD=${ICECAST_SOURCE_PASSWORD}
-      - ICECAST_ADMIN_PASSWORD=${ICECAST_ADMIN_PASSWORD}
-      - ICECAST_RELAY_PASSWORD=${ICECAST_RELAY_PASSWORD}
-      - ICECAST_ADMIN_USER=${ICECAST_ADMIN_USER:-admin}
-      - ICECAST_HOSTNAME=${ICECAST_HOSTNAME:-localhost}
+      - ICECAST_SOURCE_PASSWORD
+      - ICECAST_ADMIN_PASSWORD
+      - ICECAST_RELAY_PASSWORD
+      - ICECAST_ADMIN_USER=admin
+      - ICECAST_HOSTNAME
     volumes:
       - ./streaming/icecast/icecast.xml:/etc/icecast.xml:ro
     healthcheck:
@@ -81,7 +96,7 @@ services:
       icecast:
         condition: service_healthy
     environment:
-      - ICECAST_SOURCE_PASSWORD=${ICECAST_SOURCE_PASSWORD}
+      - ICECAST_SOURCE_PASSWORD
       - ICECAST_HOST=icecast
       - ICECAST_PORT=8000
       - API_HOST=app

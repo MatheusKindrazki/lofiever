@@ -1,107 +1,119 @@
-# TODO.MD - Roteiro de Implementação para o Lofiever
+# TODO - Lofiever Implementation Roadmap
 
-Este documento detalha as tarefas necessárias para reestruturar o projeto Lofiever, focando em um streaming de áudio sincronizado e uma geração de playlists dinâmica com IA.
+This document details the tasks required to build the Lofiever project, focusing on synchronized audio streaming and AI-powered dynamic playlist generation.
 
-## Fase 1: Reestruturação do Core de Streaming
+## Phase 1: Streaming Core Restructuring
 
-**Objetivo:** Substituir a simulação de streaming por uma arquitetura de rádio 24/7 real, onde todos os usuários ouvem a mesma parte da música simultaneamente.
+**Objective:** Replace streaming simulation with a real 24/7 radio architecture where all users hear the same part of the music simultaneously.
 
--   [x] **1.1. Configurar o Servidor de Streaming Icecast:**
-    -   [x] Instalar o Icecast em um servidor de desenvolvimento.
-    -   [x] Configurar as fontes (`<source>`) e os pontos de montagem (`<mount>`) no `icecast.xml`.
-    -   [x] Proteger o acesso de administrador e de fonte com senhas seguras.
-    -   [x] Testar a conexão ao servidor Icecast com um cliente de áudio (ex: VLC).
+- [x] **1.1. Configure Icecast Streaming Server:**
+  - [x] Install Icecast on development server
+  - [x] Configure sources and mount points in `icecast.xml`
+  - [x] Secure admin and source access with passwords
+  - [x] Test connection with audio client (e.g., VLC)
 
--   [x] **1.2. Instalar e Configurar o Liquidsoap:**
-    -   [x] Instalar o Liquidsoap no mesmo servidor ou em um servidor separado.
-    -   [x] Criar um script básico `.liq` para testar a conexão com o Icecast.
-    -   [x] Configurar o Liquidsoap para transcodificar o áudio para um formato compatível (ex: Opus ou AAC).
-    -   [x] Implementar a saída de áudio para o ponto de montagem do Icecast (`output.icecast`).
+- [x] **1.2. Install and Configure Liquidsoap:**
+  - [x] Install Liquidsoap on server
+  - [x] Create basic `.liq` script to test Icecast connection
+  - [x] Configure Liquidsoap to transcode audio to compatible format (Opus)
+  - [x] Implement audio output to Icecast mount point (`output.icecast`)
 
--   [x] **1.3. Sincronização de Tempo com NTP:**
-    -   [x] Configurar o servidor (e, se possível, os clientes) para sincronizar com um servidor NTP (Network Time Protocol) público (ex: `a.ntp.br`). Isso garante uma base de tempo comum.
+- [x] **1.3. NTP Time Synchronization:**
+  - [x] Configure server to sync with public NTP server
 
--   [x] **1.4. (Opcional, mas recomendado) Mudar para o Protocolo DASH:**
-    -   [x] Pesquisar e implementar uma ferramenta (como o Shaka Packager ou Bento4) para segmentar o áudio do Icecast/Liquidsoap em fragmentos DASH.
-    -   [x] Gerar um `manifest.mpd` dinâmico.
-    -   **Justificativa:** DASH oferece menor latência que os streams tradicionais de Icecast, essencial para a sincronização.
+- [x] **1.4. (Optional) DASH Protocol:**
+  - [x] Research DASH segmentation tools (Shaka Packager, Bento4)
+  - [x] Generate dynamic `manifest.mpd`
 
-## Fase 2: Implementação da Playlist Dinâmica
+## Phase 2: Dynamic Playlist Implementation
 
-**Objetivo:** Criar um sistema onde as músicas são adicionadas dinamicamente à playlist por uma IA, sem interromper o stream.
+**Objective:** Create a system where songs are added dynamically by AI without interrupting the stream.
 
--   [x] **2.1. Criar o Serviço de Geração de Playlist (Node.js):**
-    -   [x] Desenvolver um novo serviço/módulo em Node.js que será o "cérebro" da rádio.
-    -   [x] Criar uma API REST para que o Liquidsoap possa solicitar a próxima música.
-    -   [x] Implementar a lógica para consultar o motor de recomendação de IA (Fase 3).
+- [x] **2.1. Create Playlist Generation Service (Node.js):**
+  - [x] Develop Node.js service as the radio "brain"
+  - [x] Create REST API for Liquidsoap to request next song
+  - [x] Implement AI recommendation engine integration
 
--   [x] **2.2. Integrar o Node.js com o Liquidsoap:**
-    -   [x] Modificar o script `.liq` para usar `request.dynamic` ou um protocolo customizado.
-    -   [x] Fazer o Liquidsoap chamar a API Node.js para obter a URL da próxima música.
-    -   [x] Implementar `fallbacks` no Liquidsoap (uma playlist de emergência) caso a API falhe.
+- [x] **2.2. Integrate Node.js with Liquidsoap:**
+  - [x] Modify `.liq` script to use `request.dynamic`
+  - [x] Make Liquidsoap call Node.js API for next track URL
+  - [x] Implement fallbacks (emergency playlist) if API fails
 
--   [x] **2.3. Adicionar Transições Suaves:**
-    -   [x] Usar a função `add_smart_crossfade` do Liquidsoap para criar transições suaves (crossfade) entre as músicas.
+- [x] **2.3. Add Smooth Transitions:**
+  - [x] Use Liquidsoap's `add_smart_crossfade` for smooth crossfades
 
-## Fase 3: Desenvolvimento da IA de Curadoria
+## Phase 3: AI Curation Engine
 
-**Objetivo:** Construir um motor de recomendação que selecione músicas com base em suas características sonoras.
+**Objective:** Build a recommendation engine that selects music based on audio characteristics.
 
--   [ ] **3.1. Preparar o Ambiente Python:**
-    -   [ ] Configurar um ambiente virtual Python (`venv` ou `conda`).
-    -   [ ] Instalar as bibliotecas necessárias: `pandas`, `scikit-learn`, `numpy`, `fastapi`.
+- [x] **3.1. OpenAI Integration:**
+  - [x] Configure OpenAI API for chat moderation
+  - [x] Implement AI-powered message processing
+  - [x] Create DJ personality for responses
 
--   [ ] **3.2. Análise e Preparação dos Dados:**
-    -   [ ] Obter um dataset de músicas lofi com características de áudio (ex: do Kaggle ou via API do Spotify).
-    -   [ ] Normalizar os dados (colocar as features na mesma escala) usando `StandardScaler` do scikit-learn.
+- [ ] **3.2. Audio Feature Analysis (Future):**
+  - [ ] Set up Python environment (`venv` or `conda`)
+  - [ ] Install libraries: `pandas`, `scikit-learn`, `numpy`, `fastapi`
 
--   [ ] **3.3. Treinar o Modelo de Clustering (K-Means):**
-    -   [ ] Aplicar o algoritmo K-Means para agrupar as músicas em clusters com base em suas features (energia, dançabilidade, etc.).
-    -   [ ] Experimentar com o número de clusters (`k`) para encontrar a melhor separação.
-    -   [ ] Salvar o modelo treinado em um arquivo (`.pkl`) para não precisar retreinar a cada vez.
+- [ ] **3.3. Train Clustering Model (K-Means) (Future):**
+  - [ ] Obtain lofi music dataset with audio features
+  - [ ] Normalize data using `StandardScaler`
+  - [ ] Apply K-Means algorithm to cluster songs
+  - [ ] Save trained model to `.pkl` file
 
--   [ ] **3.4. Desenvolver a API de Recomendação (FastAPI):**
-    -   [ ] Criar um endpoint na API que recebe uma música ou um cluster como entrada.
-    -   [ ] Implementar a lógica para retornar uma música aleatória do mesmo cluster.
-    -   [ ] Esta API será consumida pelo serviço Node.js da Fase 2.
+- [ ] **3.4. Develop Recommendation API (FastAPI) (Future):**
+  - [ ] Create endpoint that receives song/cluster as input
+  - [ ] Implement logic to return random song from same cluster
 
-## Fase 4: Integração com o Frontend e Backend Existente
+## Phase 4: Frontend/Backend Integration
 
-**Objetivo:** Remover as bibliotecas e funcionalidades antigas e integrar a nova arquitetura.
+**Objective:** Complete integration of real-time features and modern UI.
 
--   [ ] **4.1. Remover Código Obsoleto:**
-    -   [ ] **Remover `socket.io` e `socket.io-client`:** A sincronização agora é feita pelo stream do Icecast, não mais por eventos WebSocket. O chat pode ser mantido se desejado, mas a sincronização do player deve ser removida.
-    -   [ ] **Remover `ioredis` para contagem de ouvintes:** O Icecast fornece essa informação nativamente através de sua API de status (`/status-json.xsl`).
-    -   [ ] **Remover a lógica de "streaming simulado"** do backend e do frontend.
-    -   [ ] **Arquivar o sistema de playlists versionadas:** A nova playlist é um fluxo contínuo e dinâmico.
+- [x] **4.1. Real-time Player:**
+  - [x] Implement HTML5 audio player with Icecast stream
+  - [x] Add volume control
+  - [x] Display current track info
+  - [x] Add play/pause with stream sync
 
--   [ ] **4.2. Integrar o Novo Player no Frontend (Next.js):**
-    -   [ ] Substituir o player atual por um player de áudio compatível com streams Icecast/DASH (ex: `HTML5 <audio>`, `Dash.js`, ou `Shaka Player`).
-    -   [ ] Configurar o player para apontar para a URL do seu stream Icecast (ex: `http://seu-servidor:8000/stream`).
+- [x] **4.2. Zen Mode:**
+  - [x] Fullscreen immersive experience
+  - [x] Animated canvas background (waves, particles)
+  - [x] Audio visualizer reacting to music
+  - [x] Fullscreen API integration
 
--   [ ] **4.3. Exibir Informações em Tempo Real:**
-    -   [ ] Criar uma rota no seu backend (API Routes do Next.js) que atue como um proxy para a API de status do Icecast.
-    -   [ ] Fazer o frontend consultar essa rota para obter e exibir:
-        -   O nome da música atual (`title`).
-        -   O número de ouvintes (`listeners`).
-    -   [ ] Usar `React Query` (`useQuery`) com um `refetchInterval` para atualizar essas informações periodicamente.
+- [x] **4.3. Live Chat:**
+  - [x] Socket.IO real-time messaging
+  - [x] AI message moderation
+  - [x] Pending message states (loading, error)
 
-## Fase 5: Implantação e Monitoramento
+- [x] **4.4. Internationalization:**
+  - [x] next-intl integration
+  - [x] English and Portuguese translations
 
-**Objetivo:** Colocar a nova arquitetura em produção.
+## Phase 5: Deployment and Monitoring
 
--   [ ] **5.1. Escolher a Estratégia de Hospedagem:**
-    -   **Opção A (Auto-hospedagem):**
-        -   [ ] Provisionar um servidor VPS (ex: DigitalOcean, Vultr, AWS EC2).
-        -   [ ] Instalar e configurar Icecast, Liquidsoap e o ambiente Node.js/Python.
-        -   [ ] Configurar um firewall e outras medidas de segurança.
-    -   **Opção B (Serviços Gerenciados):**
-        -   [ ] Contratar um serviço de hosting para Icecast.
-        -   [ ] Implantar os serviços Node.js e Python em plataformas como Vercel, Heroku ou um VPS separado.
+**Objective:** Deploy the architecture to production.
 
--   [ ] **5.2. Configurar o CI/CD:**
-    -   [ ] Criar ou atualizar os pipelines de CI/CD (ex: GitHub Actions) para implantar as diferentes partes da aplicação (frontend, backend, serviços de IA).
+- [x] **5.1. Docker Configuration:**
+  - [x] Create production Dockerfile
+  - [x] Configure docker-compose for Coolify
+  - [x] Set up health checks
 
--   [ ] **5.3. Monitoramento:**
-    -   [ ] Configurar um sistema de logs e monitoramento (ex: o já implementado ou um novo como o Sentry) para acompanhar a saúde do Icecast, Liquidsoap e dos serviços de IA.
-    -   [ ] Criar alertas para quando um dos serviços cair.
+- [ ] **5.2. CI/CD Setup:**
+  - [ ] Create GitHub Actions pipeline
+  - [ ] Automated testing
+  - [ ] Automated deployment
+
+- [ ] **5.3. Monitoring:**
+  - [ ] Configure logging system
+  - [ ] Set up alerts for service failures
+  - [ ] Implement analytics dashboard
+
+## Phase 6: Future Enhancements
+
+- [ ] User authentication system
+- [ ] Playlist voting/requests
+- [ ] Multiple stream qualities
+- [ ] Mobile app (React Native)
+- [ ] Monetization features
+- [ ] Social features (followers, favorites)
