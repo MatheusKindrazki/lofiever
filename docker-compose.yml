@@ -80,11 +80,11 @@ services:
       - ICECAST_MAX_CLIENTS=100
       - ICECAST_MAX_SOURCES=2
     healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8000/status-json.xsl"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 30s
+      test: ["CMD-SHELL", "nc -z localhost 8000 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
 
   liquidsoap:
     image: savonet/liquidsoap:v2.3.3
