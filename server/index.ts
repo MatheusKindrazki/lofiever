@@ -4,7 +4,7 @@ import next from 'next';
 import { createSocketServer } from '../src/lib/socket/server';
 
 const dev = process.env.NODE_ENV !== 'production';
-const hostname = 'localhost';
+const hostname = process.env.HOSTNAME || '0.0.0.0';
 const port = Number(process.env.PORT) || 3000;
 
 // Initialize Next.js
