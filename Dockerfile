@@ -37,6 +37,9 @@ RUN npm run build
 # Build custom server
 RUN npm run build:server
 
+# Build scripts for production
+RUN npm run build:scripts
+
 # Production stage
 FROM node:20-alpine AS runner
 
