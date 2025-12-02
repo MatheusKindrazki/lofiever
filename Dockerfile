@@ -34,6 +34,9 @@ ENV R2_PUBLIC_URL=""
 # Build Next.js application
 RUN npm run build
 
+# Build custom server
+RUN npm run build:server
+
 # Production stage
 FROM node:20-alpine AS runner
 
@@ -41,6 +44,9 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
+
+# Install wget for healthcheck
+RUN apk add --no-cache wget
 
 # Create non-root user for security
 RUN addgroup --system --gid 1001 nodejs
@@ -57,11 +63,7 @@ RUN npm ci --only=production && \
 # Copy built application from builder stage
 COPY --from=builder /app/.next ./.next
 COPY --from=builder /app/public ./public
-COPY --from=builder /app/next.config.ts ./
-COPY --from=builder /app/tsconfig.json ./
-COPY --from=builder /app/tsconfig-seed.json ./
-COPY --from=builder /app/server ./server
-COPY --from=builder /app/src ./src
+COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/i18n ./i18n
 COPY --from=builder /app/messages ./messages
 
@@ -75,5 +77,5 @@ EXPOSE 3000
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
-# Start the custom server with ts-node
-CMD ["npx", "ts-node", "-P", "tsconfig-seed.json", "server/index.ts"]
+# Start the custom server
+CMD ["node", "dist/server.js"]

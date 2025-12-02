@@ -10,7 +10,8 @@
     "dev:server": "ts-node -P tsconfig-seed.json server/index.ts",
     "dev:next": "next dev --turbopack",
     "build": "next build",
-    "start": "NODE_ENV=production ts-node -P tsconfig-seed.json server/index.ts",
+    "build:server": "esbuild server/index.ts --bundle --platform=node --target=node20 --outfile=dist/server.js --external:next --external:@prisma/client --external:ioredis --packages=external",
+    "start": "node dist/server.js",
     "start:next": "next start",
     "lint": "next lint",
     "test:redis": "ts-node -P tsconfig-seed.json scripts/test-redis.ts",
@@ -58,6 +59,7 @@
     "zustand": "^5.0.3"
   },
   "devDependencies": {
+    "esbuild": "^0.24.0",
     "@eslint/eslintrc": "^3",
     "@tailwindcss/aspect-ratio": "^0.4.2",
     "@tailwindcss/postcss": "^4.1.3",

@@ -79,18 +79,11 @@ services:
       - ICECAST_HOSTNAME=${ICECAST_HOSTNAME:-localhost}
       - ICECAST_MAX_CLIENTS=100
       - ICECAST_MAX_SOURCES=2
-    healthcheck:
-      test: ["CMD-SHELL", "nc -z localhost 8000 || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 15s
 
   liquidsoap:
     image: savonet/liquidsoap:v2.3.3
     depends_on:
-      icecast:
-        condition: service_healthy
+      - icecast
     environment:
       - ICECAST_SOURCE_PASSWORD=${ICECAST_SOURCE_PASSWORD:-hackme}
       - ICECAST_HOST=icecast
