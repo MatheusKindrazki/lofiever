@@ -41,3 +41,8 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+tracks_dump.sql
+prisma/seed-mock-data.ts
+dump.sql
+*.sql
+!prisma/migrations/**/*.sql
