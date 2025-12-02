@@ -13,7 +13,7 @@ services:
       # Redis
       - REDIS_URL=redis://redis:6379
       # Auth
-      - NEXTAUTH_URL=${SERVICE_FQDN_APP_3000:-http://localhost:3000}
+      - NEXTAUTH_URL=${SERVICE_FQDN_APP:-http://localhost:3000}
       - AUTH_SECRET=${AUTH_SECRET:-}
       # OpenAI
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
@@ -37,11 +37,11 @@ services:
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000/api/health"]
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000"]
       interval: 30s
       timeout: 10s
-      retries: 3
-      start_period: 40s
+      retries: 5
+      start_period: 60s
     volumes:
       - app-uploads:/app/public/uploads
 
