@@ -69,6 +69,7 @@ COPY --from=builder /app/public ./public
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/i18n ./i18n
 COPY --from=builder /app/messages ./messages
+COPY --from=builder /app/tracks_dump.sql ./tracks_dump.sql
 
 # Set correct permissions
 RUN chown -R nextjs:nodejs /app
