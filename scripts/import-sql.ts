@@ -52,17 +52,25 @@ async function importSQL() {
         console.log(`✅ ${success} importados, ⏩ ${skipped} já existentes...`);
       }
     } catch (error: any) {
-      // PostgreSQL error codes for raw queries
+      // Prisma wraps PostgreSQL errors - check all possible locations
       const pgCode = error.code || error.meta?.code;
       const message = error.message || '';
+      const metaMessage = error.meta?.message || '';
+      const fullError = `${message} ${metaMessage}`;
 
       // 23505 = unique_violation, P2002 = Prisma unique constraint
-      if (pgCode === '23505' || pgCode === 'P2002' ||
-          message.includes('duplicate') || message.includes('unique') ||
-          message.includes('already exists')) {
+      const isDuplicate =
+        pgCode === '23505' ||
+        pgCode === 'P2002' ||
+        fullError.includes('23505') ||
+        fullError.includes('duplicate') ||
+        fullError.includes('unique') ||
+        fullError.includes('already exists');
+
+      if (isDuplicate) {
         skipped++;
       } else {
-        console.error(`❌ Erro: ${message}`);
+        console.error(`❌ Erro: ${fullError}`);
         errors++;
       }
     }
