@@ -1,20 +1,58 @@
 import { PrismaClient, type Track } from '@prisma/client';
 
+// Check if we're in build time (no DATABASE_URL available)
+const isBuildTime = process.env.NODE_ENV === 'production' && !process.env.DATABASE_URL;
+
 // PrismaClient is attached to the `global` object in development to prevent
 // exhausting your database connection limit.
-const globalForPrisma = global as unknown as { prisma: PrismaClient };
+const globalForPrisma = global as unknown as { prisma: PrismaClient | null };
 
-export const prisma = globalForPrisma.prisma || new PrismaClient({
-  log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
-  // Connection pooling configuration
-  datasources: {
-    db: {
-      url: process.env.DATABASE_URL,
-    },
+function createPrismaClient(): PrismaClient {
+  return new PrismaClient({
+    log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
+  });
+}
+
+// Lazy initialization - only create client when actually needed
+let _prisma: PrismaClient | null = null;
+
+function getPrismaClient(): PrismaClient {
+  if (isBuildTime) {
+    throw new Error('Database is not available during build time');
+  }
+
+  if (!_prisma) {
+    _prisma = globalForPrisma.prisma || createPrismaClient();
+    if (process.env.NODE_ENV !== 'production') {
+      globalForPrisma.prisma = _prisma;
+    }
+  }
+  return _prisma;
+}
+
+// Export a proxy that lazily initializes the Prisma client
+export const prisma = new Proxy({} as PrismaClient, {
+  get(_, prop) {
+    if (isBuildTime) {
+      // During build, return no-op to prevent crashes
+      if (typeof prop === 'string') {
+        // Return a proxy for model access (e.g., prisma.track)
+        return new Proxy({}, {
+          get() {
+            return () => Promise.resolve(null);
+          }
+        });
+      }
+      return undefined;
+    }
+    const client = getPrismaClient();
+    const value = (client as Record<string | symbol, unknown>)[prop];
+    if (typeof value === 'function') {
+      return value.bind(client);
+    }
+    return value;
   },
 });
-
-if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
 
 // Utility functions for common database operations
 export const prismaHelpers = {
