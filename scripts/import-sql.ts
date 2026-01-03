@@ -4,6 +4,17 @@ import * as path from 'node:path';
 
 const prisma = new PrismaClient();
 
+// Transform INSERT to INSERT ... ON CONFLICT DO NOTHING for idempotent imports
+function makeUpsert(statement: string): string {
+  // Already has ON CONFLICT
+  if (statement.includes('ON CONFLICT')) {
+    return statement;
+  }
+
+  // Add ON CONFLICT DO NOTHING to make it idempotent
+  return statement + ' ON CONFLICT DO NOTHING';
+}
+
 async function importSQL() {
   const sqlFile = process.argv[2] || 'tracks_dump.sql';
   const sqlPath = path.join(process.cwd(), sqlFile);
@@ -20,33 +31,46 @@ async function importSQL() {
   const statements = sqlContent
     .split(';')
     .map(s => s.trim())
-    .filter(s => s.length > 0 && s.startsWith('INSERT'));
+    .filter(s => s.length > 0 && s.startsWith('INSERT'))
+    .map(makeUpsert); // Convert to upserts
 
-  console.log(`📊 Encontrados ${statements.length} comandos INSERT`);
+  console.log(`📊 Encontrados ${statements.length} comandos INSERT (com ON CONFLICT DO NOTHING)`);
 
   let success = 0;
+  let skipped = 0;
   let errors = 0;
 
   for (const statement of statements) {
     try {
-      await prisma.$executeRawUnsafe(statement + ';');
-      success++;
-      if (success % 100 === 0) {
-        console.log(`✅ ${success} registros importados...`);
+      const result = await prisma.$executeRawUnsafe(statement + ';');
+      if (result === 0) {
+        skipped++;
+      } else {
+        success++;
+      }
+      if ((success + skipped) % 100 === 0) {
+        console.log(`✅ ${success} importados, ⏩ ${skipped} já existentes...`);
       }
     } catch (error: any) {
-      // Ignore duplicate key errors
-      if (error.code === 'P2002' || error.message?.includes('duplicate') || error.message?.includes('unique')) {
-        console.log(`⏩ Registro já existe, pulando...`);
+      // PostgreSQL error codes for raw queries
+      const pgCode = error.code || error.meta?.code;
+      const message = error.message || '';
+
+      // 23505 = unique_violation, P2002 = Prisma unique constraint
+      if (pgCode === '23505' || pgCode === 'P2002' ||
+          message.includes('duplicate') || message.includes('unique') ||
+          message.includes('already exists')) {
+        skipped++;
       } else {
-        console.error(`❌ Erro: ${error.message}`);
+        console.error(`❌ Erro: ${message}`);
         errors++;
       }
     }
   }
 
   console.log(`\n🎉 Importação concluída!`);
-  console.log(`   ✅ Sucesso: ${success}`);
+  console.log(`   ✅ Novos: ${success}`);
+  console.log(`   ⏩ Já existentes: ${skipped}`);
   console.log(`   ❌ Erros: ${errors}`);
 }
 
