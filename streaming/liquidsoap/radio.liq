@@ -5,6 +5,18 @@ set("log.file", "-")
 set("log.level", 3)
 set("server.telnet", false)
 
+# --- Environment Configuration ---
+api_host = environment.get("API_HOST", "app")
+api_port = environment.get("API_PORT", "3000")
+api_base = "http://#{api_host}:#{api_port}"
+
+icecast_host = environment.get("ICECAST_HOST", "icecast")
+icecast_port = int_of_string(environment.get("ICECAST_PORT", "8000"))
+icecast_password = environment.get("ICECAST_SOURCE_PASSWORD", "hackme")
+
+log("Liquidsoap: Using API at #{api_base}")
+log("Liquidsoap: Using Icecast at #{icecast_host}:#{icecast_port}")
+
 # --- Variables to store track metadata ---
 trackId = ref("")
 trackTitle = ref("")
@@ -14,8 +26,7 @@ trackArtist = ref("")
 # Esta função é chamada pelo `request.dynamic` para obter a próxima faixa.
 def get_next_track()
   # 1. Busca a URI da nossa API
-  # Using host.docker.internal to reach the host machine from Docker container
-  uri = http.get("http://host.docker.internal:3000/api/next-track")
+  uri = http.get("#{api_base}/api/next-track")
   
   log("Liquidsoap: Recebido do backend a URI (length=#{string.length(uri)}): #{uri}")
   
@@ -89,7 +100,7 @@ def on_track_start(m)
     response = http.post(
       headers=[("Content-Type", "application/json")],
       data=json_payload,
-      "http://host.docker.internal:3000/api/track-started"
+      "#{api_base}/api/track-started"
     )
     log("Liquidsoap: Backend notified. Response: #{response}")
   catch err do
@@ -122,9 +133,9 @@ output.icecast(
     channels=2
   ),
   id="icecast_output",
-  host="icecast",
-  port=8000,
-  password="hackme",
+  host=icecast_host,
+  port=icecast_port,
+  password=icecast_password,
   mount="/stream",
   name="Lofiever Radio",
   description="Lo-fi 24/7 Radio Stream",
