@@ -80,14 +80,27 @@ export interface ChatMessage {
   locale?: 'pt' | 'en';
 }
 
+// Check if we're in build time (no Redis available)
+const isBuildTime = process.env.NODE_ENV === 'production' && !process.env.REDIS_URL;
+
 // Redis client singleton
 class RedisManager {
   private static instance: RedisManager;
-  private client: RedisClient;
+  private client: RedisClient | null = null;
   private subscriberClient: RedisClient | null = null;
   private isConnected = false;
 
   private constructor() {
+    // Don't connect during build time
+    if (isBuildTime) {
+      console.log('Redis: Skipping connection during build time');
+      return;
+    }
+  }
+
+  private initializeClient(): RedisClient {
+    if (this.client) return this.client;
+
     this.client = new Redis(config.redis.url, {
       maxRetriesPerRequest: config.redis.maxRetriesPerRequest,
       retryStrategy: (times) => {
@@ -100,12 +113,16 @@ class RedisManager {
       connectionName: 'lofiever:main',
       enableReadyCheck: true,
       enableOfflineQueue: true,
+      lazyConnect: true,
     });
 
     this.setupEventHandlers();
+    return this.client;
   }
 
   private setupEventHandlers(): void {
+    if (!this.client) return;
+
     this.client.on('connect', () => {
       console.log('Redis client connected');
     });
@@ -138,14 +155,23 @@ class RedisManager {
   }
 
   public getClient(): RedisClient {
-    return this.client;
+    if (isBuildTime) {
+      // Return a mock client during build time that throws on actual use
+      throw new Error('Redis is not available during build time');
+    }
+    return this.initializeClient();
   }
 
   public async getSubscriberClient(): Promise<RedisClient> {
+    if (isBuildTime) {
+      throw new Error('Redis is not available during build time');
+    }
+
     if (!this.subscriberClient) {
       this.subscriberClient = new Redis(config.redis.url, {
         connectionName: 'lofiever:subscriber',
         maxRetriesPerRequest: config.redis.maxRetriesPerRequest,
+        lazyConnect: true,
       });
 
       this.subscriberClient.on('error', (err) => {
@@ -160,6 +186,9 @@ class RedisManager {
   }
 
   public async ping(): Promise<string | null> {
+    if (isBuildTime || !this.client) {
+      return null;
+    }
     try {
       return await this.client.ping();
     } catch (error) {
@@ -169,7 +198,9 @@ class RedisManager {
   }
 
   public async disconnect(): Promise<void> {
-    await this.client.quit();
+    if (this.client) {
+      await this.client.quit();
+    }
     if (this.subscriberClient) {
       await this.subscriberClient.quit();
     }
@@ -178,7 +209,32 @@ class RedisManager {
 
 // Export the Redis client instance
 export const redisManager = RedisManager.getInstance();
-export const redis = redisManager.getClient();
+
+// Lazy redis client - only connects when actually used
+export const getRedis = (): RedisClient => redisManager.getClient();
+
+// For backwards compatibility, use a getter that lazily initializes
+// This will throw during build time if actually used
+let _redis: RedisClient | null = null;
+export const redis = new Proxy({} as RedisClient, {
+  get(_, prop) {
+    if (isBuildTime) {
+      // During build, return no-op functions to prevent crashes
+      if (typeof prop === 'string') {
+        return () => Promise.resolve(null);
+      }
+      return undefined;
+    }
+    if (!_redis) {
+      _redis = redisManager.getClient();
+    }
+    const value = (_redis as Record<string | symbol, unknown>)[prop];
+    if (typeof value === 'function') {
+      return value.bind(_redis);
+    }
+    return value;
+  },
+});
 
 // Helper functions for common Redis operations
 export const redisHelpers = {
