@@ -28,7 +28,7 @@
     "db:seed": "ts-node -P tsconfig-seed.json scripts/seed-database.ts",
     "db:seed:prod": "node dist/scripts/seed-database.js",
     "db:import": "ts-node -P tsconfig-seed.json scripts/import-sql.ts",
-    "db:import:prod": "node dist/scripts/import-sql.js",
+    "db:import:prod": "node dist/scripts/import-sql.js prisma/seeds/production_dump.sql",
     "db:dump-mock": "ts-node -P tsconfig-seed.json scripts/generate-seed-mock.ts",
     "db:migrate": "prisma migrate dev",
     "db:generate": "prisma generate",
