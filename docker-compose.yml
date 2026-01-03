@@ -88,6 +88,7 @@ services:
     image: savonet/liquidsoap:v2.3.3
     depends_on:
       - icecast
+    command: ["liquidsoap", "/radio/radio.liq"]
     environment:
       - ICECAST_SOURCE_PASSWORD=${ICECAST_SOURCE_PASSWORD:-hackme}
       - ICECAST_HOST=icecast
