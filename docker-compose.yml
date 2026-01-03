@@ -24,9 +24,13 @@ services:
       - R2_BUCKET_NAME=${R2_BUCKET_NAME:-}
       - R2_PUBLIC_URL=${R2_PUBLIC_URL:-}
       # Icecast
+      - ICECAST_HOST=icecast
+      - ICECAST_PORT=8000
       - ICECAST_URL=http://icecast:8000
       - ICECAST_STREAM_URL=http://icecast:8000/stream
       - ICECAST_SOURCE_PASSWORD=${ICECAST_SOURCE_PASSWORD:-}
+      - ICECAST_ADMIN_USER=${ICECAST_ADMIN_USER:-admin}
+      - ICECAST_ADMIN_PASSWORD=${ICECAST_ADMIN_PASSWORD:-}
       # API Security
       - API_SECRET_KEY=${API_SECRET_KEY:-}
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:3000}
