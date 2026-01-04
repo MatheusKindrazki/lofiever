@@ -48,8 +48,8 @@ This security audit examines the Lofiever codebase, a 24/7 lo-fi music streaming
 ### 1. [CRITICAL] Hardcoded Fallback Secrets in Production Code
 
 **Evidence**:
-- `/Users/matheuskindrazki/conductor/workspaces/lofiever/winnipeg/src/lib/auth/tokens.ts:6`
-- `/Users/matheuskindrazki/conductor/workspaces/lofiever/winnipeg/src/lib/api-security.ts:16`
+- `src/lib/auth/tokens.ts:6`
+- `src/lib/api-security.ts:16`
 
 **[FACT]** The codebase contains hardcoded fallback secrets:
 
@@ -74,7 +74,7 @@ const API_SECRET = process.env.API_SECRET_KEY || 'change-me-in-production';
 
 ### 2. [HIGH] XSS Vulnerability via dangerouslySetInnerHTML
 
-**Evidence**: `/Users/matheuskindrazki/conductor/workspaces/lofiever/winnipeg/src/components/ChatRoom.tsx:270`
+**Evidence**: `src/components/ChatRoom.tsx:270`
 
 **[FACT]** The ChatRoom component uses `dangerouslySetInnerHTML` with translation data:
 
@@ -95,7 +95,7 @@ const API_SECRET = process.env.API_SECRET_KEY || 'change-me-in-production';
 
 ### 3. [HIGH] Unprotected Admin Route
 
-**Evidence**: `/Users/matheuskindrazki/conductor/workspaces/lofiever/winnipeg/src/app/admin/page.tsx`
+**Evidence**: `src/app/admin/page.tsx`
 
 **[FACT]** The admin page at `/admin` has no authentication or authorization checks:
 - No middleware protection
@@ -118,7 +118,7 @@ const API_SECRET = process.env.API_SECRET_KEY || 'change-me-in-production';
 
 ### 4. [HIGH] Weak API Key Default and Query Parameter Exposure
 
-**Evidence**: `/Users/matheuskindrazki/conductor/workspaces/lofiever/winnipeg/src/lib/api-security.ts:80-86`
+**Evidence**: `src/lib/api-security.ts:80-86`
 
 **[FACT]** API key verification accepts keys via query parameter:
 
@@ -167,8 +167,8 @@ export function verifyAPIKey(request: NextRequest): boolean {
 ### 6. [MEDIUM] Insecure Docker Compose Defaults
 
 **Evidence**:
-- `/Users/matheuskindrazki/conductor/workspaces/lofiever/winnipeg/docker-compose.dev.yml:27-29`
-- `/Users/matheuskindrazki/conductor/workspaces/lofiever/winnipeg/docker-compose.yml:79-81`
+- `docker-compose.dev.yml:27-29`
+- `docker-compose.yml:79-81`
 
 **[FACT]** Docker Compose files use weak default passwords:
 
@@ -194,7 +194,7 @@ export function verifyAPIKey(request: NextRequest): boolean {
 
 ### 7. [MEDIUM] Rate Limit Fail-Open Behavior
 
-**Evidence**: `/Users/matheuskindrazki/conductor/workspaces/lofiever/winnipeg/src/lib/api-security.ts:144-148`
+**Evidence**: `src/lib/api-security.ts:144-148`
 
 **[FACT]** When Redis is unavailable, rate limiting fails open (allows requests):
 
@@ -238,7 +238,7 @@ export function verifyAPIKey(request: NextRequest): boolean {
 ### 9. [LOW] Verbose Error Logging
 
 **Evidence**: Multiple locations expose internal errors:
-- `/Users/matheuskindrazki/conductor/workspaces/lofiever/winnipeg/src/lib/auth/tokens.ts:39`
+- `src/lib/auth/tokens.ts:39`
 - Various API routes
 
 **[FACT]** Error details are logged to console which may leak to production logs:
@@ -260,7 +260,7 @@ export function verifyAPIKey(request: NextRequest): boolean {
 ### 10. [LOW] Missing Input Validation/Length Limits
 
 **Evidence**:
-- `/Users/matheuskindrazki/conductor/workspaces/lofiever/winnipeg/src/app/api/auth/guest/route.ts:11`
+- `src/app/api/auth/guest/route.ts:11`
 - Chat messages via Socket.IO
 
 **[FACT]** Some user inputs lack length or format validation:
@@ -298,7 +298,7 @@ const track = await prisma.track.findFirst({
 ### [FACT] Content Moderation Implemented
 
 AI-powered content moderation for chat messages:
-- `/Users/matheuskindrazki/conductor/workspaces/lofiever/winnipeg/src/services/moderation/content-moderation.service.ts`
+- `src/services/moderation/content-moderation.service.ts`
 - Checks for hate speech, harassment, explicit content, spam
 
 ### [FACT] Rate Limiting Implemented

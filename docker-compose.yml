@@ -12,27 +12,30 @@ services:
       - DATABASE_URL=postgresql://${SERVICE_USER_POSTGRES:-postgres}:${SERVICE_PASSWORD_POSTGRES:-postgres}@postgres:5432/${POSTGRES_DB:-lofiever}?schema=public
       # Redis
       - REDIS_URL=redis://redis:6379
-      # Auth
+      # Auth (required)
       - NEXTAUTH_URL=${SERVICE_FQDN_APP:-http://localhost:3000}
-      - AUTH_SECRET=${AUTH_SECRET:-}
+      - AUTH_SECRET=${AUTH_SECRET:?AUTH_SECRET is required}
+      # Admin access
+      - ADMIN_EMAILS=${ADMIN_EMAILS:-}
       # OpenAI
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
-      # Cloudflare R2
+      # Cloudflare R2 (optional - features disabled if not set)
       - R2_ACCESS_KEY_ID=${R2_ACCESS_KEY_ID:-}
       - R2_SECRET_ACCESS_KEY=${R2_SECRET_ACCESS_KEY:-}
       - R2_ENDPOINT=${R2_ENDPOINT:-}
       - R2_BUCKET_NAME=${R2_BUCKET_NAME:-}
       - R2_PUBLIC_URL=${R2_PUBLIC_URL:-}
-      # Icecast
+      # Icecast (required for streaming)
       - ICECAST_HOST=icecast
       - ICECAST_PORT=8000
+      - ICECAST_MOUNT=/stream
       - ICECAST_URL=http://icecast:8000
       - ICECAST_STREAM_URL=http://icecast:8000/stream
-      - ICECAST_SOURCE_PASSWORD=${ICECAST_SOURCE_PASSWORD:-}
+      - ICECAST_SOURCE_PASSWORD=${ICECAST_SOURCE_PASSWORD:?ICECAST_SOURCE_PASSWORD is required}
       - ICECAST_ADMIN_USER=${ICECAST_ADMIN_USER:-admin}
-      - ICECAST_ADMIN_PASSWORD=${ICECAST_ADMIN_PASSWORD:-}
-      # API Security
-      - API_SECRET_KEY=${API_SECRET_KEY:-}
+      - ICECAST_ADMIN_PASSWORD=${ICECAST_ADMIN_PASSWORD:?ICECAST_ADMIN_PASSWORD is required}
+      # API Security (required)
+      - API_SECRET_KEY=${API_SECRET_KEY:?API_SECRET_KEY is required}
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:3000}
       - RATE_LIMIT_ENABLED=${RATE_LIMIT_ENABLED:-true}
     depends_on:

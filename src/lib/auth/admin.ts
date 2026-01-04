@@ -3,6 +3,16 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { config } from '@/lib/config';
 
 /**
+ * Check if email is in allowed admin list (case-insensitive)
+ */
+function isEmailAllowed(email: string): boolean {
+  const normalizedEmail = email.toLowerCase();
+  return config.admin.allowedEmails.some(
+    allowed => allowed.toLowerCase() === normalizedEmail
+  );
+}
+
+/**
  * Check if the current user is an admin based on their email
  * Admin emails are configured via ADMIN_EMAILS environment variable
  */
@@ -13,7 +23,7 @@ export async function isAdmin(): Promise<boolean> {
     return false;
   }
 
-  return config.admin.allowedEmails.includes(session.user.email);
+  return isEmailAllowed(session.user.email);
 }
 
 /**
@@ -37,7 +47,7 @@ export async function getAdminSession() {
     return null;
   }
 
-  if (!config.admin.allowedEmails.includes(session.user.email)) {
+  if (!isEmailAllowed(session.user.email)) {
     return null;
   }
 

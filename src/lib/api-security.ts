@@ -8,6 +8,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { redis } from './redis';
+import { timingSafeEqual } from 'crypto';
 
 // ============================================================================
 // CONFIGURATION
@@ -86,7 +87,8 @@ export function isOriginAllowed(request: NextRequest): boolean {
 }
 
 /**
- * Verify API key from header or query
+ * Verify API key from header using constant-time comparison
+ * to prevent timing attacks
  */
 export function verifyAPIKey(request: NextRequest): boolean {
     const headerKey = request.headers.get('x-api-key');
@@ -96,7 +98,18 @@ export function verifyAPIKey(request: NextRequest): boolean {
         console.warn('[Security] API key must be provided via x-api-key header');
         return false;
     }
-    return headerKey === getApiSecret();
+
+    const secret = getApiSecret();
+    // Use constant-time comparison to prevent timing attacks
+    try {
+        return timingSafeEqual(
+            Buffer.from(headerKey),
+            Buffer.from(secret)
+        );
+    } catch {
+        // timingSafeEqual throws if lengths differ
+        return false;
+    }
 }
 
 // ============================================================================
