@@ -6,13 +6,14 @@ set("log.level", 3)
 set("server.telnet", false)
 
 # --- Environment Configuration ---
-api_host = environment.get("API_HOST", "app")
-api_port = environment.get("API_PORT", "3000")
+# Liquidsoap 2.x requires named 'default' parameter
+api_host = environment.get(default="app", "API_HOST")
+api_port = environment.get(default="3000", "API_PORT")
 api_base = "http://#{api_host}:#{api_port}"
 
-icecast_host = environment.get("ICECAST_HOST", "icecast")
-icecast_port = int_of_string(environment.get("ICECAST_PORT", "8000"))
-icecast_password = environment.get("ICECAST_SOURCE_PASSWORD", "hackme")
+icecast_host = environment.get(default="icecast", "ICECAST_HOST")
+icecast_port = int_of_string(environment.get(default="8000", "ICECAST_PORT"))
+icecast_password = environment.get(default="hackme", "ICECAST_SOURCE_PASSWORD")
 
 log("Liquidsoap: Using API at #{api_base}")
 log("Liquidsoap: Using Icecast at #{icecast_host}:#{icecast_port}")
