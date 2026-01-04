@@ -22,7 +22,6 @@ interface StreamData {
 
 export default function Player(): React.ReactNode {
   const [playing, setPlaying] = useState(false);
-  const [, setIsLoading] = useState(true);
   const [isClient, setIsClient] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
@@ -71,11 +70,6 @@ export default function Player(): React.ReactNode {
       setPlaying(false);
     };
 
-    const handleLoadStart = () => setIsLoading(true);
-    const handleCanPlay = () => setIsLoading(false);
-    audio.addEventListener('loadstart', handleLoadStart);
-    audio.addEventListener('canplay', handleCanPlay);
-
     audio.addEventListener('playing', handlePlaying);
     audio.addEventListener('pause', handlePause);
     audio.addEventListener('error', handleError);
@@ -88,8 +82,6 @@ export default function Player(): React.ReactNode {
       audio.removeEventListener('playing', handlePlaying);
       audio.removeEventListener('pause', handlePause);
       audio.removeEventListener('error', handleError);
-      audio.removeEventListener('loadstart', handleLoadStart);
-      audio.removeEventListener('canplay', handleCanPlay);
     };
   }, [isClient, isLoaded]); // Only re-run when client/loaded state changes
 

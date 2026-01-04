@@ -17,7 +17,7 @@ We take security seriously. If you discover a security vulnerability, please fol
 
 ### DO
 
-1. **Email**: Send details to the project maintainers privately
+1. **Email**: Send details to security@lofiever.app
 2. **Include**:
    - Description of the vulnerability
    - Steps to reproduce

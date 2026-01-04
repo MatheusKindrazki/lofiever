@@ -44,7 +44,7 @@ This project and everyone participating in it is governed by our [Code of Conduc
 
    ```bash
    cp .env.example .env
-   # Edit .env with your values (see ENV_VARIABLES.md for details)
+   # Edit .env with your values (see .env.example for details)
    ```
 
 4. **Start Docker services**
@@ -174,7 +174,7 @@ Use the provided template and include:
 ### CSS/Styling
 
 - Use Tailwind CSS utilities
-- Follow the design system in `docs/style-guide.md`
+- Follow the existing component patterns
 - Dark mode support required for new components
 - Responsive design (mobile-first)
 

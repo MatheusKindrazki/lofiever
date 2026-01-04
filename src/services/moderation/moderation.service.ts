@@ -169,12 +169,8 @@ export const ModerationService = {
     _requestId: string,
     options: { ignoreCooldown?: boolean } = {}
   ): Promise<ModerationResult> {
-    // Get enabled rules from database, or use defaults
-    // Note: rules variable is fetched but currently used only for future extensibility
-    await prisma.moderationRule.findMany({
-      where: { enabled: true },
-      orderBy: { priority: 'desc' },
-    });
+    // TODO: In future, load enabled rules from database for dynamic moderation
+    // Currently using DEFAULT_RULES defined at module level
 
     // Check rate limit
     const rateLimitResult = await this.checkRateLimit(userId);
