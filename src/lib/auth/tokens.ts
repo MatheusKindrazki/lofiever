@@ -1,7 +1,7 @@
 import { getToken } from 'next-auth/jwt';
 import { encode, decode } from 'next-auth/jwt';
 import { config } from '@/lib/config';
-import { NextRequest } from 'next/server';
+import type { NextRequest } from 'next/server';
 
 /**
  * Get the auth secret, throwing an error if not configured.

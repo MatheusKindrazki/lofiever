@@ -3,7 +3,7 @@ import { PlaylistManagerService } from "@/services/playlist/playlist-manager.ser
 import { redis } from "@/lib/redis";
 import { prisma } from "@/lib/prisma";
 import { R2Lib } from "@/lib/r2";
-import { Track } from "@prisma/client";
+import type { Track } from "@prisma/client";
 
 interface QueueTrack extends Track {
   addedBy?: string;

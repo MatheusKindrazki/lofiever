@@ -10,7 +10,7 @@ import { Redis } from 'ioredis';
 import type { ChatMessage as RedisChatMessage, Track as RedisTrack } from '../redis';
 import { ProactiveEngagementService } from '@/services/moderation/proactive-engagement.service';
 import { ContentModerationService } from '@/services/moderation/content-moderation.service';
-import { Track } from '@prisma/client';
+import type { Track } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 
 const AI_HISTORY_LIMIT = 12;

@@ -6,7 +6,8 @@ import { notFound } from 'next/navigation';
 import '../../styles/globals.css';
 import AppProviders from '@/lib/providers/AppProviders';
 import IntlProviderWrapper from '@/app/[locale]/components/IntlProviderWrapper';
-import { generateSeoMetadata, SupportedLocale } from '@/lib/seo';
+import type { SupportedLocale } from '@/lib/seo';
+import { generateSeoMetadata } from '@/lib/seo';
 import { JsonLd } from '@/components/seo/JsonLd';
 import { GoogleAnalytics } from '@/components/seo/GoogleAnalytics';
 

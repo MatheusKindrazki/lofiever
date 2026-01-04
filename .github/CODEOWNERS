@@ -1,0 +1,23 @@
+# CODEOWNERS file for Lofiever
+# These owners will be automatically requested for review when PRs modify files they own
+
+# Default owners for everything in the repo
+* @MatheusKindrazki
+
+# Core application code
+/src/ @MatheusKindrazki
+
+# Server and streaming
+/server/ @MatheusKindrazki
+/streaming/ @MatheusKindrazki
+
+# Database and migrations
+/prisma/ @MatheusKindrazki
+
+# Documentation
+/docs/ @MatheusKindrazki
+*.md @MatheusKindrazki
+
+# CI/CD and configuration
+/.github/ @MatheusKindrazki
+/docker* @MatheusKindrazki

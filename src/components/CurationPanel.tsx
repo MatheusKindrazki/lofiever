@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { defaultCurationPrompt, getAIRecommendations } from '@/lib/api';
 import type { AIRecommendation } from '@/lib/api';
 
@@ -10,10 +10,27 @@ export default function CurationPanel() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const fetchRecommendations = useCallback(async (promptText: string, isAuto = false) => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      const payload = promptText.trim() || defaultCurationPrompt;
+      const result = await getAIRecommendations(payload);
+      setRecommendations(result.recommendations);
+      if (!isAuto) {
+        setPrompt('');
+      }
+    } catch (err) {
+      console.error('Failed to fetch AI recommendations:', err);
+      setError('Não consegui gerar recomendações agora. Tente de novo em instantes.');
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     fetchRecommendations(defaultCurationPrompt, true).catch(() => null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [fetchRecommendations]);
 
   const recommendationCards = useMemo(() => {
     if (recommendations.length === 0) return null;
@@ -48,24 +65,6 @@ export default function CurationPanel() {
       </div>
     ));
   }, [recommendations]);
-
-  async function fetchRecommendations(promptText: string, isAuto = false) {
-    try {
-      setIsLoading(true);
-      setError(null);
-      const payload = promptText.trim() || defaultCurationPrompt;
-      const result = await getAIRecommendations(payload);
-      setRecommendations(result.recommendations);
-      if (!isAuto) {
-        setPrompt('');
-      }
-    } catch (err) {
-      console.error('Failed to fetch AI recommendations:', err);
-      setError('Não consegui gerar recomendações agora. Tente de novo em instantes.');
-    } finally {
-      setIsLoading(false);
-    }
-  }
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -127,7 +126,7 @@ export default function CurationPanel() {
   );
 }
 
-function formatDuration(seconds: number) {
+function formatDuration(seconds: number): string {
   const minutes = Math.floor(seconds / 60);
   const remainingSeconds = seconds % 60;
   return `${minutes}m ${remainingSeconds.toString().padStart(2, '0')}s`;

@@ -1,4 +1,4 @@
-import { Metadata } from 'next';
+import type { Metadata } from 'next';
 import { routing } from '@/i18n/routing';
 
 const BASE_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://lofiever.com';
@@ -85,7 +85,7 @@ export function generateSeoMetadata(locale: SupportedLocale): Metadata {
       template: `%s | Lofiever`,
     },
     description: content.description,
-    keywords: content.keywords,
+    keywords: [...content.keywords],
     authors: [{ name: 'Lofiever Team' }],
     creator: 'Lofiever',
     publisher: 'Lofiever',

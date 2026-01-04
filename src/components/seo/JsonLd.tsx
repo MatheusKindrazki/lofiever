@@ -1,4 +1,5 @@
-import { generateStructuredData, SupportedLocale } from '@/lib/seo';
+import type { SupportedLocale } from '@/lib/seo';
+import { generateStructuredData } from '@/lib/seo';
 
 interface JsonLdProps {
   locale: SupportedLocale;

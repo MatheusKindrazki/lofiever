@@ -1,4 +1,5 @@
-import { NextResponse, NextRequest } from "next/server";
+import type { NextRequest } from "next/server";
+import { NextResponse } from "next/server";
 import { redisHelpers, redis } from "@/lib/redis";
 
 /**
@@ -15,7 +16,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
             const body = await request.json();
             trackId = body.trackId;
             console.log(`[Track Started] Received trackId: ${trackId}`);
-        } catch (e) {
+        } catch {
             console.log("[Track Started] No JSON body or trackId provided");
         }
 
