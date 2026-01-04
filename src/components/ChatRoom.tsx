@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState, useMemo } from 'react';
+import { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
 import { useLocale, useTranslations } from 'next-intl';
 import { useChat as useSocketChat, useSocket, usePlaybackSync, PendingChatMessage } from '../lib/socket/client';
@@ -13,8 +13,8 @@ export default function ChatRoom() {
   const normalizedLocale: 'pt' | 'en' = locale === 'en' ? 'en' : 'pt';
   const { data: session } = useSession();
   // Prefer socket userId, fallback to session or anonymous
-  const { messages, isLoadingAI, hasPendingMessage, addPendingMessage } = useSocketChat();
-  const { socket, sendChatMessage, userId: socketUserId } = useSocket();
+  const { messages, isLoadingAI, hasPendingMessage, addPendingMessage, retryMessage, removeFailedMessage } = useSocketChat();
+  const { socket, sendChatMessage, userId: socketUserId, isConnected } = useSocket();
   const youLabel = normalizedLocale === 'en' ? 'you' : 'você';
 
   // Use the socket's userId for consistency with the backend
@@ -74,20 +74,30 @@ export default function ChatRoom() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (input.trim() && sendChatMessage && !hasPendingMessage) {
-      // Add pending message immediately for feedback
-      addPendingMessage(input, { isPrivate: isPrivateMode, username });
+    if (input.trim() && sendChatMessage && !hasPendingMessage && isConnected) {
+      // Add pending message immediately for feedback (optimistic update)
+      addPendingMessage(input, { isPrivate: isPrivateMode, username, locale: normalizedLocale });
       // Send to server for moderation
       sendChatMessage(input, { isPrivate: isPrivateMode, locale: normalizedLocale });
       setInput('');
     }
   };
 
+  // Handle retry for failed messages
+  const handleRetry = useCallback((tempId: string) => {
+    retryMessage(tempId);
+  }, [retryMessage]);
+
+  // Handle removing failed messages
+  const handleRemove = useCallback((tempId: string) => {
+    removeFailedMessage(tempId);
+  }, [removeFailedMessage]);
+
   const handleQuickAction = (actionKey: string) => {
-    if (sendChatMessage && !isLoadingAI && !hasPendingMessage) {
+    if (sendChatMessage && !isLoadingAI && !hasPendingMessage && isConnected) {
       const action = t(`quickActionsMessages.${actionKey}`);
-      // Add pending message immediately for feedback
-      addPendingMessage(action, { isPrivate: isPrivateMode, username });
+      // Add pending message immediately for feedback (optimistic update)
+      addPendingMessage(action, { isPrivate: isPrivateMode, username, locale: normalizedLocale });
       sendChatMessage(action, { isPrivate: isPrivateMode, locale: normalizedLocale });
     }
   };
@@ -226,6 +236,11 @@ export default function ChatRoom() {
                   youLabel={youLabel}
                   isPending={msg.isPending}
                   isFailed={msg.isFailed}
+                  onRetry={msg.tempId ? () => handleRetry(msg.tempId!) : undefined}
+                  onRemove={msg.tempId ? () => handleRemove(msg.tempId!) : undefined}
+                  retryLabel={normalizedLocale === 'en' ? 'Retry' : 'Tentar novamente'}
+                  removeLabel={normalizedLocale === 'en' ? 'Remove' : 'Remover'}
+                  failedLabel={normalizedLocale === 'en' ? 'Failed to send' : 'Falha ao enviar'}
                 />
               ))}
             </div>
@@ -325,6 +340,16 @@ export default function ChatRoom() {
           </div>
         </div>
 
+        {/* Connection status warning */}
+        {!isConnected && (
+          <div className="bg-amber-500/20 px-4 py-2 border-b border-amber-200/30 flex items-center gap-2 backdrop-blur-sm">
+            <div className="w-2 h-2 bg-amber-400 rounded-full animate-pulse"></div>
+            <span className="text-xs text-amber-200">
+              {normalizedLocale === 'en' ? 'Reconnecting...' : 'Reconectando...'}
+            </span>
+          </div>
+        )}
+
         {/* Input */}
         <div className="px-4 pb-4">
           <form onSubmit={handleSubmit} className="flex flex-col gap-2">
@@ -332,13 +357,21 @@ export default function ChatRoom() {
               <input
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                disabled={isLoadingAI || hasPendingMessage}
-                className="flex-1 px-4 py-2.5 border border-white/15 rounded-full bg-white/10 text-white text-sm focus:ring-2 focus:ring-lofi-400 focus:border-transparent outline-none transition-all placeholder-white/50 backdrop-blur-sm"
-                placeholder={hasPendingMessage ? t('input.placeholderModerating') : (isLoadingAI ? t('input.placeholderLoading') : (isPrivateMode ? t('input.placeholderPrivate') : t('input.placeholder')))}
+                disabled={isLoadingAI || hasPendingMessage || !isConnected}
+                className={`flex-1 px-4 py-2.5 border rounded-full bg-white/10 text-white text-sm focus:ring-2 focus:ring-lofi-400 focus:border-transparent outline-none transition-all placeholder-white/50 backdrop-blur-sm ${!isConnected ? 'border-amber-500/30' : 'border-white/15'}`}
+                placeholder={
+                  !isConnected
+                    ? (normalizedLocale === 'en' ? 'Reconnecting...' : 'Reconectando...')
+                    : hasPendingMessage
+                      ? t('input.placeholderModerating')
+                      : (isLoadingAI
+                          ? t('input.placeholderLoading')
+                          : (isPrivateMode ? t('input.placeholderPrivate') : t('input.placeholder')))
+                }
               />
               <button
                 type="submit"
-                disabled={isLoadingAI || hasPendingMessage || !input.trim()}
+                disabled={isLoadingAI || hasPendingMessage || !input.trim() || !isConnected}
                 className={`px-4 py-2.5 text-white rounded-full transition-all duration-200 flex items-center gap-2 ${isPrivateMode
                   ? 'bg-gradient-to-r from-slate-700 to-slate-900 hover:from-slate-800 hover:to-black shadow-lg shadow-black/30'
                   : 'bg-gradient-to-r from-[var(--mood-accent)] to-[var(--mood-accent-2)] hover:brightness-110 shadow-lg shadow-black/25'
@@ -387,7 +420,12 @@ function MessageBubble({
   isDirectToUser,
   youLabel,
   isPending,
-  isFailed
+  isFailed,
+  onRetry,
+  onRemove,
+  retryLabel,
+  removeLabel,
+  failedLabel
 }: {
   message: PendingChatMessage;
   formatTime: (timestamp: number) => string;
@@ -397,13 +435,18 @@ function MessageBubble({
   youLabel: string;
   isPending?: boolean;
   isFailed?: boolean;
+  onRetry?: () => void;
+  onRemove?: () => void;
+  retryLabel?: string;
+  removeLabel?: string;
+  failedLabel?: string;
 }) {
   const isAI = message.type === 'ai' || message.type === 'system' || message.userId === 'dj';
   const isDJ = message.userId === 'dj' || message.username === 'Lofine';
 
   // Different styles for pending/failed states
   const bubbleHighlight = isPending
-    ? 'border border-white/20 shadow-[0_10px_20px_rgba(0,0,0,0.2)] opacity-70'
+    ? 'border border-white/30 shadow-[0_10px_20px_rgba(0,0,0,0.2)]'
     : isFailed
       ? 'border-2 border-red-500/50 shadow-[0_0_24px_rgba(239,68,68,0.3)]'
       : isDirectToUser
@@ -414,16 +457,16 @@ function MessageBubble({
 
   return (
     <div className={`flex items-start gap-3 ${isCurrentUser ? 'flex-row-reverse' : ''} bubble-pop`}>
-      <div className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 ${isAI ? 'bg-gradient-to-br from-[var(--mood-accent)] to-[var(--mood-accent-2)] shadow-lg shadow-black/20' : 'bg-white/10 text-white border border-white/10'}`}>
+      <div className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 ${isAI ? 'bg-gradient-to-br from-[var(--mood-accent)] to-[var(--mood-accent-2)] shadow-lg shadow-black/20' : 'bg-white/10 text-white border border-white/10'} ${isPending ? 'opacity-70' : ''}`}>
         <span className="text-white text-sm">{isAI ? '🎧' : message.username.charAt(0).toUpperCase()}</span>
       </div>
       <div
-        className={`relative max-w-[75%] rounded-2xl px-4 py-3 backdrop-blur-sm ${isCurrentUser
+        className={`relative max-w-[75%] rounded-2xl px-4 py-3 backdrop-blur-sm transition-all duration-200 ${isCurrentUser
           ? 'bg-gradient-to-r from-[var(--mood-accent)] to-[var(--mood-accent-2)] text-white rounded-br-sm'
           : isAI
             ? 'bg-white/10 text-white rounded-tl-sm'
             : 'bg-white/5 text-white rounded-tl-sm'
-          } ${bubbleHighlight}`}
+          } ${bubbleHighlight} ${isPending ? 'opacity-80' : ''}`}
       >
         <div className="flex items-center justify-between gap-3 mb-2">
           <span className={`text-sm font-semibold ${isCurrentUser ? 'text-white' : 'text-white/90'}`}>
@@ -431,22 +474,49 @@ function MessageBubble({
           </span>
           <div className="flex items-center gap-2">
             {isPending && (
-              <div className="w-3 h-3 border-2 border-white/50 border-t-transparent rounded-full animate-spin"></div>
+              <div className="flex items-center gap-1.5">
+                <div className="w-3 h-3 border-2 border-white/60 border-t-transparent rounded-full animate-spin"></div>
+              </div>
             )}
             {isFailed && (
-              <span className="text-red-400 text-xs" title="Falha ao enviar">⚠️</span>
+              <span className="text-red-400 text-sm" title={failedLabel}>⚠️</span>
             )}
-            <span className={`text-xs ${isCurrentUser ? 'text-white/70' : 'text-white/50'}`}>
-              {isPending ? '' : formatTime(message.timestamp)}
-            </span>
+            {!isPending && !isFailed && (
+              <span className={`text-xs ${isCurrentUser ? 'text-white/70' : 'text-white/50'}`}>
+                {formatTime(message.timestamp)}
+              </span>
+            )}
           </div>
         </div>
-        <p className={`text-sm leading-relaxed whitespace-pre-wrap ${isPending ? 'text-white/60' : (isCurrentUser ? 'text-white/95' : 'text-white/85')}`}>
+        <p className={`text-sm leading-relaxed whitespace-pre-wrap transition-opacity ${isPending ? 'text-white/70' : (isCurrentUser ? 'text-white/95' : 'text-white/85')}`}>
           {message.isPrivate && !isDirectToUser && <span className="text-xs opacity-70 mr-1">🔒</span>}
           {message.content}
         </p>
         {isFailed && (
-          <p className="text-xs text-red-400 mt-1">Falha ao enviar. Tente novamente.</p>
+          <div className="mt-2 pt-2 border-t border-red-500/20">
+            <p className="text-xs text-red-400 mb-2">{failedLabel}</p>
+            <div className="flex gap-2">
+              {onRetry && (
+                <button
+                  onClick={onRetry}
+                  className="text-xs px-3 py-1 bg-white/10 hover:bg-white/20 text-white rounded-full transition-colors flex items-center gap-1"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd" />
+                  </svg>
+                  {retryLabel}
+                </button>
+              )}
+              {onRemove && (
+                <button
+                  onClick={onRemove}
+                  className="text-xs px-3 py-1 bg-red-500/20 hover:bg-red-500/30 text-red-300 rounded-full transition-colors"
+                >
+                  {removeLabel}
+                </button>
+              )}
+            </div>
+          </div>
         )}
         {isDirectToUser && (
           <span className="absolute -top-2.5 right-3 text-[10px] uppercase tracking-wide bg-amber-400 text-slate-900 font-bold px-2 py-0.5 rounded-full shadow-md">

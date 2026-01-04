@@ -330,6 +330,12 @@ export interface PendingChatMessage extends ChatMessage {
   isPending?: boolean;
   isFailed?: boolean;
   tempId?: string;
+  // Store original data for retry
+  retryData?: {
+    content: string;
+    isPrivate?: boolean;
+    locale?: 'pt' | 'en';
+  };
 }
 
 /**
@@ -340,10 +346,11 @@ export function useChat() {
   const [aiMessageBuffers, setAiMessageBuffers] = useState<Record<string, string>>({});
   const [isLoadingAI, setIsLoadingAI] = useState<boolean>(false);
   const [pendingMessageId, setPendingMessageId] = useState<string | null>(null);
-  const { socket, userId } = useSocket();
+  const { socket, userId, isConnected, sendChatMessage } = useSocket();
+  const pendingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Add a pending message (optimistic update)
-  const addPendingMessage = useCallback((content: string, options: { isPrivate?: boolean; username?: string }) => {
+  const addPendingMessage = useCallback((content: string, options: { isPrivate?: boolean; username?: string; locale?: 'pt' | 'en' }) => {
     const tempId = `pending-${nanoid()}`;
     const pendingMessage: PendingChatMessage = {
       id: tempId,
@@ -355,13 +362,24 @@ export function useChat() {
       type: 'user',
       isPrivate: options.isPrivate,
       isPending: true,
+      // Store retry data
+      retryData: {
+        content,
+        isPrivate: options.isPrivate,
+        locale: options.locale,
+      },
     };
 
     setMessages((prev) => [...prev, pendingMessage]);
     setPendingMessageId(tempId);
 
-    // Set timeout to mark as failed if no confirmation
-    setTimeout(() => {
+    // Clear any existing timeout
+    if (pendingTimeoutRef.current) {
+      clearTimeout(pendingTimeoutRef.current);
+    }
+
+    // Set timeout to mark as failed if no confirmation (5 seconds for better UX)
+    pendingTimeoutRef.current = setTimeout(() => {
       setMessages((prev) =>
         prev.map(m =>
           m.tempId === tempId && m.isPending
@@ -370,13 +388,19 @@ export function useChat() {
         )
       );
       setPendingMessageId((current) => current === tempId ? null : current);
-    }, 15000); // 15 second timeout
+    }, 5000); // 5 second timeout - faster feedback
 
     return tempId;
   }, [userId]);
 
   // Clear pending state when message is confirmed
   const confirmPendingMessage = useCallback((tempId: string, confirmedMessage: ChatMessage) => {
+    // Clear timeout when confirmed
+    if (pendingTimeoutRef.current) {
+      clearTimeout(pendingTimeoutRef.current);
+      pendingTimeoutRef.current = null;
+    }
+
     setMessages((prev) =>
       prev.map(m =>
         m.tempId === tempId
@@ -385,6 +409,53 @@ export function useChat() {
       )
     );
     setPendingMessageId((current) => current === tempId ? null : current);
+  }, []);
+
+  // Retry a failed message
+  const retryMessage = useCallback((tempId: string) => {
+    if (!isConnected) return false;
+
+    setMessages((prev) => {
+      const messageToRetry = prev.find(m => m.tempId === tempId);
+      if (!messageToRetry?.retryData) return prev;
+
+      // Send the message again
+      sendChatMessage(messageToRetry.retryData.content, {
+        isPrivate: messageToRetry.retryData.isPrivate,
+        locale: messageToRetry.retryData.locale,
+      });
+
+      // Update the message to pending state
+      return prev.map(m =>
+        m.tempId === tempId
+          ? { ...m, isPending: true, isFailed: false, timestamp: Date.now() }
+          : m
+      );
+    });
+
+    // Set new timeout for the retry
+    if (pendingTimeoutRef.current) {
+      clearTimeout(pendingTimeoutRef.current);
+    }
+
+    setPendingMessageId(tempId);
+    pendingTimeoutRef.current = setTimeout(() => {
+      setMessages((prev) =>
+        prev.map(m =>
+          m.tempId === tempId && m.isPending
+            ? { ...m, isPending: false, isFailed: true }
+            : m
+        )
+      );
+      setPendingMessageId((current) => current === tempId ? null : current);
+    }, 5000);
+
+    return true;
+  }, [isConnected, sendChatMessage]);
+
+  // Remove a failed message
+  const removeFailedMessage = useCallback((tempId: string) => {
+    setMessages((prev) => prev.filter(m => m.tempId !== tempId));
   }, []);
 
   useEffect(() => {
@@ -512,6 +583,8 @@ export function useChat() {
     hasPendingMessage: !!pendingMessageId,
     addPendingMessage,
     confirmPendingMessage,
+    retryMessage,
+    removeFailedMessage,
   };
 }
 
