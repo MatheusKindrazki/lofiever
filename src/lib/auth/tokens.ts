@@ -3,7 +3,17 @@ import { encode, decode } from 'next-auth/jwt';
 import { config } from '@/lib/config';
 import { NextRequest } from 'next/server';
 
-const SECRET = config.auth.secret || 'fallback-secret-do-not-use-in-prod';
+/**
+ * Get the auth secret, throwing an error if not configured.
+ * Uses lazy evaluation to allow build-time compilation.
+ */
+function getSecret(): string {
+    const secret = config.auth.secret;
+    if (!secret) {
+        throw new Error('AUTH_SECRET environment variable is required. Generate with: openssl rand -base64 32');
+    }
+    return secret;
+}
 
 export interface TokenPayload {
     sub?: string;
@@ -23,7 +33,7 @@ export async function generateGuestToken(userId: string, username: string): Prom
             name: username,
             isGuest: true,
         },
-        secret: SECRET,
+        secret: getSecret(),
         maxAge: 24 * 60 * 60, // 24 hours
     });
 }
@@ -32,7 +42,7 @@ export async function verifyToken(token: string): Promise<TokenPayload | null> {
     try {
         const decoded = await decode({
             token,
-            secret: SECRET,
+            secret: getSecret(),
         });
         return decoded as TokenPayload;
     } catch (error) {
@@ -43,7 +53,7 @@ export async function verifyToken(token: string): Promise<TokenPayload | null> {
 
 export async function getSessionOrGuestToken(req: NextRequest): Promise<TokenPayload | null> {
     // Try to get the standard NextAuth session token
-    const token = await getToken({ req, secret: SECRET });
+    const token = await getToken({ req, secret: getSecret() });
     if (token) {
         return token as TokenPayload;
     }

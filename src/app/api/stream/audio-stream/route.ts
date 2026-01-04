@@ -20,11 +20,19 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
   try {
     // URL do stream Icecast (configurável via env)
-    const icecastHost = process.env.ICECAST_HOST || 'localhost';
-    const icecastPort = process.env.ICECAST_PORT || '8000';
-    const streamMount = process.env.ICECAST_MOUNT || '/stream';
-    const adminUser = process.env.ICECAST_ADMIN_USER || 'admin';
-    const adminPassword = process.env.ICECAST_ADMIN_PASSWORD || 'admin_password';
+    const icecastHost = process.env.ICECAST_HOST;
+    const icecastPort = process.env.ICECAST_PORT;
+    const streamMount = process.env.ICECAST_MOUNT;
+    const adminUser = process.env.ICECAST_ADMIN_USER;
+    const adminPassword = process.env.ICECAST_ADMIN_PASSWORD;
+
+    if (!icecastHost || !icecastPort || !streamMount || !adminUser || !adminPassword) {
+      console.error('Missing Icecast configuration');
+      return NextResponse.json(
+        { error: 'Stream configuration missing', code: 'CONFIG_ERROR' },
+        { status: 500 }
+      );
+    }
 
     const streamUrl = `http://${icecastHost}:${icecastPort}${streamMount}`;
     const statsUrl = `http://${icecastHost}:${icecastPort}/admin/stats.xml`;

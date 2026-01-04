@@ -1,0 +1,217 @@
+{
+  "audit_metadata": {
+    "project": "Lofiever",
+    "audit_date": "2026-01-04",
+    "branch": "MatheusKindrazki/winnipeg",
+    "auditor": "Principal Engineer Security Review",
+    "risk_level": "MEDIUM"
+  },
+  "summary": {
+    "total_findings": 10,
+    "critical": 1,
+    "high": 3,
+    "medium": 3,
+    "low": 3
+  },
+  "findings": [
+    {
+      "id": "SEC-001",
+      "severity": "CRITICAL",
+      "title": "Hardcoded Fallback Secrets in Production Code",
+      "description": "The codebase contains hardcoded fallback secrets that could be used if environment variables are not set",
+      "evidence": [
+        "src/lib/auth/tokens.ts:6",
+        "src/lib/api-security.ts:16"
+      ],
+      "probability": "HIGH",
+      "impact": "CRITICAL",
+      "priority": "P0",
+      "cwe": "CWE-798",
+      "status": "OPEN"
+    },
+    {
+      "id": "SEC-002",
+      "severity": "HIGH",
+      "title": "XSS Vulnerability via dangerouslySetInnerHTML",
+      "description": "The ChatRoom component uses dangerouslySetInnerHTML with translation data, potentially enabling XSS attacks",
+      "evidence": [
+        "src/components/ChatRoom.tsx:270"
+      ],
+      "probability": "MEDIUM",
+      "impact": "HIGH",
+      "priority": "P1",
+      "cwe": "CWE-79",
+      "status": "OPEN"
+    },
+    {
+      "id": "SEC-003",
+      "severity": "HIGH",
+      "title": "Unprotected Admin Route",
+      "description": "The admin page at /admin has no authentication or authorization checks, exposing moderation data",
+      "evidence": [
+        "src/app/admin/page.tsx",
+        "src/app/api/admin/moderation/route.ts"
+      ],
+      "probability": "HIGH",
+      "impact": "HIGH",
+      "priority": "P1",
+      "cwe": "CWE-306",
+      "status": "OPEN"
+    },
+    {
+      "id": "SEC-004",
+      "severity": "HIGH",
+      "title": "API Key Exposed in Query Parameters",
+      "description": "API key verification accepts keys via query parameter, exposing them in logs and browser history",
+      "evidence": [
+        "src/lib/api-security.ts:80-86"
+      ],
+      "probability": "MEDIUM",
+      "impact": "HIGH",
+      "priority": "P1",
+      "cwe": "CWE-598",
+      "status": "OPEN"
+    },
+    {
+      "id": "SEC-005",
+      "severity": "MEDIUM",
+      "title": "Missing CSRF Protection",
+      "description": "State-changing POST endpoints lack CSRF protection",
+      "evidence": [
+        "src/app/api/playlist/route.ts",
+        "src/app/api/tracks/route.ts",
+        "src/app/api/curation/route.ts",
+        "src/app/api/auth/guest/route.ts"
+      ],
+      "probability": "MEDIUM",
+      "impact": "MEDIUM",
+      "priority": "P2",
+      "cwe": "CWE-352",
+      "status": "OPEN"
+    },
+    {
+      "id": "SEC-006",
+      "severity": "MEDIUM",
+      "title": "Insecure Docker Compose Defaults",
+      "description": "Docker Compose files use weak default passwords (hackme) that could be used in production",
+      "evidence": [
+        "docker-compose.dev.yml:27-29",
+        "docker-compose.yml:79-81"
+      ],
+      "probability": "MEDIUM",
+      "impact": "MEDIUM",
+      "priority": "P2",
+      "cwe": "CWE-1188",
+      "status": "OPEN"
+    },
+    {
+      "id": "SEC-007",
+      "severity": "MEDIUM",
+      "title": "Rate Limit Fail-Open Behavior",
+      "description": "When Redis is unavailable, rate limiting fails open and allows all requests",
+      "evidence": [
+        "src/lib/api-security.ts:144-148"
+      ],
+      "probability": "LOW",
+      "impact": "MEDIUM",
+      "priority": "P3",
+      "cwe": "CWE-636",
+      "status": "OPEN"
+    },
+    {
+      "id": "SEC-008",
+      "severity": "LOW",
+      "title": "Missing Security Headers",
+      "description": "The application does not configure security headers (CSP, HSTS, X-Frame-Options, etc.)",
+      "evidence": [
+        "next.config.ts"
+      ],
+      "probability": "LOW",
+      "impact": "MEDIUM",
+      "priority": "P3",
+      "cwe": "CWE-693",
+      "status": "OPEN"
+    },
+    {
+      "id": "SEC-009",
+      "severity": "LOW",
+      "title": "Verbose Error Logging",
+      "description": "Error details including stack traces are logged to console, potentially leaking sensitive information",
+      "evidence": [
+        "src/lib/auth/tokens.ts:39",
+        "src/lib/api-security.ts:145"
+      ],
+      "probability": "LOW",
+      "impact": "LOW",
+      "priority": "P4",
+      "cwe": "CWE-209",
+      "status": "OPEN"
+    },
+    {
+      "id": "SEC-010",
+      "severity": "LOW",
+      "title": "Missing Input Validation/Length Limits",
+      "description": "Some user inputs lack length or format validation, potentially enabling DoS or display issues",
+      "evidence": [
+        "src/app/api/auth/guest/route.ts:11"
+      ],
+      "probability": "LOW",
+      "impact": "LOW",
+      "priority": "P4",
+      "cwe": "CWE-20",
+      "status": "OPEN"
+    }
+  ],
+  "positive_findings": [
+    {
+      "title": "No SQL Injection Risk",
+      "description": "Prisma ORM is used throughout with parameterized queries"
+    },
+    {
+      "title": "Content Moderation Implemented",
+      "description": "AI-powered content moderation for chat messages"
+    },
+    {
+      "title": "Rate Limiting Implemented",
+      "description": "Rate limiting is implemented for user requests"
+    },
+    {
+      "title": "Presigned URLs for R2 Storage",
+      "description": "Audio files use presigned URLs with expiration"
+    },
+    {
+      "title": "Environment Variables Documented",
+      "description": "ENV_VARIABLES.md provides clear documentation and security guidance"
+    },
+    {
+      "title": ".env Files Properly Gitignored",
+      "description": ".gitignore excludes all environment files"
+    }
+  ],
+  "dependencies": {
+    "next": "15.3.0",
+    "next-auth": "4.24.11",
+    "@prisma/client": "6.6.0",
+    "ioredis": "5.6.1",
+    "socket.io": "4.8.1",
+    "ai": "5.0.98"
+  },
+  "recommendations": {
+    "immediate": [
+      "Remove hardcoded fallback secrets",
+      "Fix XSS vulnerability in ChatRoom.tsx",
+      "Protect admin route with authentication",
+      "Remove API key from query parameters"
+    ],
+    "short_term": [
+      "Implement CSRF protection",
+      "Secure Docker defaults"
+    ],
+    "medium_term": [
+      "Add security headers",
+      "Improve error handling",
+      "Add input validation",
+      "Consider rate limit fail-closed"
+    ]
+  }
+}

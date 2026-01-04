@@ -5,6 +5,9 @@ export const config = {
     url: process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000',
     env: process.env.NODE_ENV || 'development',
   },
+  admin: {
+    allowedEmails: (process.env.ADMIN_EMAILS || '').split(',').map(e => e.trim()).filter(Boolean),
+  },
   redis: {
     url: process.env.REDIS_URL || 'redis://localhost:6379',
     maxRetriesPerRequest: 3,

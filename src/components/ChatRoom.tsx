@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useMemo } from 'react';
 import { useSession } from 'next-auth/react';
 import { useLocale, useTranslations } from 'next-intl';
 import { useChat as useSocketChat, useSocket, usePlaybackSync, PendingChatMessage } from '../lib/socket/client';
+import DOMPurify from 'isomorphic-dompurify';
 import { SOCKET_EVENTS } from '../lib/socket/types';
 
 export default function ChatRoom() {
@@ -267,7 +268,7 @@ export default function ChatRoom() {
           <div className="bg-amber-500/10 px-4 py-2 border-b border-amber-200/40 flex items-center justify-between gap-2 backdrop-blur-sm">
             <div className="flex items-center gap-2 text-xs text-amber-100">
               <span className="text-lg">🤫</span>
-              <span dangerouslySetInnerHTML={{ __html: t.raw('privateMode.warning') }} />
+              <span dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(t.raw('privateMode.warning')) }} />
             </div>
             <button
               onClick={() => setIsPrivateMode(false)}
