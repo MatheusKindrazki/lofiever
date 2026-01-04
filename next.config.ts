@@ -11,6 +11,20 @@ const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
+  // Prevent jsdom (used by isomorphic-dompurify) from being bundled server-side
+  // jsdom tries to load default-stylesheet.css which fails in production
+  serverExternalPackages: ['jsdom', 'isomorphic-dompurify'],
+  // Use webpack to externalize jsdom on server-side
+  webpack: (config, { isServer }) => {
+    if (isServer) {
+      config.externals = config.externals || [];
+      config.externals.push({
+        'jsdom': 'commonjs jsdom',
+        'isomorphic-dompurify': 'commonjs isomorphic-dompurify',
+      });
+    }
+    return config;
+  },
   images: {
     remotePatterns: [
       {
