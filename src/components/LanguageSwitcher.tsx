@@ -30,11 +30,11 @@ export default function LanguageSwitcher() {
             <button
                 onClick={() => handleLocaleChange(otherLocale.code)}
                 disabled={isPending}
-                className="flex items-center gap-2 px-3 py-1.5 text-sm bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-full border border-gray-200 dark:border-gray-700 transition-all disabled:opacity-50 shadow-sm"
+                className="flex items-center gap-2 px-3 py-1.5 text-sm bg-white/10 hover:bg-white/15 rounded-full border border-white/10 transition-all disabled:opacity-50 shadow-sm text-white/80"
                 aria-label={t('switchTo')}
             >
                 <span className="text-lg">{isPending ? '⏳' : otherLocale.emoji}</span>
-                <span className="hidden sm:inline font-medium text-gray-700 dark:text-gray-300">
+                <span className="hidden sm:inline font-medium text-white/80">
                     {otherLocale.code.toUpperCase()}
                 </span>
             </button>

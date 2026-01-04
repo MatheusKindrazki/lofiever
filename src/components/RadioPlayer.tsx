@@ -238,15 +238,27 @@ const ZenPlayer = (props: any) => {
         <div className="relative w-full h-full flex flex-col items-center justify-center text-center">
             {/* Glow effect pulsante behind album */}
             <div className={`absolute inset-0 pointer-events-none ${playing ? 'animate-pulse-slow' : ''}`}>
-                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[400px] h-[400px] bg-purple-500/30 rounded-full blur-[80px]"></div>
-                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[250px] h-[250px] bg-lofi-500/40 rounded-full blur-[50px]"></div>
+                <div
+                    className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[360px] h-[360px] rounded-full blur-[70px]"
+                    style={{ background: 'rgb(var(--mood-accent-rgb) / 0.18)' }}
+                />
+                <div
+                    className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[220px] h-[220px] rounded-full blur-[45px]"
+                    style={{ background: 'rgb(var(--mood-accent-2-rgb) / 0.25)' }}
+                />
             </div>
 
             <div className="relative z-10 flex flex-col items-center justify-center px-8 py-12 w-full max-w-lg">
                 {/* Album com glow dinâmico */}
                 <div className="relative group">
                     {/* Glow ring atrás do álbum */}
-                    <div className={`absolute -inset-4 bg-gradient-to-r from-purple-500 via-lofi-500 to-pink-500 rounded-3xl blur-xl opacity-50 ${playing ? 'animate-pulse-slow' : 'opacity-30'}`}></div>
+                    <div
+                        className={`absolute -inset-4 rounded-3xl blur-xl opacity-40 ${playing ? 'animate-pulse-slow' : 'opacity-25'}`}
+                        style={{
+                            background:
+                                'linear-gradient(90deg, rgb(var(--mood-accent-rgb) / 0.6), rgb(var(--mood-accent-2-rgb) / 0.6), rgb(var(--mood-accent-3-rgb) / 0.6))',
+                        }}
+                    />
 
                     <div className="relative w-72 h-72 rounded-2xl shadow-[0_25px_80px_-20px_rgba(124,58,237,0.6)] overflow-hidden border-2 border-white/20 group">
                         <Image
@@ -276,7 +288,7 @@ const ZenPlayer = (props: any) => {
                 {/* Track info */}
                 <div className="mt-8 w-full">
                     <h2 className="text-3xl font-bold text-white truncate drop-shadow-lg">{currentSong.title}</h2>
-                    <p className="text-lg text-white/60 truncate mt-1">{currentSong.artist}</p>
+                    <p className="text-lg text-white/70 truncate mt-1">{currentSong.artist}</p>
                 </div>
 
                 {/* Audio Visualizer - Onda sonora */}
@@ -285,7 +297,7 @@ const ZenPlayer = (props: any) => {
                 </div>
 
                 {/* Status indicators */}
-                <div className="flex items-center justify-center gap-6 text-sm text-white/50 mt-6">
+                    <div className="flex items-center justify-center gap-6 text-sm text-white/60 mt-6">
                     <div className="flex items-center gap-2">
                         <div className="relative flex h-2.5 w-2.5">
                             <span className={`absolute inline-flex h-full w-full rounded-full ${playing ? 'bg-green-400 animate-ping' : 'bg-gray-500'} opacity-75`}></span>
@@ -303,7 +315,7 @@ const ZenPlayer = (props: any) => {
                 {/* Volume control */}
                 <div className="w-full max-w-xs mx-auto mt-6">
                     <div className="flex items-center gap-3 bg-white/5 rounded-full px-4 py-2 border border-white/10">
-                        <SpeakerWaveIcon className="w-5 h-5 text-white/50" />
+                        <SpeakerWaveIcon className="w-5 h-5 text-white/60" />
                         <input
                             type="range"
                             min={0}
@@ -313,7 +325,7 @@ const ZenPlayer = (props: any) => {
                             className="w-full h-1 accent-lofi-500 bg-white/20 rounded-full appearance-none cursor-pointer"
                             aria-label="Volume"
                         />
-                        <span className="text-xs text-white/50 w-8 text-right font-mono">{volume}</span>
+                        <span className="text-xs text-white/60 w-8 text-right font-mono">{volume}</span>
                     </div>
                 </div>
             </div>
@@ -327,7 +339,7 @@ const StandardPlayer = (props: any) => {
     const { t, currentSong, playing, isLoading, togglePlayPause, volume, handleVolumeChange, listenersCount, playlistData, activeTab, setActiveTab, historyLoading, dailyHistory, selectedHistoryDate, setSelectedHistoryDate, formatDuration } = props;
 
     return (
-        <div className="relative w-full rounded-2xl overflow-hidden h-full flex flex-col border border-white/10 bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 shadow-2xl shadow-black/40">
+        <div className="relative w-full rounded-2xl overflow-hidden h-full flex flex-col border border-white/10 bg-gradient-to-b from-[#141824] via-[#1a1f2d] to-[#141824] shadow-2xl shadow-black/40">
             {/* Album section */}
             <div className="relative flex-shrink-0">
                 <div className="absolute inset-0 w-full h-full">
@@ -337,7 +349,13 @@ const StandardPlayer = (props: any) => {
                 <div className="relative z-10 p-5 text-center text-white">
                     {/* Album art with glow */}
                     <div className="relative inline-block">
-                        <div className={`absolute -inset-2 bg-gradient-to-r from-purple-500/40 to-lofi-500/40 rounded-2xl blur-lg ${playing ? 'animate-pulse-slow' : 'opacity-50'}`}></div>
+                        <div
+                            className={`absolute -inset-2 rounded-2xl blur-lg ${playing ? 'animate-pulse-slow' : 'opacity-40'}`}
+                            style={{
+                                background:
+                                    'linear-gradient(90deg, rgb(var(--mood-accent-rgb) / 0.4), rgb(var(--mood-accent-2-rgb) / 0.4))',
+                            }}
+                        />
                         <div className="relative w-44 h-44 mx-auto rounded-xl shadow-[0_20px_50px_rgba(124,58,237,0.4)] overflow-hidden border-2 border-white/15 group">
                             <Image src={currentSong.artworkUrl} alt={`${currentSong.title} by ${currentSong.artist}`} fill className="object-cover" priority unoptimized />
                             <button onClick={togglePlayPause} className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 group-hover:opacity-100 transition-all duration-300 backdrop-blur-sm" aria-label={playing ? "Pause" : "Play"}>
@@ -349,11 +367,11 @@ const StandardPlayer = (props: any) => {
                     {/* Track info */}
                     <div className="mt-4">
                         <h2 className="text-lg font-bold text-white truncate">{currentSong.title}</h2>
-                        <p className="text-sm text-white/60 truncate mt-0.5">{currentSong.artist}</p>
+                        <p className="text-sm text-white/70 truncate mt-0.5">{currentSong.artist}</p>
                     </div>
 
                     {/* Status */}
-                    <div className="flex items-center justify-center gap-4 text-xs text-white/50 mt-3">
+                    <div className="flex items-center justify-center gap-4 text-xs text-white/60 mt-3">
                         <div className="flex items-center gap-1.5">
                             <div className="relative flex h-2 w-2">
                                 <span className={`absolute inline-flex h-full w-full rounded-full ${playing ? 'bg-green-400 animate-ping' : 'bg-gray-500'} opacity-75`}></span>
@@ -371,9 +389,9 @@ const StandardPlayer = (props: any) => {
                     {/* Volume */}
                     <div className="px-2 mt-4">
                         <div className="flex items-center gap-3 bg-white/5 rounded-full px-3 py-1.5 border border-white/10">
-                            <SpeakerWaveIcon className="w-4 h-4 text-white/50" />
+                            <SpeakerWaveIcon className="w-4 h-4 text-white/60" />
                             <input type="range" min={0} max={100} value={volume} onChange={handleVolumeChange} className="w-full h-1 accent-lofi-500 bg-white/20 rounded-full appearance-none cursor-pointer" aria-label="Volume" />
-                            <span className="text-xs text-white/50 w-6 text-right font-mono">{volume}</span>
+                            <span className="text-xs text-white/60 w-6 text-right font-mono">{volume}</span>
                         </div>
                     </div>
                 </div>
@@ -383,13 +401,13 @@ const StandardPlayer = (props: any) => {
             <div className="relative z-10 flex border-y border-white/10">
                 <button
                     onClick={() => setActiveTab('upcoming')}
-                    className={`flex-1 px-4 py-2.5 text-sm font-medium transition-all ${activeTab === 'upcoming' ? 'text-white bg-white/10 border-b-2 border-lofi-500' : 'text-white/50 hover:bg-white/5 hover:text-white/70'}`}
+                    className={`flex-1 px-4 py-2.5 text-sm font-medium transition-all ${activeTab === 'upcoming' ? 'text-white bg-white/10 border-b-2 border-lofi-500' : 'text-white/60 hover:bg-white/5 hover:text-white/80'}`}
                 >
                     {t('tabs.upcoming')} ({playlistData.upcoming.length})
                 </button>
                 <button
                     onClick={() => setActiveTab('history')}
-                    className={`flex-1 px-4 py-2.5 text-sm font-medium transition-all ${activeTab === 'history' ? 'text-white bg-white/10 border-b-2 border-lofi-500' : 'text-white/50 hover:bg-white/5 hover:text-white/70'}`}
+                    className={`flex-1 px-4 py-2.5 text-sm font-medium transition-all ${activeTab === 'history' ? 'text-white bg-white/10 border-b-2 border-lofi-500' : 'text-white/60 hover:bg-white/5 hover:text-white/80'}`}
                 >
                     {t('tabs.history')}
                 </button>
@@ -445,6 +463,25 @@ const AudioVisualizer = ({ analyser, isPlaying = false }: { analyser: AnalyserNo
     const animationRef = useRef<number>(0);
     const analyserRef = useRef<AnalyserNode | null>(analyser);
     const isPlayingRef = useRef(isPlaying);
+    const paletteRef = useRef({ accent: '#5fa3a9', accent2: '#8f6ea9', accent3: '#d9b8a6' });
+
+    const toRgba = (hex: string, alpha: number) => {
+        const cleaned = hex.replace('#', '').trim();
+        if (cleaned.length !== 6) return `rgba(95, 163, 169, ${alpha})`;
+        const r = parseInt(cleaned.slice(0, 2), 16);
+        const g = parseInt(cleaned.slice(2, 4), 16);
+        const b = parseInt(cleaned.slice(4, 6), 16);
+        return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+    };
+
+    const readPalette = () => {
+        const styles = getComputedStyle(document.documentElement);
+        paletteRef.current = {
+            accent: styles.getPropertyValue('--mood-accent').trim() || '#5fa3a9',
+            accent2: styles.getPropertyValue('--mood-accent-2').trim() || '#8f6ea9',
+            accent3: styles.getPropertyValue('--mood-accent-3').trim() || '#d9b8a6',
+        };
+    };
 
     // Keep refs updated
     useEffect(() => {
@@ -461,6 +498,8 @@ const AudioVisualizer = ({ analyser, isPlaying = false }: { analyser: AnalyserNo
 
         const context = canvas.getContext('2d');
         if (!context) return;
+
+        readPalette();
 
         // Configurar DPI para canvas nítido
         const dpr = window.devicePixelRatio || 1;
@@ -525,9 +564,9 @@ const AudioVisualizer = ({ analyser, isPlaying = false }: { analyser: AnalyserNo
 
                 // Gradiente para cada barra
                 const gradient = context.createLinearGradient(x, centerY - barHeight / 2, x, centerY + barHeight / 2);
-                gradient.addColorStop(0, 'rgba(168, 85, 247, 0.9)'); // purple-500
-                gradient.addColorStop(0.5, 'rgba(156, 111, 196, 1)'); // lofi-500
-                gradient.addColorStop(1, 'rgba(236, 72, 153, 0.8)'); // pink-500
+                gradient.addColorStop(0, toRgba(paletteRef.current.accent, 0.88));
+                gradient.addColorStop(0.5, toRgba(paletteRef.current.accent2, 0.92));
+                gradient.addColorStop(1, toRgba(paletteRef.current.accent3, 0.88));
 
                 // Barra com cantos arredondados
                 context.fillStyle = gradient;
@@ -552,7 +591,7 @@ const AudioVisualizer = ({ analyser, isPlaying = false }: { analyser: AnalyserNo
 
                 // Glow effect sutil
                 context.shadowBlur = 10;
-                context.shadowColor = 'rgba(168, 85, 247, 0.3)';
+                context.shadowColor = toRgba(paletteRef.current.accent, 0.25);
             }
 
             context.shadowBlur = 0;
@@ -560,7 +599,14 @@ const AudioVisualizer = ({ analyser, isPlaying = false }: { analyser: AnalyserNo
 
         draw();
 
+        const handleMoodChange = () => {
+            readPalette();
+        };
+
+        window.addEventListener('moodchange', handleMoodChange);
+
         return () => {
+            window.removeEventListener('moodchange', handleMoodChange);
             cancelAnimationFrame(animationRef.current);
         };
     }, [analyser, isPlaying]);
@@ -595,7 +641,7 @@ const TrackItem = ({ number, time, title, artist, duration }: { number?: number;
             <p className="text-sm font-medium text-white/90 truncate group-hover:text-white transition-colors">{title}</p>
             <p className="text-xs text-white/50 truncate mt-0.5">{artist}</p>
         </div>
-        <span className="text-xs text-white/40 font-mono">{duration}</span>
+            <span className="text-xs text-white/60 font-mono">{duration}</span>
     </div>
 );
 

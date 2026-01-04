@@ -1,30 +1,30 @@
 :root {
-  /* Lofi Palette - Warmer, softer tones */
-  --color-lofi-50: #faf8fc;
-  --color-lofi-100: #f3eef8;
-  --color-lofi-200: #e7ddf1;
-  --color-lofi-300: #d4c2e5;
-  --color-lofi-400: #b795d4;
-  --color-lofi-500: #9c6fc4;
-  --color-lofi-600: #8555b3;
-  --color-lofi-700: #6d4494;
-  --color-lofi-800: #583979;
-  --color-lofi-900: #4a3166;
-  --color-lofi-950: #2d1d3e;
+  /* Lofi Palette - Soft lavender */
+  --color-lofi-50: #f6f2fb;
+  --color-lofi-100: #ece4f7;
+  --color-lofi-200: #dacff0;
+  --color-lofi-300: #c4b3e4;
+  --color-lofi-400: #ac95d4;
+  --color-lofi-500: #9075c1;
+  --color-lofi-600: #775aa6;
+  --color-lofi-700: #624789;
+  --color-lofi-800: #4c3767;
+  --color-lofi-900: #362845;
+  --color-lofi-950: #221a2c;
 
   /* Accent colors for warmth */
-  --color-accent-pink: #e8a5c5;
-  --color-accent-blue: #7fb3d5;
-  --color-accent-peach: #f5c0a0;
+  --color-accent-pink: #e3b1c6;
+  --color-accent-blue: #7ba9c9;
+  --color-accent-peach: #f0bca3;
 
   /* Semantic Colors */
   --color-primary: var(--color-lofi-500);
   --color-primary-hover: var(--color-lofi-600);
   --color-primary-foreground: #ffffff;
 
-  --color-background: #fefefe;
-  --color-background-subtle: var(--color-lofi-50);
-  --color-foreground: var(--color-lofi-950);
+  --color-background: #0f1117;
+  --color-background-subtle: #161a24;
+  --color-foreground: #ece8f0;
   --color-muted: var(--color-lofi-200);
   --color-border: var(--color-lofi-200);
 
@@ -35,14 +35,14 @@
 }
 
 .dark {
-  --color-background: #1a1625;
-  --color-background-subtle: var(--color-lofi-950);
-  --color-foreground: var(--color-lofi-50);
-  --color-muted: var(--color-lofi-800);
-  --color-border: var(--color-lofi-800);
+  --color-background: #0f1117;
+  --color-background-subtle: #161a24;
+  --color-foreground: #ece8f0;
+  --color-muted: #2f2b3a;
+  --color-border: #2f2b3a;
 
   /* Dark mode glass */
-  --glass-bg: rgba(42, 30, 56, 0.6);
-  --glass-border: rgba(156, 111, 196, 0.3);
-  --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.4);
+  --glass-bg: rgba(22, 26, 36, 0.7);
+  --glass-border: rgba(144, 117, 193, 0.25);
+  --glass-shadow: 0 10px 32px 0 rgba(0, 0, 0, 0.45);
 }
