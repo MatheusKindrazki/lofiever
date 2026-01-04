@@ -255,6 +255,7 @@ const ZenPlayer = (props: any) => {
                             fill
                             className={`object-cover transition-transform duration-700 ${playing ? 'scale-105' : 'scale-100'}`}
                             priority
+                            unoptimized
                         />
                         <button
                             onClick={togglePlayPause}
@@ -330,7 +331,7 @@ const StandardPlayer = (props: any) => {
             {/* Album section */}
             <div className="relative flex-shrink-0">
                 <div className="absolute inset-0 w-full h-full">
-                    <Image src={currentSong.artworkUrl} alt={`${currentSong.title} by ${currentSong.artist}`} fill className="object-cover opacity-25 blur-xl scale-110" priority />
+                    <Image src={currentSong.artworkUrl} alt={`${currentSong.title} by ${currentSong.artist}`} fill className="object-cover opacity-25 blur-xl scale-110" priority unoptimized />
                     <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-slate-900/80 to-transparent"></div>
                 </div>
                 <div className="relative z-10 p-5 text-center text-white">
@@ -338,7 +339,7 @@ const StandardPlayer = (props: any) => {
                     <div className="relative inline-block">
                         <div className={`absolute -inset-2 bg-gradient-to-r from-purple-500/40 to-lofi-500/40 rounded-2xl blur-lg ${playing ? 'animate-pulse-slow' : 'opacity-50'}`}></div>
                         <div className="relative w-44 h-44 mx-auto rounded-xl shadow-[0_20px_50px_rgba(124,58,237,0.4)] overflow-hidden border-2 border-white/15 group">
-                            <Image src={currentSong.artworkUrl} alt={`${currentSong.title} by ${currentSong.artist}`} fill className="object-cover" priority />
+                            <Image src={currentSong.artworkUrl} alt={`${currentSong.title} by ${currentSong.artist}`} fill className="object-cover" priority unoptimized />
                             <button onClick={togglePlayPause} className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 group-hover:opacity-100 transition-all duration-300 backdrop-blur-sm" aria-label={playing ? "Pause" : "Play"}>
                                 {isLoading ? <div className="w-12 h-12 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : playing ? <PauseIcon className="w-14 h-14 text-white drop-shadow-lg" /> : <PlayIcon className="w-14 h-14 text-white drop-shadow-lg" />}
                             </button>
