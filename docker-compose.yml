@@ -85,19 +85,17 @@ services:
       - ICECAST_MAX_SOURCES=2
 
   liquidsoap:
-    image: savonet/liquidsoap:v2.3.3
+    build:
+      context: ./streaming/liquidsoap
+      dockerfile: Dockerfile
     depends_on:
       - icecast
-    command: ["liquidsoap", "/radio/radio.liq"]
     environment:
       - ICECAST_SOURCE_PASSWORD=${ICECAST_SOURCE_PASSWORD:-hackme}
       - ICECAST_HOST=icecast
       - ICECAST_PORT=8000
       - API_HOST=app
       - API_PORT=3000
-    volumes:
-      - ./streaming/liquidsoap:/radio:ro
-      - music-data:/music
 
 volumes:
   redis-data:
