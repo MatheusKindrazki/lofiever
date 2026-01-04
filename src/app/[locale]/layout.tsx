@@ -5,54 +5,75 @@ import { notFound } from 'next/navigation';
 import '../../styles/globals.css';
 import AppProviders from '@/lib/providers/AppProviders';
 import IntlProviderWrapper from '@/app/[locale]/components/IntlProviderWrapper';
+import { generateSeoMetadata, SupportedLocale } from '@/lib/seo';
+import { JsonLd } from '@/components/seo/JsonLd';
+import { GoogleAnalytics } from '@/components/seo/GoogleAnalytics';
+
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 export function generateStaticParams() {
-    return routing.locales.map((locale) => ({ locale }));
+  return routing.locales.map((locale) => ({ locale }));
 }
 
-export const metadata: Metadata = {
-    title: 'Lofiever - 24/7 Lofi Streaming',
-    description: 'Continuous streaming of lofi music with AI curation',
-    keywords: ['lofi', 'music', 'streaming', 'AI', 'curation', 'study', 'focus', 'relax'],
-    authors: [{ name: 'Lofiever Team' }],
+type Props = {
+  params: Promise<{ locale: string }>;
 };
 
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const { locale } = await params;
+  return generateSeoMetadata(locale as SupportedLocale);
+}
+
 export const viewport: Viewport = {
-    themeColor: '#8459c0'
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: '#8459c0' },
+    { media: '(prefers-color-scheme: dark)', color: '#1a1a2e' },
+  ],
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 5,
+  userScalable: true,
 };
 
 export default async function LocaleLayout({
-    children,
-    params
+  children,
+  params,
 }: {
-    children: React.ReactNode;
-    params: Promise<{ locale: string }>;
+  children: React.ReactNode;
+  params: Promise<{ locale: string }>;
 }): Promise<React.ReactElement> {
-    const { locale } = await params;
+  const { locale } = await params;
 
-    // Ensure that the incoming `locale` is valid
-    if (!routing.locales.includes(locale as any)) {
-        notFound();
-    }
+  // Ensure that the incoming `locale` is valid
+  if (!routing.locales.includes(locale as any)) {
+    notFound();
+  }
 
-    // Tell Next.js/next-intl which locale is active for this request
-    setRequestLocale(locale);
+  // Tell Next.js/next-intl which locale is active for this request
+  setRequestLocale(locale);
 
-    // Providing all messages to the client
-    // side is the easiest way to get started
-    const messages = await getMessages();
+  // Providing all messages to the client
+  // side is the easiest way to get started
+  const messages = await getMessages();
 
-    return (
-        <html lang={locale} key={locale}>
-            <body className="antialiased" suppressHydrationWarning>
-                <IntlProviderWrapper key={locale} locale={locale} messages={messages}>
-                    <AppProviders key={locale}>
-                        {children}
-                    </AppProviders>
-                </IntlProviderWrapper>
-            </body>
-        </html>
-    );
+  return (
+    <html lang={locale === 'pt' ? 'pt-BR' : 'en-US'} key={locale}>
+      <head>
+        <JsonLd locale={locale as SupportedLocale} />
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link
+          rel="preconnect"
+          href="https://fonts.gstatic.com"
+          crossOrigin="anonymous"
+        />
+      </head>
+      <body className="antialiased" suppressHydrationWarning>
+        <GoogleAnalytics />
+        <IntlProviderWrapper key={locale} locale={locale} messages={messages}>
+          <AppProviders key={locale}>{children}</AppProviders>
+        </IntlProviderWrapper>
+      </body>
+    </html>
+  );
 }

@@ -2,10 +2,16 @@
     "common": {
         "appName": "Lofiever",
         "appTagline": "24/7 Lofi streaming com DJ virtual",
+        "appDescription": "Radio lofi online 24 horas. Musica perfeita para estudar, trabalhar e relaxar. Peca musicas para o DJ virtual!",
         "footer": {
-            "copyright": "© {year} Lofiever. All rights reserved.",
-            "madeWith": "Built with ❤️ using Next.js, React, and AI"
+            "copyright": "© {year} Lofiever. Todos os direitos reservados.",
+            "madeWith": "Feito com amor usando Next.js, React e IA"
         }
+    },
+    "seo": {
+        "homeTitle": "Lofiever - Radio Lofi 24/7 com DJ Virtual e IA",
+        "homeDescription": "Lofiever e a radio lofi online 24 horas por dia. Musica lofi perfeita para estudar, trabalhar, relaxar e focar. DJ virtual com IA que aceita pedidos.",
+        "keywords": "lofi, radio lofi, musica lofi, lofi para estudar, lofi para trabalhar, musica relaxante, musica para foco, DJ virtual, streaming lofi"
     },
     "player": {
         "nowPlaying": "Tocando Agora",

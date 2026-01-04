@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#8459c0"/>
+      <stop offset="100%" style="stop-color:#6b46a0"/>
+    </linearGradient>
+  </defs>
+  <!-- Background circle -->
+  <circle cx="256" cy="256" r="240" fill="url(#gradient)"/>
+  <!-- Sound waves -->
+  <g fill="none" stroke="#ffffff" stroke-width="20" stroke-linecap="round">
+    <!-- Left wave -->
+    <path d="M 140 200 Q 120 256 140 312" opacity="0.6"/>
+    <path d="M 100 160 Q 60 256 100 352" opacity="0.4"/>
+    <!-- Right wave -->
+    <path d="M 372 200 Q 392 256 372 312" opacity="0.6"/>
+    <path d="M 412 160 Q 452 256 412 352" opacity="0.4"/>
+  </g>
+  <!-- Center play/headphone circle -->
+  <circle cx="256" cy="256" r="80" fill="#ffffff" opacity="0.9"/>
+  <!-- Musical note inside -->
+  <g fill="#8459c0">
+    <ellipse cx="240" cy="290" rx="25" ry="20"/>
+    <rect x="260" y="210" width="8" height="80"/>
+    <path d="M 268 210 Q 300 200 300 230 Q 300 250 268 240 Z"/>
+  </g>
+</svg>
