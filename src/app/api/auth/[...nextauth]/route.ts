@@ -1,9 +1,9 @@
 // src/app/api/auth/[...nextauth]/route.ts
-import NextAuth from 'next-auth';
+import NextAuth, { type NextAuthOptions } from 'next-auth';
 import GitHubProvider from 'next-auth/providers/github';
 import { config } from '@/lib/config';
 
-const handler = NextAuth({
+export const authOptions: NextAuthOptions = {
   providers: [
     GitHubProvider({
       clientId: config.auth.providers.github.clientId || '',
@@ -11,6 +11,8 @@ const handler = NextAuth({
     }),
   ],
   secret: config.auth.secret,
-});
+};
+
+const handler = NextAuth(authOptions);
 
 export { handler as GET, handler as POST };

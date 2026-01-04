@@ -8,14 +8,26 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { redis } from './redis';
+import { timingSafeEqual } from 'crypto';
 
 // ============================================================================
 // CONFIGURATION
 // ============================================================================
 
-const API_SECRET = process.env.API_SECRET_KEY || 'change-me-in-production';
 const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS?.split(',') || ['http://localhost:3000'];
 const RATE_LIMIT_ENABLED = process.env.RATE_LIMIT_ENABLED !== 'false';
+
+/**
+ * Get the API secret, throwing an error if not configured.
+ * Uses lazy evaluation to allow build-time compilation.
+ */
+function getApiSecret(): string {
+    const secret = process.env.API_SECRET_KEY;
+    if (!secret) {
+        throw new Error('API_SECRET_KEY environment variable is required. Generate with: openssl rand -base64 32');
+    }
+    return secret;
+}
 
 // Rate limit configurations (requests per minute)
 export const RATE_LIMITS = {
@@ -75,14 +87,29 @@ export function isOriginAllowed(request: NextRequest): boolean {
 }
 
 /**
- * Verify API key from header or query
+ * Verify API key from header using constant-time comparison
+ * to prevent timing attacks
  */
 export function verifyAPIKey(request: NextRequest): boolean {
     const headerKey = request.headers.get('x-api-key');
-    const { searchParams } = new URL(request.url);
-    const queryKey = searchParams.get('api_key');
+    // Security: Only accept API key via header, never via query params
+    // Query params are logged and can leak in browser history/referrer
+    if (!headerKey) {
+        console.warn('[Security] API key must be provided via x-api-key header');
+        return false;
+    }
 
-    return headerKey === API_SECRET || queryKey === API_SECRET;
+    const secret = getApiSecret();
+    // Use constant-time comparison to prevent timing attacks
+    try {
+        return timingSafeEqual(
+            Buffer.from(headerKey),
+            Buffer.from(secret)
+        );
+    } catch {
+        // timingSafeEqual throws if lengths differ
+        return false;
+    }
 }
 
 // ============================================================================
@@ -142,9 +169,9 @@ export async function checkRateLimit(
             resetAt: now + (config.window * 1000),
         };
     } catch (error) {
-        console.error('[Security] Rate limit check failed:', error);
-        // Fail open - allow request if Redis is down
-        return { allowed: true, remaining: config.max, resetAt: Date.now() + config.window * 1000 };
+        console.error('[Security] Rate limit check failed - denying request:', error);
+        // Fail closed - deny request if Redis is down (more secure)
+        return { allowed: false, remaining: 0, resetAt: Date.now() + config.window * 1000 };
     }
 }
 
