@@ -1,0 +1,40 @@
+# Streaming services for Lofiever (Icecast + Liquidsoap)
+# Deploy this as a separate service in Coolify
+# These services don't need rolling updates - they're stateful
+
+name: lofiever-streaming
+
+services:
+  icecast:
+    image: moul/icecast
+    restart: unless-stopped
+    environment:
+      - ICECAST_SOURCE_PASSWORD=${ICECAST_SOURCE_PASSWORD:?ICECAST_SOURCE_PASSWORD is required}
+      - ICECAST_ADMIN_PASSWORD=${ICECAST_ADMIN_PASSWORD:?ICECAST_ADMIN_PASSWORD is required}
+      - ICECAST_RELAY_PASSWORD=${ICECAST_RELAY_PASSWORD:-relay_password}
+      - ICECAST_ADMIN_USER=${ICECAST_ADMIN_USER:-admin}
+      - ICECAST_HOSTNAME=${ICECAST_HOSTNAME:-localhost}
+      - ICECAST_MAX_CLIENTS=${ICECAST_MAX_CLIENTS:-100}
+      - ICECAST_MAX_SOURCES=${ICECAST_MAX_SOURCES:-2}
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8000/status.xsl"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  liquidsoap:
+    build:
+      context: ./streaming/liquidsoap
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      icecast:
+        condition: service_healthy
+    environment:
+      - ICECAST_SOURCE_PASSWORD=${ICECAST_SOURCE_PASSWORD:?ICECAST_SOURCE_PASSWORD is required}
+      - ICECAST_HOST=icecast
+      - ICECAST_PORT=8000
+      # App API for track metadata (external URL)
+      - API_URL=${APP_URL:-http://app:3000}
+      - API_SECRET_KEY=${API_SECRET_KEY:-}
