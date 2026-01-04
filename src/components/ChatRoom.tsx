@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
 import { useLocale, useTranslations } from 'next-intl';
-import { useChat as useSocketChat, useSocket, usePlaybackSync, PendingChatMessage } from '../lib/socket/client';
+import type { PendingChatMessage } from '../lib/socket/client';
+import { useChat as useSocketChat, useSocket, usePlaybackSync } from '../lib/socket/client';
 import DOMPurify from 'isomorphic-dompurify';
 import { SOCKET_EVENTS } from '../lib/socket/types';
 

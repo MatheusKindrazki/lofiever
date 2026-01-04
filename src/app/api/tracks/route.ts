@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { handleApiError } from '@/lib/api-utils';
+import type { Prisma } from '@prisma/client';
 
 // GET - Obter lista de faixas
 export async function GET(request: Request): Promise<NextResponse> {
@@ -9,13 +10,13 @@ export async function GET(request: Request): Promise<NextResponse> {
     const limit = Number(searchParams.get('limit') || '20');
     const offset = Number(searchParams.get('offset') || '0');
     const search = searchParams.get('search');
-    
+
     // Construir o filtro baseado no termo de busca
-    const filter = search
+    const filter: Prisma.TrackWhereInput = search
       ? {
           OR: [
-            { title: { contains: search, mode: 'insensitive' } },
-            { artist: { contains: search, mode: 'insensitive' } },
+            { title: { contains: search, mode: 'insensitive' as const } },
+            { artist: { contains: search, mode: 'insensitive' as const } },
           ],
         }
       : {};

@@ -22,13 +22,11 @@ export interface StreamMetadata {
 }
 
 class AudioStreamService {
-  private streamUrl: string;
   private fallbackUrl: string;
   private metadata: StreamMetadata = {};
   private listeners: Array<(metadata: StreamMetadata) => void> = [];
 
   constructor() {
-    this.streamUrl = process.env.NEXT_PUBLIC_STREAM_URL || 'http://localhost:8000/stream';
     this.fallbackUrl = '/music/example.mp3';
   }
 

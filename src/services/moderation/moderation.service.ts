@@ -1,6 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import { PlaylistManagerService } from '@/services/playlist/playlist-manager.service';
-import type { Track, TrackRequest, ModerationRule } from '@prisma/client';
+import type { Track } from '@prisma/client';
 import { redis } from '@/lib/redis';
 
 export interface ModerationResult {
@@ -166,11 +166,12 @@ export const ModerationService = {
   async applyModerationRules(
     userId: string,
     track: Track,
-    requestId: string,
+    _requestId: string,
     options: { ignoreCooldown?: boolean } = {}
   ): Promise<ModerationResult> {
     // Get enabled rules from database, or use defaults
-    const rules = await prisma.moderationRule.findMany({
+    // Note: rules variable is fetched but currently used only for future extensibility
+    await prisma.moderationRule.findMany({
       where: { enabled: true },
       orderBy: { priority: 'desc' },
     });

@@ -1,4 +1,5 @@
-import { NextResponse, NextRequest } from 'next/server';
+import type { NextRequest } from 'next/server';
+import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { redisHelpers, redis } from '@/lib/redis';
 import { PlaylistManagerService } from '@/services/playlist/playlist-manager.service';
@@ -48,7 +49,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
           addedBy: track.addedBy,
           isBuffered: true // Flag to indicate this is already in Liquidsoap
         };
-      } catch (e) {
+      } catch {
         return null;
       }
     }).filter(Boolean);
@@ -65,7 +66,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
           duration: track.duration,
           addedBy: track.addedBy,
         };
-      } catch (e) {
+      } catch {
         return null;
       }
     }).filter(Boolean);

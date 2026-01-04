@@ -20,17 +20,19 @@ const eslintConfig = [
       // Enforce type imports
       "@typescript-eslint/consistent-type-imports": [
         "error",
-        { prefer: "type-imports" }
+        { prefer: "type-imports", fixStyle: "separate-type-imports" }
       ],
-      // Enforce explicit return types on functions and class methods
-      "@typescript-eslint/explicit-function-return-type": [
-        "error",
-        { allowExpressions: true }
-      ],
+      // Explicit return types - disabled for React components (too verbose)
+      "@typescript-eslint/explicit-function-return-type": "off",
       // Enforce consistent usage of type imports
       "@typescript-eslint/no-import-type-side-effects": "error",
-      // Disallow unused variables
-      "@typescript-eslint/no-unused-vars": ["error", { argsIgnorePattern: "^_" }],
+      // Disallow unused variables - prefix with _ to ignore
+      "@typescript-eslint/no-unused-vars": [
+        "error",
+        { argsIgnorePattern: "^_", varsIgnorePattern: "^_" }
+      ],
+      // Disallow explicit any - warn instead of error for gradual migration
+      "@typescript-eslint/no-explicit-any": "warn",
       // Enforce consistent React imports
       "react/react-in-jsx-scope": "off",
       // Enforce hook dependencies

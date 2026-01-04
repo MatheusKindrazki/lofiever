@@ -12,7 +12,7 @@ export default function CurationPanel() {
 
   useEffect(() => {
     fetchRecommendations(defaultCurationPrompt, true).catch(() => null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, []);
 
   const recommendationCards = useMemo(() => {

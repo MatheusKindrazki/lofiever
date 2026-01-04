@@ -1,5 +1,11 @@
 // Jest setup file
 import '@testing-library/jest-dom';
+import { TransformStream, ReadableStream, WritableStream } from 'web-streams-polyfill';
+
+// Polyfills for web streams (needed by AI SDK)
+global.TransformStream = TransformStream;
+global.ReadableStream = ReadableStream as unknown as typeof global.ReadableStream;
+global.WritableStream = WritableStream;
 
 // Mock Next.js router
 jest.mock('next/navigation', () => ({
@@ -16,14 +22,14 @@ jest.mock('next/navigation', () => ({
 
 // Mock next-intl
 jest.mock('next-intl', () => ({
-  useTranslations: () => (key) => key,
+  useTranslations: () => (key: string) => key,
   useLocale: () => 'en',
 }));
 
 // Mock window.matchMedia
 Object.defineProperty(window, 'matchMedia', {
   writable: true,
-  value: jest.fn().mockImplementation((query) => ({
+  value: jest.fn().mockImplementation((query: string) => ({
     matches: false,
     media: query,
     onchange: null,
@@ -36,7 +42,8 @@ Object.defineProperty(window, 'matchMedia', {
 });
 
 // Mock Audio
-global.Audio = jest.fn().mockImplementation(() => ({
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+(global as any).Audio = jest.fn().mockImplementation(() => ({
   play: jest.fn().mockResolvedValue(undefined),
   pause: jest.fn(),
   addEventListener: jest.fn(),
@@ -61,17 +68,3 @@ global.IntersectionObserver = jest.fn().mockImplementation(() => ({
   unobserve: jest.fn(),
   disconnect: jest.fn(),
 }));
-
-// Suppress console errors during tests (optional, can be removed if needed)
-// const originalError = console.error;
-// beforeAll(() => {
-//   console.error = (...args) => {
-//     if (/Warning.*not wrapped in act/.test(args[0])) {
-//       return;
-//     }
-//     originalError.call(console, ...args);
-//   };
-// });
-// afterAll(() => {
-//   console.error = originalError;
-// });

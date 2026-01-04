@@ -22,7 +22,7 @@ interface StreamData {
 
 export default function Player(): React.ReactNode {
   const [playing, setPlaying] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
+  const [, setIsLoading] = useState(true);
   const [isClient, setIsClient] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 

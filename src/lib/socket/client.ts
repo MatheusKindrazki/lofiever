@@ -528,7 +528,7 @@ export function useChat() {
     const onAIMessageComplete = ({ messageId }: { messageId: string }) => {
       setIsLoadingAI(false);
       setAiMessageBuffers((prev) => {
-        const { [messageId]: completedMessage, ...rest } = prev;
+        const { [messageId]: _completedMessage, ...rest } = prev;
         // The full message is already in the `messages` state from the last chunk update
         // We just need to clear the buffer and ensure the message is finalized.
         // The server sends the full message in the final chatMessage event.

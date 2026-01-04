@@ -516,7 +516,7 @@ const AudioVisualizer = ({ analyser, isPlaying = false }: { analyser: AnalyserNo
         const centerY = height / 2;
 
         // Array para suavização
-        let smoothedData = new Array(numBars).fill(0);
+        const smoothedData = new Array(numBars).fill(0);
 
         const draw = () => {
             animationRef.current = requestAnimationFrame(draw);
