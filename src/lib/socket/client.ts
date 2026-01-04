@@ -348,6 +348,8 @@ export function useChat() {
   const [pendingMessageId, setPendingMessageId] = useState<string | null>(null);
   const { socket, userId, isConnected, sendChatMessage } = useSocket();
   const pendingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  // Use ref to avoid stale closure issues with pendingMessageId
+  const pendingMessageIdRef = useRef<string | null>(null);
 
   // Add a pending message (optimistic update)
   const addPendingMessage = useCallback((content: string, options: { isPrivate?: boolean; username?: string; locale?: 'pt' | 'en' }) => {
@@ -372,13 +374,15 @@ export function useChat() {
 
     setMessages((prev) => [...prev, pendingMessage]);
     setPendingMessageId(tempId);
+    pendingMessageIdRef.current = tempId;
 
     // Clear any existing timeout
     if (pendingTimeoutRef.current) {
       clearTimeout(pendingTimeoutRef.current);
     }
 
-    // Set timeout to mark as failed if no confirmation (5 seconds for better UX)
+    // Set timeout to mark as failed if no confirmation
+    // 15 seconds to account for: network latency + content moderation + AI processing
     pendingTimeoutRef.current = setTimeout(() => {
       setMessages((prev) =>
         prev.map(m =>
@@ -388,7 +392,10 @@ export function useChat() {
         )
       );
       setPendingMessageId((current) => current === tempId ? null : current);
-    }, 5000); // 5 second timeout - faster feedback
+      if (pendingMessageIdRef.current === tempId) {
+        pendingMessageIdRef.current = null;
+      }
+    }, 15000); // 15 second timeout - allows for slower connections and AI processing
 
     return tempId;
   }, [userId]);
@@ -409,6 +416,9 @@ export function useChat() {
       )
     );
     setPendingMessageId((current) => current === tempId ? null : current);
+    if (pendingMessageIdRef.current === tempId) {
+      pendingMessageIdRef.current = null;
+    }
   }, []);
 
   // Retry a failed message
@@ -439,6 +449,7 @@ export function useChat() {
     }
 
     setPendingMessageId(tempId);
+    pendingMessageIdRef.current = tempId;
     pendingTimeoutRef.current = setTimeout(() => {
       setMessages((prev) =>
         prev.map(m =>
@@ -448,7 +459,10 @@ export function useChat() {
         )
       );
       setPendingMessageId((current) => current === tempId ? null : current);
-    }, 5000);
+      if (pendingMessageIdRef.current === tempId) {
+        pendingMessageIdRef.current = null;
+      }
+    }, 15000); // 15 second timeout for retries too
 
     return true;
   }, [isConnected, sendChatMessage]);
@@ -464,9 +478,17 @@ export function useChat() {
     // Handle new user messages (already includes full AI messages for history)
     const onChatMessage = (message: ChatMessage) => {
       // Check if this confirms a pending message
+      // Use ref instead of state to avoid stale closure issues
       const isPendingConfirmation = message.userId === userId && message.type === 'user';
+      const currentPendingId = pendingMessageIdRef.current;
 
-      if (isPendingConfirmation && pendingMessageId) {
+      if (isPendingConfirmation && currentPendingId) {
+        // Clear the timeout immediately when we receive confirmation
+        if (pendingTimeoutRef.current) {
+          clearTimeout(pendingTimeoutRef.current);
+          pendingTimeoutRef.current = null;
+        }
+
         // Find the pending message with similar content
         setMessages((prev) => {
           const pendingIdx = prev.findIndex(m => m.isPending && m.userId === userId);
@@ -480,6 +502,7 @@ export function useChat() {
           return [...prev.filter(m => m.id !== message.id), message];
         });
         setPendingMessageId(null);
+        pendingMessageIdRef.current = null;
       } else {
         setMessages((prev) => [...prev.filter(m => m.id !== message.id), message]);
       }
@@ -575,7 +598,7 @@ export function useChat() {
       socket.off(SOCKET_EVENTS.DJ_ANNOUNCEMENT, onDJAnnouncement);
       socket.off(SOCKET_EVENTS.CHAT_HISTORY, onChatHistory);
     };
-  }, [socket, aiMessageBuffers, userId, pendingMessageId]); // Include aiMessageBuffers in dependency array
+  }, [socket, aiMessageBuffers, userId]); // Removed pendingMessageId - using ref instead to avoid stale closures
 
   return {
     messages,
