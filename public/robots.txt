@@ -1,0 +1,38 @@
+# Lofiever - robots.txt
+# https://lofiever.com
+
+# Allow all crawlers
+User-agent: *
+Allow: /
+
+# Sitemap locations
+Sitemap: https://lofiever.com/sitemap.xml
+
+# Disallow API routes and internal paths
+Disallow: /api/
+Disallow: /admin/
+Disallow: /_next/
+Disallow: /static/
+
+# Disallow stream endpoint (audio file)
+Disallow: /stream
+
+# Google specific
+User-agent: Googlebot
+Allow: /
+Crawl-delay: 1
+
+# Bing specific
+User-agent: Bingbot
+Allow: /
+Crawl-delay: 2
+
+# Allow social media crawlers for better sharing
+User-agent: facebookexternalhit
+Allow: /
+
+User-agent: Twitterbot
+Allow: /
+
+User-agent: LinkedInBot
+Allow: /

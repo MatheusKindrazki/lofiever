@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1a1a2e"/>
+      <stop offset="50%" style="stop-color:#16213e"/>
+      <stop offset="100%" style="stop-color:#0f0f23"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#8459c0"/>
+      <stop offset="100%" style="stop-color:#6b46a0"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1200" height="630" fill="url(#bg)"/>
+
+  <!-- Decorative circles -->
+  <circle cx="100" cy="100" r="200" fill="#8459c0" opacity="0.1"/>
+  <circle cx="1100" cy="530" r="300" fill="#8459c0" opacity="0.08"/>
+
+  <!-- Sound wave lines -->
+  <g fill="none" stroke="#8459c0" stroke-width="3" opacity="0.3">
+    <path d="M 0 315 Q 200 280 400 315 Q 600 350 800 315 Q 1000 280 1200 315"/>
+    <path d="M 0 330 Q 200 365 400 330 Q 600 295 800 330 Q 1000 365 1200 330"/>
+  </g>
+
+  <!-- Logo icon -->
+  <g transform="translate(480, 150)">
+    <circle cx="120" cy="120" r="100" fill="url(#accent)"/>
+    <circle cx="120" cy="120" r="35" fill="#ffffff" opacity="0.9"/>
+    <g fill="none" stroke="#ffffff" stroke-width="8" stroke-linecap="round" opacity="0.6">
+      <path d="M 60 90 Q 40 120 60 150"/>
+      <path d="M 180 90 Q 200 120 180 150"/>
+    </g>
+  </g>
+
+  <!-- Text -->
+  <text x="600" y="420" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="72" font-weight="bold" fill="#ffffff">
+    Lofiever
+  </text>
+  <text x="600" y="480" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="28" fill="#a0a0a0">
+    24/7 Lofi Radio with Virtual DJ
+  </text>
+
+  <!-- Bottom accent line -->
+  <rect x="450" y="520" width="300" height="4" rx="2" fill="url(#accent)"/>
+</svg>
