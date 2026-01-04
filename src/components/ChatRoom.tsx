@@ -146,19 +146,25 @@ export default function ChatRoom() {
   }, [filteredMessages]);
 
   return (
-    <div className="relative flex flex-col h-full overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 shadow-2xl shadow-black/40">
+    <div className="relative flex flex-col h-full overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-[#141824] via-[#1a1f2d] to-[#141824] shadow-2xl shadow-black/40">
       {/* Ambient background */}
       <div className="pointer-events-none absolute inset-0 opacity-70">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(124,58,237,0.15),transparent_35%),radial-gradient(circle_at_80%_10%,rgba(16,185,129,0.18),transparent_35%),radial-gradient(circle_at_50%_80%,rgba(236,72,153,0.12),transparent_40%)]" />
-        <div className="absolute -left-16 top-10 h-40 w-40 rounded-full bg-purple-500/10 blur-3xl float-slow" />
-        <div className="absolute -right-10 bottom-20 h-48 w-48 rounded-full bg-emerald-500/10 blur-3xl float-slower" />
+        <div
+          className="absolute inset-0"
+          style={{
+            backgroundImage:
+              'radial-gradient(circle_at_18%_18%, rgb(var(--mood-accent-rgb) / 0.2), transparent 38%), radial-gradient(circle_at_82%_12%, rgb(var(--mood-accent-2-rgb) / 0.14), transparent 38%), radial-gradient(circle_at_50%_82%, rgb(var(--mood-accent-3-rgb) / 0.12), transparent 42%)',
+          }}
+        />
+        <div className="absolute -left-16 top-10 h-40 w-40 rounded-full blur-3xl float-slow" style={{ background: 'rgb(var(--mood-accent-rgb) / 0.12)' }} />
+        <div className="absolute -right-10 bottom-20 h-48 w-48 rounded-full blur-3xl float-slower" style={{ background: 'rgb(var(--mood-accent-2-rgb) / 0.1)' }} />
       </div>
 
       {/* Header */}
       <div className="relative z-10 flex items-center justify-between px-4 py-3 border-b border-white/5 bg-white/5 backdrop-blur-sm">
         <div className="flex items-center gap-3">
           <div className="relative">
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-lofi-500 flex items-center justify-center shadow-lg shadow-purple-500/30">
+            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[var(--mood-accent)] to-[var(--mood-accent-2)] flex items-center justify-center shadow-lg shadow-black/20">
               <span className="text-white text-lg animate-pulse">🎧</span>
             </div>
             <span className="absolute bottom-0 right-0 w-3 h-3 bg-emerald-400 border-2 border-slate-950 rounded-full shadow-md"></span>
@@ -249,7 +255,7 @@ export default function ChatRoom() {
         {/* Private Mode Toast (Temporary) */}
         {showPrivateToast && (
           <div className="absolute -top-12 left-0 right-0 flex justify-center px-4 animate-fade-in-up z-10">
-            <div className="bg-gradient-to-r from-purple-600 to-lofi-600 text-white text-xs px-4 py-2 rounded-full shadow-lg flex items-center gap-2">
+            <div className="bg-gradient-to-r from-[var(--mood-accent)] to-[var(--mood-accent-2)] text-white text-xs px-4 py-2 rounded-full shadow-lg flex items-center gap-2">
               <span>🔒</span>
               <span>{t('privateMode.toast')}</span>
             </div>
@@ -334,7 +340,7 @@ export default function ChatRoom() {
                 disabled={isLoadingAI || hasPendingMessage || !input.trim()}
                 className={`px-4 py-2.5 text-white rounded-full transition-all duration-200 flex items-center gap-2 ${isPrivateMode
                   ? 'bg-gradient-to-r from-slate-700 to-slate-900 hover:from-slate-800 hover:to-black shadow-lg shadow-black/30'
-                  : 'bg-gradient-to-r from-purple-500 to-lofi-500 hover:from-purple-600 hover:to-lofi-600 shadow-lg shadow-purple-500/40'
+                  : 'bg-gradient-to-r from-[var(--mood-accent)] to-[var(--mood-accent-2)] hover:brightness-110 shadow-lg shadow-black/25'
                   } disabled:from-gray-300 disabled:to-gray-400 disabled:opacity-50`}
               >
                 {hasPendingMessage ? (
@@ -402,17 +408,17 @@ function MessageBubble({
       : isDirectToUser
         ? 'border-2 border-amber-300/70 shadow-[0_0_24px_rgba(251,191,36,0.4)]'
         : isDJ
-          ? 'border border-purple-200/40 shadow-[0_10px_30px_rgba(124,58,237,0.2)]'
+          ? 'border border-white/10 shadow-[0_10px_28px_rgba(180,154,217,0.18)]'
           : 'border border-white/5 shadow-[0_10px_20px_rgba(0,0,0,0.2)]';
 
   return (
     <div className={`flex items-start gap-3 ${isCurrentUser ? 'flex-row-reverse' : ''} bubble-pop`}>
-      <div className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 ${isAI ? 'bg-gradient-to-br from-purple-500 to-lofi-500 shadow-lg shadow-purple-500/30' : 'bg-white/10 text-white border border-white/10'}`}>
+      <div className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 ${isAI ? 'bg-gradient-to-br from-[var(--mood-accent)] to-[var(--mood-accent-2)] shadow-lg shadow-black/20' : 'bg-white/10 text-white border border-white/10'}`}>
         <span className="text-white text-sm">{isAI ? '🎧' : message.username.charAt(0).toUpperCase()}</span>
       </div>
       <div
         className={`relative max-w-[75%] rounded-2xl px-4 py-3 backdrop-blur-sm ${isCurrentUser
-          ? 'bg-gradient-to-r from-purple-500 to-lofi-500 text-white rounded-br-sm'
+          ? 'bg-gradient-to-r from-[var(--mood-accent)] to-[var(--mood-accent-2)] text-white rounded-br-sm'
           : isAI
             ? 'bg-white/10 text-white rounded-tl-sm'
             : 'bg-white/5 text-white rounded-tl-sm'

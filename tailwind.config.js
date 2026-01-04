@@ -66,7 +66,9 @@ export default {
         },
       },
       fontFamily: {
-        sans: ['var(--font-inter)', 'system-ui', 'sans-serif'],
+        sans: ['var(--font-manrope)', 'system-ui', 'sans-serif'],
+        serif: ['var(--font-fraunces)', 'ui-serif', 'serif'],
+        display: ['var(--font-fraunces)', 'ui-serif', 'serif'],
         mono: ['var(--font-jetbrains-mono)', 'monospace'],
       },
       container: {

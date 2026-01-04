@@ -105,10 +105,10 @@ export function LocalizedComponents() {
             {/* Main Content Grid (Normal Mode) */}
             {!zenMode && (
                 <div className="w-full grid grid-cols-1 lg:grid-cols-12 gap-6">
-                    <div className="lg:col-span-5 h-[640px]">
+                    <div className="lg:col-span-5 min-h-[520px] h-[70vh] max-h-[720px]">
                         <RadioPlayer key={`player-${locale}`} zen={false} />
                     </div>
-                    <div className="lg:col-span-7 h-[640px]">
+                    <div className="lg:col-span-7 min-h-[520px] h-[70vh] max-h-[720px]">
                         <ChatRoom key={`chat-${locale}`} />
                     </div>
                 </div>

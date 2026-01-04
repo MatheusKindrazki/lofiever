@@ -2,24 +2,72 @@
 @import "./theme.css";
 
 :root {
-  --foreground-rgb: 45, 29, 62;
-  --background-start-rgb: 254, 254, 254;
-  --background-end-rgb: 250, 248, 252;
+  --foreground-color: #ece8f0;
+  --mood-bg-start: #0f1117;
+  --mood-bg-end: #151720;
+  --mood-accent: #7ba9c9;
+  --mood-accent-2: #b49ad9;
+  --mood-accent-3: #f0bca3;
+  --mood-accent-rgb: 123 169 201;
+  --mood-accent-2-rgb: 180 154 217;
+  --mood-accent-3-rgb: 240 188 163;
+  --mood-ring: rgba(180, 154, 217, 0.5);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --foreground-rgb: 250, 248, 252;
-    --background-start-rgb: 26, 22, 37;
-    --background-end-rgb: 20, 16, 28;
-  }
+:root[data-mood="focus"] {
+  --mood-bg-start: #0e1218;
+  --mood-bg-end: #151c25;
+  --mood-accent: #6b9fd6;
+  --mood-accent-2: #8fb0c4;
+  --mood-accent-3: #e2b48f;
+  --mood-accent-rgb: 107 159 214;
+  --mood-accent-2-rgb: 143 176 196;
+  --mood-accent-3-rgb: 226 180 143;
+  --mood-ring: rgba(107, 159, 214, 0.5);
+}
+
+:root[data-mood="relax"] {
+  --mood-bg-start: #0f1117;
+  --mood-bg-end: #151720;
+  --mood-accent: #7ba9c9;
+  --mood-accent-2: #b49ad9;
+  --mood-accent-3: #f0bca3;
+  --mood-accent-rgb: 123 169 201;
+  --mood-accent-2-rgb: 180 154 217;
+  --mood-accent-3-rgb: 240 188 163;
+  --mood-ring: rgba(180, 154, 217, 0.5);
+}
+
+:root[data-mood="sleep"] {
+  --mood-bg-start: #0b0f18;
+  --mood-bg-end: #101421;
+  --mood-accent: #5f7da7;
+  --mood-accent-2: #8a7ba7;
+  --mood-accent-3: #c9a98f;
+  --mood-accent-rgb: 95 125 167;
+  --mood-accent-2-rgb: 138 123 167;
+  --mood-accent-3-rgb: 201 169 143;
+  --mood-ring: rgba(95, 125, 167, 0.45);
+}
+
+.light {
+  --foreground-color: #2d1d3e;
+  --mood-bg-start: #fefefe;
+  --mood-bg-end: #faf8fc;
+  --mood-accent: #9075c1;
+  --mood-accent-2: #7ba9c9;
+  --mood-accent-3: #f0bca3;
+  --mood-accent-rgb: 144 117 193;
+  --mood-accent-2-rgb: 123 169 201;
+  --mood-accent-3-rgb: 240 188 163;
+  --mood-ring: rgba(144, 117, 193, 0.4);
 }
 
 body {
-  color: rgb(var(--foreground-rgb));
+  color: var(--foreground-color);
   background: linear-gradient(to bottom,
-      rgb(var(--background-start-rgb)),
-      rgb(var(--background-end-rgb)));
+      var(--mood-bg-start),
+      var(--mood-bg-end));
   min-height: 100vh;
   letter-spacing: -0.01em;
   line-height: 1.6;
@@ -34,7 +82,7 @@ body::before {
   left: 0;
   width: 100%;
   height: 100%;
-  opacity: 0.03;
+  opacity: 0.02;
   background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='3' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
   pointer-events: none;
   z-index: 1;
@@ -52,8 +100,8 @@ body::before {
 
 ::-webkit-scrollbar-thumb {
   background: linear-gradient(to bottom,
-      rgba(156, 111, 196, 0.4),
-      rgba(156, 111, 196, 0.6));
+      color-mix(in srgb, var(--mood-accent-2) 50%, transparent),
+      color-mix(in srgb, var(--mood-accent-2) 75%, transparent));
   border-radius: 10px;
   border: 2px solid transparent;
   background-clip: padding-box;
@@ -61,20 +109,20 @@ body::before {
 
 ::-webkit-scrollbar-thumb:hover {
   background: linear-gradient(to bottom,
-      rgba(156, 111, 196, 0.6),
-      rgba(156, 111, 196, 0.8));
+      color-mix(in srgb, var(--mood-accent-2) 70%, transparent),
+      color-mix(in srgb, var(--mood-accent-2) 90%, transparent));
   background-clip: padding-box;
 }
 
 /* Selection */
 ::selection {
-  background-color: rgba(156, 111, 196, 0.3);
+  background-color: color-mix(in srgb, var(--mood-accent-2) 40%, transparent);
   color: inherit;
 }
 
 /* Smooth focus rings */
 *:focus-visible {
-  outline: 2px solid rgba(156, 111, 196, 0.5);
+  outline: 2px solid var(--mood-ring);
   outline-offset: 2px;
   border-radius: 4px;
 }

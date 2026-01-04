@@ -228,7 +228,7 @@ export const redis = new Proxy({} as RedisClient, {
     if (!_redis) {
       _redis = redisManager.getClient();
     }
-    const value = (_redis as Record<string | symbol, unknown>)[prop];
+    const value = (_redis as unknown as Record<string | symbol, unknown>)[prop];
     if (typeof value === 'function') {
       return value.bind(_redis);
     }

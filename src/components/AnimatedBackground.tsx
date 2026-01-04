@@ -6,6 +6,25 @@ interface AnimatedBackgroundProps {
     className?: string;
 }
 
+const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
+
+const toRgba = (hex: string, alpha: number) => {
+    const cleaned = hex.replace('#', '').trim();
+    if (cleaned.length !== 6) return `rgba(95, 163, 169, ${alpha})`;
+    const r = parseInt(cleaned.slice(0, 2), 16);
+    const g = parseInt(cleaned.slice(2, 4), 16);
+    const b = parseInt(cleaned.slice(4, 6), 16);
+    return `rgba(${clamp(r, 0, 255)}, ${clamp(g, 0, 255)}, ${clamp(b, 0, 255)}, ${alpha})`;
+};
+
+const readMoodPalette = () => {
+    const styles = getComputedStyle(document.documentElement);
+    const accent = styles.getPropertyValue('--mood-accent').trim() || '#5fa3a9';
+    const accent2 = styles.getPropertyValue('--mood-accent-2').trim() || '#8f6ea9';
+    const accent3 = styles.getPropertyValue('--mood-accent-3').trim() || '#d9b8a6';
+    return { accent, accent2, accent3 };
+};
+
 // Simple noise function for organic wave movement
 function createNoise() {
     const permutation = Array.from({ length: 256 }, (_, i) => i);
@@ -35,6 +54,7 @@ export default function AnimatedBackground({ className = '' }: AnimatedBackgroun
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const animationRef = useRef<number>(0);
     const noiseRef = useRef(createNoise());
+    const paletteRef = useRef(readMoodPalette());
 
     useEffect(() => {
         const canvas = canvasRef.current;
@@ -58,13 +78,15 @@ export default function AnimatedBackground({ className = '' }: AnimatedBackgroun
 
         const noise = noiseRef.current;
 
-        // Wave configuration for lofi aesthetic
-        const waves = [
-            { amplitude: 60, frequency: 0.003, speed: 0.0003, color: 'rgba(168, 85, 247, 0.15)', offset: 0 },      // Purple
-            { amplitude: 80, frequency: 0.002, speed: 0.0004, color: 'rgba(156, 111, 196, 0.12)', offset: 100 },   // Lofi purple
-            { amplitude: 50, frequency: 0.004, speed: 0.0002, color: 'rgba(236, 72, 153, 0.10)', offset: 200 },    // Pink
-            { amplitude: 70, frequency: 0.0025, speed: 0.00035, color: 'rgba(59, 130, 246, 0.08)', offset: 150 },  // Blue
-        ];
+        const getWaves = () => {
+            const { accent, accent2, accent3 } = paletteRef.current;
+            return [
+                { amplitude: 55, frequency: 0.0028, speed: 0.00025, color: toRgba(accent, 0.12), offset: 0 },
+                { amplitude: 70, frequency: 0.002, speed: 0.00032, color: toRgba(accent2, 0.1), offset: 90 },
+                { amplitude: 45, frequency: 0.0036, speed: 0.0002, color: toRgba(accent2, 0.08), offset: 170 },
+                { amplitude: 65, frequency: 0.0023, speed: 0.0003, color: toRgba(accent3, 0.06), offset: 140 },
+            ];
+        };
 
         let time = 0;
 
@@ -73,10 +95,11 @@ export default function AnimatedBackground({ className = '' }: AnimatedBackgroun
             time += 1;
 
             // Clear with dark background
-            ctx.fillStyle = 'rgb(2, 6, 23)'; // slate-950
+            ctx.fillStyle = 'rgb(14, 16, 22)';
             ctx.fillRect(0, 0, width, height);
 
             // Draw each wave layer
+            const waves = getWaves();
             waves.forEach((wave) => {
                 ctx.beginPath();
                 ctx.moveTo(0, height);
@@ -99,19 +122,20 @@ export default function AnimatedBackground({ className = '' }: AnimatedBackgroun
                 width * 0.5, height * 0.3, 0,
                 width * 0.5, height * 0.3, width * 0.8
             );
-            gradient.addColorStop(0, 'rgba(168, 85, 247, 0.05)');
-            gradient.addColorStop(0.5, 'rgba(156, 111, 196, 0.03)');
+            const { accent, accent2 } = paletteRef.current;
+            gradient.addColorStop(0, toRgba(accent, 0.05));
+            gradient.addColorStop(0.5, toRgba(accent2, 0.025));
             gradient.addColorStop(1, 'transparent');
             ctx.fillStyle = gradient;
             ctx.fillRect(0, 0, width, height);
 
             // Floating particles
-            const particleCount = 30;
+            const particleCount = 18;
             for (let i = 0; i < particleCount; i++) {
                 const x = Math.abs((noise(i * 0.1 + time * 0.0001) + 1) * 0.5) * width;
                 const y = Math.abs((noise(i * 0.2 + time * 0.00015 + 100) + 1) * 0.5) * height;
                 const size = Math.max(0.5, Math.abs(noise(i * 0.3) + 1) * 1.5 + 0.5);
-                const alpha = Math.max(0.05, Math.abs(noise(i * 0.4 + time * 0.0002) + 1) * 0.15);
+                const alpha = Math.max(0.04, Math.abs(noise(i * 0.4 + time * 0.0002) + 1) * 0.1);
 
                 ctx.beginPath();
                 ctx.arc(x, y, size, 0, Math.PI * 2);
@@ -122,8 +146,15 @@ export default function AnimatedBackground({ className = '' }: AnimatedBackgroun
 
         draw();
 
+        const handleMoodChange = () => {
+            paletteRef.current = readMoodPalette();
+        };
+
+        window.addEventListener('moodchange', handleMoodChange);
+
         return () => {
             window.removeEventListener('resize', resize);
+            window.removeEventListener('moodchange', handleMoodChange);
             cancelAnimationFrame(animationRef.current);
         };
     }, []);

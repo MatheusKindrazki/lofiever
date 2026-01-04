@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from 'next';
+import { Fraunces, Manrope, JetBrains_Mono } from 'next/font/google';
 import { getMessages, setRequestLocale } from 'next-intl/server';
 import { routing } from '@/i18n/routing';
 import { notFound } from 'next/navigation';
@@ -36,6 +37,24 @@ export const viewport: Viewport = {
   userScalable: true,
 };
 
+const manrope = Manrope({
+    subsets: ['latin'],
+    variable: '--font-manrope',
+    display: 'swap',
+});
+
+const fraunces = Fraunces({
+    subsets: ['latin'],
+    variable: '--font-fraunces',
+    display: 'swap',
+});
+
+const jetbrains = JetBrains_Mono({
+    subsets: ['latin'],
+    variable: '--font-jetbrains-mono',
+    display: 'swap',
+});
+
 export default async function LocaleLayout({
   children,
   params,
@@ -68,7 +87,10 @@ export default async function LocaleLayout({
           crossOrigin="anonymous"
         />
       </head>
-      <body className="antialiased" suppressHydrationWarning>
+      <body
+        className={`${manrope.variable} ${fraunces.variable} ${jetbrains.variable} antialiased dark`}
+        suppressHydrationWarning
+      >
         <GoogleAnalytics />
         <IntlProviderWrapper key={locale} locale={locale} messages={messages}>
           <AppProviders key={locale}>{children}</AppProviders>
