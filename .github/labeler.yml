@@ -1,0 +1,104 @@
+# Configuration for actions/labeler
+# Automatically labels PRs based on files changed
+
+# Frontend changes
+frontend:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'app/**/*'
+          - 'components/**/*'
+          - 'styles/**/*'
+          - '*.css'
+          - 'tailwind.config.*'
+
+# Backend/Server changes
+backend:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'server/**/*'
+          - 'lib/server/**/*'
+
+# API changes
+api:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'app/api/**/*'
+          - 'server/api/**/*'
+
+# Database changes
+database:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'prisma/**/*'
+          - 'lib/db/**/*'
+          - 'lib/prisma/**/*'
+
+# Infrastructure/DevOps
+infrastructure:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'docker-compose*.yml'
+          - 'Dockerfile*'
+          - '.github/**/*'
+          - 'scripts/**/*'
+
+# Documentation
+documentation:
+  - changed-files:
+      - any-glob-to-any-file:
+          - '**/*.md'
+          - 'docs/**/*'
+
+# Tests
+tests:
+  - changed-files:
+      - any-glob-to-any-file:
+          - '**/*.test.ts'
+          - '**/*.test.tsx'
+          - '**/*.spec.ts'
+          - '**/*.spec.tsx'
+          - '__tests__/**/*'
+          - 'jest.config.*'
+
+# Configuration changes
+config:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'package.json'
+          - 'package-lock.json'
+          - 'tsconfig*.json'
+          - 'next.config.*'
+          - '.env.example'
+          - 'eslint.config.*'
+
+# Dependencies
+dependencies:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'package.json'
+          - 'package-lock.json'
+
+# AI/Chat related
+ai:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'lib/ai/**/*'
+          - 'app/**/chat/**/*'
+          - 'components/**/chat/**/*'
+          - 'server/**/ai/**/*'
+
+# Real-time/Socket
+realtime:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'server/socket/**/*'
+          - 'lib/socket/**/*'
+          - 'hooks/use*Socket*'
+
+# Internationalization
+i18n:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'messages/**/*'
+          - 'i18n/**/*'
+          - '**/locales/**/*'
