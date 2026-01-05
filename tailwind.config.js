@@ -38,6 +38,7 @@ export default {
         'slide-down': 'slideDown 0.5s ease-out',
         'scale-in': 'scaleIn 0.3s ease-out',
         'bounce-subtle': 'bounceSubtle 2s ease-in-out infinite',
+        'pulse-attention': 'pulseAttention 1.5s ease-in-out infinite',
       },
       keyframes: {
         fadeIn: {
@@ -63,6 +64,16 @@ export default {
         bounceSubtle: {
           '0%, 100%': { transform: 'translateY(0)' },
           '50%': { transform: 'translateY(-5px)' },
+        },
+        pulseAttention: {
+          '0%, 100%': {
+            transform: 'scale(1)',
+            boxShadow: '0 0 0 0 rgba(124, 58, 237, 0.7)',
+          },
+          '50%': {
+            transform: 'scale(1.08)',
+            boxShadow: '0 0 0 12px rgba(124, 58, 237, 0)',
+          },
         },
       },
       fontFamily: {
