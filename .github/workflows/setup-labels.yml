@@ -34,7 +34,6 @@ jobs:
               { name: 'api', color: 'e99695', description: 'API changes' },
               { name: 'database', color: 'd4c5f9', description: 'Database/Prisma changes' },
               { name: 'infrastructure', color: 'f9d0c4', description: 'Infrastructure/DevOps' },
-              { name: 'documentation', color: '0075ca', description: 'Documentation updates' },
               { name: 'tests', color: 'bfdadc', description: 'Test files changed' },
               { name: 'config', color: 'c5def5', description: 'Configuration changes' },
               { name: 'ai', color: '7057ff', description: 'AI/Chat related' },

@@ -43,7 +43,7 @@ infrastructure:
           - 'scripts/**/*'
 
 # Documentation
-documentation:
+docs:
   - changed-files:
       - any-glob-to-any-file:
           - '**/*.md'

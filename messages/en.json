@@ -4,8 +4,12 @@
         "appTagline": "24/7 Lofi streaming with virtual DJ",
         "appDescription": "24/7 online lofi radio. Perfect music for studying, working, and relaxing. Request songs from the virtual DJ!",
         "footer": {
-            "copyright": "© {year} Lofiever. All rights reserved.",
-            "madeWith": "Built with love using Next.js, React, and AI"
+            "createdBy": "Created by",
+            "starOnGithub": "Star on GitHub",
+            "suggestFeature": "Suggest Feature",
+            "openSource": "This is an open source project.",
+            "contribute": "Want to contribute?",
+            "copyright": "© {year} Lofiever. All rights reserved."
         }
     },
     "seo": {

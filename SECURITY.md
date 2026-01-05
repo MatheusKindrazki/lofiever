@@ -8,17 +8,13 @@
 
 ## Reporting a Vulnerability
 
-We take security seriously. If you discover a security vulnerability, please follow these steps:
+We take the security of Lofiever seriously. If you discover a security vulnerability, please report it responsibly.
 
-### Do NOT
+### How to Report
 
-- Open a public GitHub issue
-- Disclose the vulnerability publicly before it's fixed
-
-### DO
-
-1. **Email**: Send details to security@lofiever.app
-2. **Include**:
+1. **DO NOT** open a public issue for security vulnerabilities
+2. Email the maintainer directly at your security contact or use GitHub's private vulnerability reporting
+3. Include as much detail as possible:
    - Description of the vulnerability
    - Steps to reproduce
    - Potential impact
@@ -26,68 +22,66 @@ We take security seriously. If you discover a security vulnerability, please fol
 
 ### What to Expect
 
-- **Initial Response**: Within 48 hours
-- **Status Update**: Within 7 days
-- **Resolution Timeline**: Depends on severity
-  - Critical: 7 days
-  - High: 14 days
-  - Medium: 30 days
+- **Response Time**: We aim to respond within 48 hours
+- **Updates**: We'll keep you informed of our progress
+- **Credit**: If you'd like, we'll credit you in our release notes
 
-### After Resolution
+### Scope
 
-- We will credit you in the security advisory (unless you prefer anonymity)
-- We may offer recognition for significant vulnerabilities
+The following are in scope for security reports:
 
-## Security Best Practices for Contributors
+- Authentication and authorization issues
+- Data exposure vulnerabilities
+- Cross-site scripting (XSS)
+- SQL injection
+- Server-side request forgery (SSRF)
+- Remote code execution
+- Denial of service vulnerabilities
 
-1. **Never commit secrets** (API keys, passwords, tokens)
-2. **Use environment variables** for sensitive configuration
-3. **Validate all user input** on both client and server
-4. **Follow the principle of least privilege**
-5. **Keep dependencies updated** (run `npm audit` regularly)
+### Out of Scope
 
-## Known Security Considerations
+- Issues in dependencies (report these to the dependency maintainers)
+- Social engineering attacks
+- Physical security issues
+- Issues requiring physical access to a user's device
 
-### Authentication
+## Security Best Practices
 
-- Guest sessions use temporary tokens
-- Admin endpoints require authentication
-- Rate limiting is enabled by default
+When contributing to Lofiever, please follow these security guidelines:
 
-### Data Protection
+### Environment Variables
 
-- Chat messages are moderated by AI
-- User sessions expire automatically
-- Sensitive data is never logged
+- Never commit secrets or API keys
+- Use `.env.example` as a template without real values
+- Rotate credentials if accidentally exposed
 
-### Infrastructure
+### Dependencies
 
-- All production traffic should use HTTPS
-- Database credentials should be unique per environment
-- Redis should not be exposed publicly
+- Keep dependencies up to date
+- Review dependency changes in PRs
+- Use `npm audit` to check for known vulnerabilities
 
-### Audio Streaming
+### Code Review
 
-- Icecast admin panel should be protected
-- Source passwords should be strong and unique
-- Consider IP restrictions for streaming sources
+- All PRs require review before merging
+- Security-sensitive changes require additional scrutiny
+- Use parameterized queries for database operations
+- Sanitize user input before processing
 
-## Security Headers
+## Security Features
 
-The application implements security headers including:
+Lofiever implements the following security measures:
 
-- Content Security Policy (CSP)
-- X-Frame-Options
-- X-Content-Type-Options
-- Referrer-Policy
+- **Rate Limiting**: API endpoints are rate-limited to prevent abuse
+- **Input Validation**: All user input is validated using Zod schemas
+- **Authentication**: NextAuth.js for secure session management
+- **CORS**: Configured to allow only trusted origins
+- **Content Security**: DOMPurify for HTML sanitization in chat
 
-## Dependency Security
+## Acknowledgments
 
-We recommend running security audits regularly:
+We appreciate the security research community and thank all researchers who responsibly disclose vulnerabilities.
 
-```bash
-npm audit
-npm audit fix
-```
+---
 
-For critical vulnerabilities, update immediately and create a patch release.
+Thank you for helping keep Lofiever and our users safe!

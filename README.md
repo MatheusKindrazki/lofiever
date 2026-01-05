@@ -1,67 +1,134 @@
-# Lofiever - 24/7 Lo-fi Radio Stream
+<p align="center">
+  <img src="https://img.shields.io/badge/Next.js-15-black?style=for-the-badge&logo=next.js" alt="Next.js 15" />
+  <img src="https://img.shields.io/badge/React-19-61DAFB?style=for-the-badge&logo=react" alt="React 19" />
+  <img src="https://img.shields.io/badge/TypeScript-5-3178C6?style=for-the-badge&logo=typescript" alt="TypeScript" />
+  <img src="https://img.shields.io/badge/Tailwind-4-38B2AC?style=for-the-badge&logo=tailwindcss" alt="Tailwind CSS" />
+  <img src="https://img.shields.io/badge/Socket.IO-4-010101?style=for-the-badge&logo=socket.io" alt="Socket.IO" />
+  <img src="https://img.shields.io/badge/OpenAI-API-412991?style=for-the-badge&logo=openai" alt="OpenAI" />
+</p>
 
-A 24/7 lo-fi music streaming platform with real-time synchronization, AI-powered curation, live chat, and an immersive Zen Mode experience.
+<h1 align="center">Lofiever</h1>
+
+<p align="center">
+  <strong>24/7 Lo-fi Radio Stream with AI-Powered Virtual DJ</strong>
+</p>
+
+<p align="center">
+  A beautiful, immersive lo-fi music streaming platform where all listeners are synchronized,<br/>
+  featuring real-time chat, AI curation, and a stunning Zen Mode experience.
+</p>
+
+<p align="center">
+  <a href="#features">Features</a> •
+  <a href="#quick-start">Quick Start</a> •
+  <a href="#contributing">Contributing</a> •
+  <a href="#community">Community</a>
+</p>
+
+<p align="center">
+  <a href="https://github.com/MatheusKindrazki/lofiever/stargazers">
+    <img src="https://img.shields.io/github/stars/MatheusKindrazki/lofiever?style=social" alt="Stars" />
+  </a>
+  <a href="https://github.com/MatheusKindrazki/lofiever/network/members">
+    <img src="https://img.shields.io/github/forks/MatheusKindrazki/lofiever?style=social" alt="Forks" />
+  </a>
+  <a href="https://github.com/MatheusKindrazki/lofiever/issues">
+    <img src="https://img.shields.io/github/issues/MatheusKindrazki/lofiever" alt="Issues" />
+  </a>
+  <a href="LICENSE">
+    <img src="https://img.shields.io/github/license/MatheusKindrazki/lofiever" alt="License" />
+  </a>
+</p>
+
+---
 
 ## Features
 
-- **24/7 Live Radio Stream** - Continuous lo-fi music streaming via Icecast + Liquidsoap
-- **Real-time Synchronization** - All listeners hear the same music at the same time
-- **AI DJ Curation** - OpenAI-powered music recommendations and chat moderation
-- **Live Chat** - Real-time chat with AI moderation
-- **Zen Mode** - Fullscreen immersive experience with animated backgrounds and audio visualizer
-- **Multi-language Support** - English and Portuguese (next-intl)
-- **Dynamic Playlists** - AI-curated playlists that evolve continuously
+| Feature | Description |
+|---------|-------------|
+| **24/7 Live Radio** | Continuous lo-fi streaming via Icecast + Liquidsoap |
+| **Real-time Sync** | All listeners hear the same music at the same time |
+| **AI DJ (Lofine)** | OpenAI-powered virtual DJ that takes song requests and chats |
+| **Live Chat** | Real-time chat with AI moderation and private messaging |
+| **Zen Mode** | Fullscreen immersive experience with animated backgrounds |
+| **Multi-language** | English and Portuguese support |
+| **Dynamic Playlists** | AI-curated playlists that evolve based on mood and requests |
+
+## Tech Stack
+
+<table>
+  <tr>
+    <td align="center"><strong>Frontend</strong></td>
+    <td>Next.js 15, React 19, TypeScript, Tailwind CSS 4, Zustand, React Query</td>
+  </tr>
+  <tr>
+    <td align="center"><strong>Real-time</strong></td>
+    <td>Socket.IO for live chat and metadata sync</td>
+  </tr>
+  <tr>
+    <td align="center"><strong>Backend</strong></td>
+    <td>Node.js, PostgreSQL + Prisma, Redis</td>
+  </tr>
+  <tr>
+    <td align="center"><strong>Streaming</strong></td>
+    <td>Icecast + Liquidsoap for professional audio streaming</td>
+  </tr>
+  <tr>
+    <td align="center"><strong>AI</strong></td>
+    <td>OpenAI API for DJ personality and chat moderation</td>
+  </tr>
+  <tr>
+    <td align="center"><strong>Storage</strong></td>
+    <td>Cloudflare R2 for music files and artwork</td>
+  </tr>
+</table>
 
 ## Quick Start
 
-### 1. Start all services
+### Prerequisites
 
-```bash
+- Node.js 20.x or higher
+- Docker and Docker Compose
+- npm
+
+### 1. Clone and install
+
+\`\`\`bash
+git clone https://github.com/MatheusKindrazki/lofiever.git
+cd lofiever
+npm install
+\`\`\`
+
+### 2. Configure environment
+
+\`\`\`bash
+cp .env.example .env
+# Edit .env with your values
+\`\`\`
+
+### 3. Start all services
+
+\`\`\`bash
 npm run setup
-```
+\`\`\`
 
-This will:
-- Start all Docker containers (Icecast, Liquidsoap, PostgreSQL, Redis)
-- Verify all services are running
-- Display stream status and available URLs
+This starts Docker containers (Icecast, Liquidsoap, PostgreSQL, Redis) and verifies everything is running.
 
-### 2. Start the application
+### 4. Start development
 
-```bash
-# Development (both frontend and backend)
+\`\`\`bash
 npm run dev
+\`\`\`
 
-# Or separately:
-npm run dev:next    # Frontend only
-npm run dev:server  # Backend only
-```
+### 5. Open in browser
 
-## Architecture
-
-### Tech Stack
-
-| Layer | Technology |
-|-------|------------|
-| Frontend | Next.js 15, React 19, TypeScript |
-| Styling | Tailwind CSS 4 |
-| State Management | Zustand, React Query |
-| Real-time | Socket.IO |
-| Database | PostgreSQL + Prisma ORM |
-| Cache | Redis |
-| Streaming | Icecast + Liquidsoap |
-| AI | OpenAI API |
-| Storage | Cloudflare R2 |
-
-### Services (Docker)
-
-- **Icecast** - Audio streaming server (port 8000)
-- **Liquidsoap** - Audio processing and playlist engine
-- **PostgreSQL** - Primary database (port 5432)
-- **Redis** - Cache and real-time data (port 6379)
+- **Web app**: http://localhost:3000
+- **Audio stream**: http://localhost:8000/stream
+- **Icecast admin**: http://localhost:8000/admin/
 
 ## Project Structure
 
-```
+\`\`\`
 lofiever/
 ├── src/
 │   ├── app/              # Next.js App Router
@@ -74,190 +141,99 @@ lofiever/
 ├── server/               # Custom Node.js server (Socket.IO)
 ├── streaming/            # Icecast + Liquidsoap configs
 ├── prisma/               # Database schema and migrations
-├── messages/             # i18n translations
-├── i18n/                 # Internationalization config
-└── public/music/         # Music library
-```
+├── messages/             # i18n translations (en, pt)
+└── docs/                 # Documentation
+\`\`\`
 
 ## Available Scripts
 
-### Development
-
-```bash
-npm run dev          # Full dev server (Socket.IO + Next.js)
-npm run dev:next     # Next.js only (with Turbopack)
-npm run dev:server   # Socket.IO server only
-npm run build        # Production build
-npm run start        # Production server
-npm run lint         # ESLint check
-```
-
-### Docker
-
-```bash
-npm run docker:up       # Start containers
-npm run docker:down     # Stop containers
-npm run docker:logs     # View logs
-npm run docker:restart  # Restart containers
-```
-
-### Database
-
-```bash
-npm run db:seed         # Seed database
-npm run db:migrate      # Run migrations
-npm run db:generate     # Generate Prisma client
-```
-
-### Stream Monitoring
-
-```bash
-npm run stream:test     # Check stream status (JSON)
-npm run stream:monitor  # Monitor stream
-npm run stream:watch    # Continuous monitoring (5s interval)
-```
-
-### Utilities
-
-```bash
-npm run test:redis       # Test Redis connection
-npm run chat:clear       # Clear chat messages
-npm run session:clear    # Clear sessions
-npm run listeners:reset  # Reset listener count
-npm run playlist:reset   # Reset playlist
-```
-
-## Environment Variables
-
-Copy `.env.example` to `.env` and configure:
-
-```bash
-# Database
-DATABASE_URL="postgresql://postgres:postgres@localhost:5432/postgres?schema=public"
-
-# Redis
-REDIS_URL="redis://localhost:6379"
-
-# Cloudflare R2 (music storage)
-R2_ACCESS_KEY_ID=""
-R2_SECRET_ACCESS_KEY=""
-R2_ENDPOINT="https://<account_id>.r2.cloudflarestorage.com"
-R2_BUCKET_NAME="lofiever"
-R2_PUBLIC_URL="https://cdn.lofiever.dev"
-
-# OpenAI (AI DJ)
-OPENAI_API_KEY=""
-
-# Icecast
-ICECAST_SOURCE_PASSWORD=""
-ICECAST_ADMIN_PASSWORD=""
-ICECAST_RELAY_PASSWORD=""
-
-# Auth & Security
-AUTH_SECRET=""
-API_SECRET_KEY=""
-ALLOWED_ORIGINS="http://localhost:3000"
-```
-
-See [ENV_VARIABLES.md](./ENV_VARIABLES.md) for complete documentation.
-
-## Available Endpoints
-
-| URL | Description |
-|-----|-------------|
-| http://localhost:3000 | Web application |
-| http://localhost:8000/stream | Audio stream |
-| http://localhost:8000/admin/ | Icecast admin panel |
-
-## Docker Deployment (Coolify)
-
-The project includes production-ready Docker configuration:
-
-- `Dockerfile` - Multi-stage build for Next.js with custom server
-- `docker-compose.yml` - Production configuration for Coolify
-- `docker-compose.dev.yml` - Local development configuration
-
-### Deploy to Coolify
-
-1. Create a new service in Coolify
-2. Connect your Git repository
-3. Configure environment variables
-4. Deploy using docker-compose
-
-## API Endpoints
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/health` | GET | Health check |
-| `/api/stream` | GET | Current stream data |
-| `/api/playlist` | GET | Active playlist |
-| `/api/tracks` | GET | Available tracks |
-| `/api/stats` | GET | Stream statistics |
-| `/api/curation/process-message` | POST | AI chat processing |
-| `/api/next-track` | GET | Get next track (Liquidsoap) |
-
-## Testing the Stream
-
-### Browser
-Open http://localhost:8000/stream in any audio player
-
-### VLC
-```bash
-vlc http://localhost:8000/stream
-```
-
-### cURL
-```bash
-curl -I http://localhost:8000/stream
-```
-
-## Troubleshooting
-
-### Stream not working
-
-```bash
-# Check containers
-docker-compose ps
-
-# View logs
-npm run docker:logs
-
-# Restart everything
-npm run docker:restart
-npm run setup
-```
-
-### Port conflicts
-
-Ensure these ports are available:
-- 8000 (Icecast)
-- 5432 (PostgreSQL)
-- 6379 (Redis)
-- 3000 (Next.js)
-
-### Detailed logs
-
-```bash
-# Liquidsoap logs
-docker-compose logs liquidsoap
-
-# Icecast logs
-docker-compose logs icecast
-```
+| Command | Description |
+|---------|-------------|
+| \`npm run dev\` | Start development server (Socket.IO + Next.js) |
+| \`npm run build\` | Build for production |
+| \`npm run start\` | Start production server |
+| \`npm run lint\` | Run ESLint |
+| \`npm test\` | Run tests |
+| \`npm run docker:up\` | Start Docker containers |
+| \`npm run docker:down\` | Stop Docker containers |
+| \`npm run db:migrate\` | Run database migrations |
+| \`npm run db:seed\` | Seed database with sample data |
 
 ## Contributing
 
+We love contributions! Lofiever is open source and we welcome contributors of all skill levels.
+
+### Ways to Contribute
+
+- **Report bugs** - Found something broken? [Open an issue](https://github.com/MatheusKindrazki/lofiever/issues/new?template=bug_report.md)
+- **Suggest features** - Have an idea? [Request a feature](https://github.com/MatheusKindrazki/lofiever/issues/new?template=feature_request.md)
+- **Submit PRs** - Code contributions are always welcome
+- **Improve docs** - Help make our documentation better
+- **Star the repo** - Show your support!
+
+### Good First Issues
+
+New to the project? Look for issues labeled [\`good first issue\`](https://github.com/MatheusKindrazki/lofiever/labels/good%20first%20issue) - these are beginner-friendly and a great way to start contributing.
+
+### Getting Started
+
 1. Fork the repository
-2. Create a feature branch
-3. Commit your changes
-4. Push to the branch
-5. Open a Pull Request
+2. Create a feature branch (\`git checkout -b feat/amazing-feature\`)
+3. Make your changes following our [Contributing Guide](CONTRIBUTING.md)
+4. Commit using [Conventional Commits](https://www.conventionalcommits.org/) (\`feat: add amazing feature\`)
+5. Push and open a Pull Request
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines.
+
+## Community
+
+- **Issues**: [Report bugs or request features](https://github.com/MatheusKindrazki/lofiever/issues)
+- **Discussions**: [Ask questions and share ideas](https://github.com/MatheusKindrazki/lofiever/discussions)
+- **Pull Requests**: [Contribute code](https://github.com/MatheusKindrazki/lofiever/pulls)
+
+## Documentation
+
+| Document | Description |
+|----------|-------------|
+| [CONTRIBUTING.md](CONTRIBUTING.md) | How to contribute to the project |
+| [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) | Community guidelines |
+| [SECURITY.md](SECURITY.md) | Security policy and reporting |
+| [ENV_VARIABLES.md](ENV_VARIABLES.md) | Environment variables reference |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | System architecture overview |
+| [docs/STREAMING.md](docs/STREAMING.md) | Audio streaming configuration |
+
+## Roadmap
+
+- [ ] Mobile app (React Native)
+- [ ] More languages (Spanish, French, Japanese)
+- [ ] User accounts and personalized playlists
+- [ ] Discord bot integration
+- [ ] Spotify/Apple Music integration for song metadata
+- [ ] Community-submitted music
+
+See our [project board](https://github.com/MatheusKindrazki/lofiever/projects) for current development priorities.
+
+## Support the Project
+
+If you enjoy Lofiever, please consider:
+
+- Giving the repo a star
+- Sharing with friends who love lo-fi music
+- Contributing code or documentation
+- Reporting bugs or suggesting features
 
 ## License
 
-This project is under the MIT License. See the LICENSE file for details.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ---
 
-**Author**: Matheus Kindrazki
-**Version**: 0.1.0
+<p align="center">
+  Made with love by <a href="https://github.com/MatheusKindrazki">@MatheusKindrazki</a>
+</p>
+
+<p align="center">
+  <a href="https://github.com/MatheusKindrazki/lofiever">
+    <img src="https://img.shields.io/badge/GitHub-lofiever-181717?style=for-the-badge&logo=github" alt="GitHub" />
+  </a>
+</p>
