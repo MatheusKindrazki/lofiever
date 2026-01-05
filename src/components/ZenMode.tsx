@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useTranslations } from 'next-intl';
+import { useTranslations, useLocale } from 'next-intl';
 import Image from 'next/image';
 import { useChat as useSocketChat, useSocket, usePlaybackSync, useListeners } from '../lib/socket/client';
 import { useUserPreferences } from '../hooks/useUserPreferences';
@@ -109,6 +109,7 @@ const AuroraBackground = () => {
             const dpr = window.devicePixelRatio || 1;
             canvas.width = width * dpr;
             canvas.height = height * dpr;
+            ctx.setTransform(1, 0, 0, 1, 0, 0);
             ctx.scale(dpr, dpr);
         };
 
@@ -378,6 +379,7 @@ export default function ZenMode({
 }: ZenModeProps) {
     const playerT = useTranslations('player');
     const chatT = useTranslations('chat');
+    const locale = useLocale();
 
     const [showChat, setShowChat] = useState(false);
     const [showInput, setShowInput] = useState(false);
@@ -425,11 +427,11 @@ export default function ZenMode({
 
     const handleSendMessage = useCallback(() => {
         if (inputValue.trim() && sendChatMessage && isConnected) {
-            sendChatMessage(inputValue, { isPrivate: false, locale: 'pt' });
+            sendChatMessage(inputValue, { isPrivate: false, locale });
             setInputValue('');
             setShowInput(false);
         }
-    }, [inputValue, sendChatMessage, isConnected]);
+    }, [inputValue, sendChatMessage, isConnected, locale]);
 
     // Keyboard shortcuts
     useEffect(() => {
