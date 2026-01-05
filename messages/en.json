@@ -34,12 +34,24 @@
         "loadingHistory": "Loading history...",
         "zenMode": {
             "activate": "Zen Mode",
-            "exit": "Exit Zen"
+            "exit": "Exit Zen",
+            "loading": "Loading...",
+            "hints": {
+                "exit": "Exit",
+                "chat": "Chat",
+                "reply": "Reply",
+                "playPause": "Play/Pause",
+                "hideHints": "Hide hints",
+                "spaceKey": "Space",
+                "pressEnterOrEsc": "Press <enter>Enter</enter> to send or <esc>Esc</esc> to cancel"
+            }
         }
     },
     "chat": {
         "djName": "Lofine DJ",
         "djStatus": "Online • Ready to help",
+        "showChat": "Show chat",
+        "hideChat": "Hide chat",
         "welcome": {
             "title": "Hello! I'm Lofine",
             "description": "Your virtual DJ. Request songs, suggest a mood, or just chat about the playlist!"
