@@ -38,6 +38,7 @@ export default function RadioPlayer({ zen = false }: { zen?: boolean }): React.R
     const t = useTranslations('player');
     const [playing, setPlaying] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
+    const [autoplayBlocked, setAutoplayBlocked] = useState(false);
     const [isClient, setIsClient] = useState(false);
     const [activeTab, setActiveTab] = useState<'upcoming' | 'history'>('upcoming');
     const [selectedHistoryDate, setSelectedHistoryDate] = useState(new Date());
@@ -117,7 +118,10 @@ export default function RadioPlayer({ zen = false }: { zen?: boolean }): React.R
         audio.addEventListener('loadstart', handleLoadStart);
         audio.addEventListener('canplay', handleCanPlay);
 
-        audio.play().catch(e => console.warn("Autoplay blocked", e));
+        audio.play().catch(e => {
+            console.warn("Autoplay blocked", e);
+            setAutoplayBlocked(true);
+        });
 
         return () => {
             audio.pause();
@@ -167,6 +171,7 @@ export default function RadioPlayer({ zen = false }: { zen?: boolean }): React.R
 
     const togglePlayPause = () => {
         if (!audioRef.current) return;
+        setAutoplayBlocked(false);
         if (playing) {
             audioRef.current.pause();
         } else {
@@ -225,6 +230,7 @@ export default function RadioPlayer({ zen = false }: { zen?: boolean }): React.R
         setSelectedHistoryDate,
         formatDuration,
         analyser,
+        autoplayBlocked,
     };
 
     return zen ? <ZenPlayer {...playerProps} /> : <StandardPlayer {...playerProps} />;
@@ -232,7 +238,7 @@ export default function RadioPlayer({ zen = false }: { zen?: boolean }): React.R
 
 // Zen Player Layout
 const ZenPlayer = (props: any) => {
-    const { t, currentSong, playing, isLoading, togglePlayPause, volume, handleVolumeChange, listenersCount, analyser } = props;
+    const { t, currentSong, playing, isLoading, togglePlayPause, volume, handleVolumeChange, listenersCount, analyser, autoplayBlocked } = props;
 
     return (
         <div className="relative w-full h-full flex flex-col items-center justify-center text-center">
@@ -271,7 +277,11 @@ const ZenPlayer = (props: any) => {
                         />
                         <button
                             onClick={togglePlayPause}
-                            className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 group-hover:opacity-100 transition-all duration-300 backdrop-blur-sm"
+                            className={`absolute inset-0 flex items-center justify-center bg-black/50 transition-all duration-300 backdrop-blur-sm ${
+                                autoplayBlocked && !playing
+                                    ? 'opacity-100 animate-pulse-attention'
+                                    : 'opacity-0 group-hover:opacity-100'
+                            }`}
                             aria-label={props.playing ? "Pause" : "Play"}
                         >
                             {isLoading ? (
@@ -336,7 +346,7 @@ const ZenPlayer = (props: any) => {
 
 // Standard Player Layout
 const StandardPlayer = (props: any) => {
-    const { t, currentSong, playing, isLoading, togglePlayPause, volume, handleVolumeChange, listenersCount, playlistData, activeTab, setActiveTab, historyLoading, dailyHistory, selectedHistoryDate, setSelectedHistoryDate, formatDuration } = props;
+    const { t, currentSong, playing, isLoading, togglePlayPause, volume, handleVolumeChange, listenersCount, playlistData, activeTab, setActiveTab, historyLoading, dailyHistory, selectedHistoryDate, setSelectedHistoryDate, formatDuration, autoplayBlocked } = props;
 
     return (
         <div className="relative w-full rounded-2xl overflow-hidden h-full flex flex-col border border-white/10 bg-gradient-to-b from-[#141824] via-[#1a1f2d] to-[#141824] shadow-2xl shadow-black/40">
@@ -358,7 +368,15 @@ const StandardPlayer = (props: any) => {
                         />
                         <div className="relative w-44 h-44 mx-auto rounded-xl shadow-[0_20px_50px_rgba(124,58,237,0.4)] overflow-hidden border-2 border-white/15 group">
                             <Image src={currentSong.artworkUrl} alt={`${currentSong.title} by ${currentSong.artist}`} fill className="object-cover" priority unoptimized />
-                            <button onClick={togglePlayPause} className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 group-hover:opacity-100 transition-all duration-300 backdrop-blur-sm" aria-label={playing ? "Pause" : "Play"}>
+                            <button
+                                onClick={togglePlayPause}
+                                className={`absolute inset-0 flex items-center justify-center bg-black/50 transition-all duration-300 backdrop-blur-sm ${
+                                    autoplayBlocked && !playing
+                                        ? 'opacity-100 animate-pulse-attention'
+                                        : 'opacity-0 group-hover:opacity-100'
+                                }`}
+                                aria-label={playing ? "Pause" : "Play"}
+                            >
                                 {isLoading ? <div className="w-12 h-12 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : playing ? <PauseIcon className="w-14 h-14 text-white drop-shadow-lg" /> : <PlayIcon className="w-14 h-14 text-white drop-shadow-lg" />}
                             </button>
                         </div>
