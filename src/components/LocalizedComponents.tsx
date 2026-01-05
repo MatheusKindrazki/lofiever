@@ -4,13 +4,105 @@ import { useLocale, useTranslations } from 'next-intl';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import RadioPlayer from './RadioPlayer';
 import ChatRoom from './ChatRoom';
-import AnimatedBackground from './AnimatedBackground';
+import ZenMode from './ZenMode';
+import { useUserPreferences } from '../hooks/useUserPreferences';
 
 export function LocalizedComponents() {
     const locale = useLocale();
     const t = useTranslations('player');
     const [zenMode, setZenMode] = useState(false);
+    const [playing, setPlaying] = useState(false);
+    const [isLoading, setIsLoading] = useState(true);
     const zenContainerRef = useRef<HTMLDivElement>(null);
+
+    const audioRef = useRef<HTMLAudioElement | null>(null);
+    const audioContextRef = useRef<AudioContext | null>(null);
+    const [analyser, setAnalyser] = useState<AnalyserNode | null>(null);
+    const sourceRef = useRef<MediaElementAudioSourceNode | null>(null);
+
+    const { preferences, isLoaded } = useUserPreferences();
+    const volume = preferences.volume;
+
+    // Setup audio element
+    useEffect(() => {
+        if (audioRef.current || !isLoaded) return;
+
+        const audio = new Audio();
+        audioRef.current = audio;
+        audio.crossOrigin = 'anonymous';
+        audio.volume = volume / 100;
+        audio.src = '/api/stream/audio-stream?proxy=true';
+        audio.load();
+
+        const handlePlaying = () => setPlaying(true);
+        const handlePause = () => setPlaying(false);
+        const handleError = (e: Event) => console.error('Audio error:', e);
+        const handleLoadStart = () => setIsLoading(true);
+        const handleCanPlay = () => setIsLoading(false);
+
+        audio.addEventListener('playing', handlePlaying);
+        audio.addEventListener('pause', handlePause);
+        audio.addEventListener('error', handleError);
+        audio.addEventListener('loadstart', handleLoadStart);
+        audio.addEventListener('canplay', handleCanPlay);
+
+        audio.play().catch(e => console.warn('Autoplay blocked', e));
+
+        return () => {
+            audio.pause();
+            audio.removeEventListener('playing', handlePlaying);
+            audio.removeEventListener('pause', handlePause);
+            audio.removeEventListener('error', handleError);
+            audio.removeEventListener('loadstart', handleLoadStart);
+            audio.removeEventListener('canplay', handleCanPlay);
+            sourceRef.current?.disconnect();
+            audioContextRef.current?.close();
+        };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isLoaded]);
+
+    // Update volume when preferences change
+    useEffect(() => {
+        if (audioRef.current) {
+            audioRef.current.volume = volume / 100;
+        }
+    }, [volume]);
+
+    const initAudioContext = useCallback(() => {
+        if (!audioRef.current || audioContextRef.current) return;
+
+        try {
+            const context = new (window.AudioContext || (window as any).webkitAudioContext)();
+            audioContextRef.current = context;
+            const analyserNode = context.createAnalyser();
+            analyserNode.fftSize = 256;
+            setAnalyser(analyserNode);
+
+            if (!sourceRef.current) {
+                sourceRef.current = context.createMediaElementSource(audioRef.current);
+            }
+            sourceRef.current.connect(analyserNode);
+            analyserNode.connect(context.destination);
+        } catch (error) {
+            console.error('Failed to initialize AudioContext:', error);
+        }
+    }, []);
+
+    const togglePlayPause = useCallback(() => {
+        if (!audioRef.current) return;
+        if (playing) {
+            audioRef.current.pause();
+        } else {
+            setIsLoading(true);
+            audioRef.current.src = '/api/stream/audio-stream?proxy=true&t=' + Date.now();
+            audioRef.current.load();
+            initAudioContext();
+            audioRef.current.play().catch(e => {
+                console.error('Play error:', e);
+                setIsLoading(false);
+            });
+        }
+    }, [playing, initAudioContext]);
 
     // Handle fullscreen changes - exit zen mode when user exits fullscreen
     useEffect(() => {
@@ -45,17 +137,12 @@ export function LocalizedComponents() {
         }
     }, [zenMode]);
 
-    // Handle ESC key to exit zen mode
-    useEffect(() => {
-        const handleKeyDown = (e: KeyboardEvent) => {
-            if (e.key === 'Escape' && zenMode && !document.fullscreenElement) {
-                setZenMode(false);
-            }
-        };
-
-        document.addEventListener('keydown', handleKeyDown);
-        return () => document.removeEventListener('keydown', handleKeyDown);
-    }, [zenMode]);
+    const exitZenMode = useCallback(async () => {
+        setZenMode(false);
+        if (document.fullscreenElement) {
+            await document.exitFullscreen();
+        }
+    }, []);
 
     return (
         <div className="w-full space-y-6" ref={zenContainerRef}>
@@ -77,29 +164,13 @@ export function LocalizedComponents() {
 
             {/* Zen Mode Fullscreen Layout */}
             {zenMode && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950 overflow-hidden">
-                    {/* Animated background - inside zen container */}
-                    <div className="absolute inset-0 z-0">
-                        <AnimatedBackground />
-                    </div>
-
-                    {/* Exit button */}
-                    <button
-                        type="button"
-                        onClick={toggleZenMode}
-                        className="absolute top-6 right-6 z-50 px-4 py-2 text-sm font-medium rounded-full border transition-all duration-300 flex items-center gap-2 bg-white/10 text-white/80 border-white/20 hover:bg-white/20 hover:text-white backdrop-blur-sm"
-                    >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                        {t('zenMode.exit')}
-                    </button>
-
-                    {/* Centered Player */}
-                    <div className="relative z-10 w-full max-w-2xl px-8">
-                        <RadioPlayer key={`player-zen-${locale}`} zen={true} />
-                    </div>
-                </div>
+                <ZenMode
+                    onExit={exitZenMode}
+                    analyser={analyser}
+                    playing={playing}
+                    isLoading={isLoading}
+                    togglePlayPause={togglePlayPause}
+                />
             )}
 
             {/* Main Content Grid (Normal Mode) */}
