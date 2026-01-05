@@ -395,8 +395,9 @@ export const redisHelpers = {
 
       if (user?.username) {
         console.log(`[Redis] Username found in DB for ${userId}: ${user.username}, caching...`);
-        // Cache it in Redis for future lookups
+        // Cache it in Redis for future lookups with TTL to keep cache fresh (24 hours)
         await redis.hset(key, { username: user.username });
+        await redis.expire(key, 86400); // 24 hours TTL
         return user.username;
       }
     } catch (error) {

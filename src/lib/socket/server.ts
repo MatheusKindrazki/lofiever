@@ -32,28 +32,27 @@ const IDEMPOTENCY_TTL = 300; // 5 minutes TTL for idempotency keys
 type AIMessagesPayload = Array<{ role: 'user' | 'assistant'; content: string }>;
 const normalizeLocale = (locale?: string | null): 'pt' | 'en' => (locale === 'en' ? 'en' : 'pt');
 
-// Simple in-memory rate limiter (use Redis in production for multi-instance)
-const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
-
 /**
- * Check if user is rate limited
+ * Check if user is rate limited using Redis for multi-instance consistency
  * @returns true if rate limited, false if allowed
  */
-function isRateLimited(userId: string): boolean {
-  const now = Date.now();
-  const userLimit = rateLimitMap.get(userId);
+async function isRateLimited(userId: string): Promise<boolean> {
+  const key = `ratelimit:chat:${userId}`;
 
-  if (!userLimit || now > userLimit.resetTime) {
-    rateLimitMap.set(userId, { count: 1, resetTime: now + MESSAGE_RATE_WINDOW * 1000 });
+  try {
+    const count = await redis.incr(key);
+
+    if (count === 1) {
+      // Set expiry on first message of the window
+      await redis.expire(key, MESSAGE_RATE_WINDOW);
+    }
+
+    return count > MESSAGE_RATE_LIMIT;
+  } catch (error) {
+    console.error('[RateLimit] Redis error, allowing message:', error);
+    // Fail open - allow message if Redis is unavailable
     return false;
   }
-
-  if (userLimit.count >= MESSAGE_RATE_LIMIT) {
-    return true;
-  }
-
-  userLimit.count++;
-  return false;
 }
 
 /**
@@ -105,8 +104,11 @@ export function createSocketServer(httpServer: HTTPServer): SocketIOServer<Clien
     },
   });
 
-  // Setup Redis adapter for multi-instance scaling
-  setupRedisAdapter(io);
+  // Setup Redis adapter for multi-instance scaling (runs async, non-blocking)
+  // The adapter will be ready before most connections since Redis connects quickly
+  setupRedisAdapter(io).catch((error) => {
+    console.error('[Socket.IO] Unexpected error in Redis adapter setup:', error);
+  });
 
   // Add connection middleware
   setupMiddleware(io);
@@ -129,7 +131,7 @@ export function createSocketServer(httpServer: HTTPServer): SocketIOServer<Clien
 }
 
 // Setup Redis adapter for multi-instance scaling
-function setupRedisAdapter(io: SocketIOServer<ClientToServerEvents, ServerToClientEvents>): void {
+async function setupRedisAdapter(io: SocketIOServer<ClientToServerEvents, ServerToClientEvents>): Promise<void> {
   try {
     // Create dedicated Redis clients for the adapter (separate from main redis client)
     redisPubClient = new Redis(config.redis.url, {
@@ -138,19 +140,13 @@ function setupRedisAdapter(io: SocketIOServer<ClientToServerEvents, ServerToClie
     });
     redisSubClient = redisPubClient.duplicate();
 
-    // Connect both clients
-    Promise.all([redisPubClient.connect(), redisSubClient.connect()])
-      .then(() => {
-        io.adapter(createAdapter(redisPubClient!, redisSubClient!));
-        console.log('[Socket.IO] Redis adapter enabled for multi-instance scaling');
-      })
-      .catch((error) => {
-        console.error('[Socket.IO] Failed to setup Redis adapter:', error);
-        console.log('[Socket.IO] Falling back to in-memory adapter (single instance only)');
-      });
+    // Connect both clients and wait for them to be ready
+    await Promise.all([redisPubClient.connect(), redisSubClient.connect()]);
+    io.adapter(createAdapter(redisPubClient, redisSubClient));
+    console.log('[Socket.IO] Redis adapter enabled for multi-instance scaling');
   } catch (error) {
-    console.error('[Socket.IO] Error creating Redis adapter clients:', error);
-    console.log('[Socket.IO] Using in-memory adapter (single instance only)');
+    console.error('[Socket.IO] Failed to setup Redis adapter:', error);
+    console.log('[Socket.IO] Falling back to in-memory adapter (single instance only)');
   }
 }
 
@@ -262,7 +258,7 @@ function setupEventHandlers(io: SocketIOServer<ClientToServerEvents, ServerToCli
 
       try {
         // 0a. Check rate limit
-        if (isRateLimited(userId)) {
+        if (await isRateLimited(userId)) {
           console.log(`[RateLimit] User ${userId} exceeded rate limit`);
           const errorMsg = locale === 'en'
             ? 'Too many messages. Please wait a moment.'

@@ -1,12 +1,16 @@
 import { z } from 'zod';
 
 // Chat message payload schema with validation
+// Note: trim() is applied BEFORE validation to ensure empty strings after trim are rejected
 export const ChatMessagePayloadSchema = z.object({
   content: z
     .string()
-    .min(1, 'Message cannot be empty')
-    .max(2000, 'Message too long (max 2000 characters)')
-    .transform((val) => val.trim()),
+    .transform((val) => val.trim())
+    .pipe(
+      z.string()
+        .min(1, 'Message cannot be empty')
+        .max(2000, 'Message too long (max 2000 characters)')
+    ),
   type: z.enum(['user', 'system', 'ai']).default('user'),
   isPrivate: z.boolean().optional().default(false),
   locale: z.enum(['pt', 'en']).optional(),
