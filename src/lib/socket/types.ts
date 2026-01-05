@@ -1,6 +1,21 @@
 import type { Track } from '../redis';
 import type { ChatMessage } from '../redis';
 
+// Message payload with idempotency key to prevent duplicates
+export interface ChatMessagePayload {
+  content: string;
+  type: 'user' | 'system' | 'ai';
+  isPrivate?: boolean;
+  locale?: 'pt' | 'en';
+  clientMessageId?: string; // Idempotency key - prevents duplicate processing on retry
+}
+
+// AI message complete with optional skip flag
+export interface AIMessageCompletePayload {
+  messageId: string;
+  skipped?: boolean; // True if AI processing was skipped (e.g., no listeners)
+}
+
 export const SOCKET_EVENTS = {
   // Connection events
   CONNECT: 'connect',
@@ -55,14 +70,14 @@ export interface ServerToClientEvents {
   [SOCKET_EVENTS.LISTENERS_UPDATE]: (data: { count: number }) => void;
   [SOCKET_EVENTS.ERROR]: (error: { message: string }) => void;
   [SOCKET_EVENTS.AI_MESSAGE_CHUNK]: (data: { chunk: string; messageId: string }) => void;
-  [SOCKET_EVENTS.AI_MESSAGE_COMPLETE]: (data: { messageId: string }) => void;
+  [SOCKET_EVENTS.AI_MESSAGE_COMPLETE]: (data: AIMessageCompletePayload) => void;
   [SOCKET_EVENTS.DJ_ANNOUNCEMENT]: (data: { message: string; track?: Track }) => void;
   [SOCKET_EVENTS.USER_UPDATE]: (data: { username: string }) => void;
 }
 
 export interface ClientToServerEvents {
   [SOCKET_EVENTS.SYNC_REQUEST]: () => void;
-  [SOCKET_EVENTS.CHAT_MESSAGE]: (message: { content: string; type: 'user' | 'system' | 'ai'; isPrivate?: boolean; locale?: 'pt' | 'en' }) => void;
+  [SOCKET_EVENTS.CHAT_MESSAGE]: (message: ChatMessagePayload) => void;
   [SOCKET_EVENTS.PLAYLIST_VOTE]: (trackId: string) => void;
   [SOCKET_EVENTS.HEARTBEAT]: () => void;
 }
