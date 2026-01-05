@@ -429,7 +429,8 @@ export default function ZenMode({
 
     const handleSendMessage = useCallback(() => {
         if (inputValue.trim() && sendChatMessage && isConnected) {
-            sendChatMessage(inputValue, { isPrivate: false, locale: locale as 'pt' | 'en' });
+            const validLocale = (locale === 'pt' || locale === 'en') ? locale : 'pt';
+            sendChatMessage(inputValue, { isPrivate: false, locale: validLocale });
             setInputValue('');
             setShowInput(false);
         }
@@ -589,7 +590,7 @@ export default function ZenMode({
                                 <button
                                     onClick={togglePlayPause}
                                     className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-all duration-300 backdrop-blur-sm"
-                                    aria-label={playing ? 'Pause' : 'Play'}
+                                    aria-label={playing ? playerT('paused') : playerT('live')}
                                 >
                                     {isLoading ? (
                                         <div className="w-16 h-16 border-4 border-white border-t-transparent rounded-full animate-spin" />
@@ -644,7 +645,7 @@ export default function ZenMode({
                                         value={volume}
                                         onChange={handleVolumeChange}
                                         className="w-full h-1.5 accent-lofi-500 bg-white/20 rounded-full appearance-none cursor-pointer"
-                                        aria-label="Volume"
+                                        aria-label={playerT('volume')}
                                     />
                                     <span className="text-xs text-white/60 w-8 text-right font-mono">{volume}</span>
                                 </div>
