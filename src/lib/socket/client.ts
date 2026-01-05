@@ -167,6 +167,8 @@ export function useSocket() {
           initializingRef.current = true;
 
           let token = session?.token;
+          let userId = session?.userId;
+          let username = session?.username;
 
           // If no session, try to restore or create one
           if (!token) {
@@ -186,7 +188,7 @@ export function useSocket() {
             // Maybe we connect unauthenticated first? Or wait?
             // The original code auto-created a guest token.
 
-            // Let's keep the auto-creation for now if no session exists, 
+            // Let's keep the auto-creation for now if no session exists,
             // but use the loginAsGuest from the hook to persist it.
             if (!session) {
               try {
@@ -194,6 +196,8 @@ export function useSocket() {
                 const storedUsername = localStorage.getItem('username'); // Legacy check?
                 const newSession = await loginAsGuest(storedUsername || undefined);
                 token = newSession.token;
+                userId = newSession.userId;
+                username = newSession.username;
               } catch (e) {
                 console.error('Failed to auto-login guest', e);
               }
@@ -206,12 +210,12 @@ export function useSocket() {
               : null;
             const preferredLocale: 'pt' | 'en' = pathLocale === 'en' ? 'en' : 'pt';
 
-            console.log('[Client] Initializing socket with token', { userId: session?.userId, username: session?.username, preferredLocale });
+            console.log('[Client] Initializing socket with token', { userId, username, preferredLocale });
             currentTokenRef.current = token;
             socket = initializeSocket({
               token,
-              userId: session?.userId,
-              username: session?.username,
+              userId,
+              username,
               locale: preferredLocale
             });
             setSocketInstance(socket);

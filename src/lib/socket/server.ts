@@ -208,6 +208,10 @@ function setupEventHandlers(io: SocketIOServer<ClientToServerEvents, ServerToCli
       await redisHelpers.addListener(socket.id);
       await redisHelpers.markUserActive(userId);
 
+      // Immediately sync the server-assigned username back to the client
+      // This ensures the client always uses the authoritative username from the server
+      socket.emit(SOCKET_EVENTS.USER_UPDATE, { username });
+
       await syncClientState(socket);
 
       // Get fresh count after all operations to avoid race conditions
