@@ -14,8 +14,34 @@ const nanoid = customAlphabet('1234567890abcdefghijklmnopqrstuvwxyz', 10);
 let socket: Socket<ServerToClientEvents, ClientToServerEvents> | null = null;
 
 /**
- * Initialize socket connection (should be called only once)
+ * Exponential backoff configuration for reconnection
+ * Starts at 1s, maxes at 30s, with full jitter to prevent thundering herd
  */
+const RECONNECTION_CONFIG = {
+  initialDelay: 1000,      // Start at 1 second
+  maxDelay: 30000,         // Max 30 seconds
+  factor: 2,               // Double each time
+  maxAttempts: 10,         // Max 10 attempts before giving up
+  jitter: true,            // Add randomness to prevent thundering herd
+};
+
+/**
+ * Calculate delay with exponential backoff and optional jitter
+ */
+function calculateBackoff(attempt: number): number {
+  const baseDelay = Math.min(
+    RECONNECTION_CONFIG.initialDelay * Math.pow(RECONNECTION_CONFIG.factor, attempt),
+    RECONNECTION_CONFIG.maxDelay
+  );
+
+  if (RECONNECTION_CONFIG.jitter) {
+    // Full jitter: random value between 0 and baseDelay
+    return Math.random() * baseDelay;
+  }
+
+  return baseDelay;
+}
+
 /**
  * Initialize socket connection (should be called only once)
  */
@@ -25,22 +51,38 @@ export function initializeSocket(auth: { token: string; userId?: string; usernam
       path: config.socket.path,
       transports: ['websocket'],
       autoConnect: true,
-      reconnectionAttempts: 5,
-      reconnectionDelay: 1000,
+      reconnectionAttempts: RECONNECTION_CONFIG.maxAttempts,
+      reconnectionDelay: RECONNECTION_CONFIG.initialDelay,
+      reconnectionDelayMax: RECONNECTION_CONFIG.maxDelay,
+      randomizationFactor: 0.5, // Built-in jitter support
       auth,
     });
 
     // Global event listeners
     socket.on('connect', () => {
-      console.log('Socket connected');
+      console.log('[Socket] Connected successfully');
     });
 
     socket.on('disconnect', (reason) => {
-      console.log(`Socket disconnected: ${reason}`);
+      console.log(`[Socket] Disconnected: ${reason}`);
     });
 
     socket.on('connect_error', (err) => {
-      console.error('Socket connection error:', err);
+      console.error('[Socket] Connection error:', err.message);
+    });
+
+    // Reconnection events for better UX feedback
+    socket.io.on('reconnect_attempt', (attempt) => {
+      const delay = calculateBackoff(attempt - 1);
+      console.log(`[Socket] Reconnection attempt ${attempt}/${RECONNECTION_CONFIG.maxAttempts} (delay: ${Math.round(delay)}ms)`);
+    });
+
+    socket.io.on('reconnect', (attempt) => {
+      console.log(`[Socket] Reconnected after ${attempt} attempts`);
+    });
+
+    socket.io.on('reconnect_failed', () => {
+      console.error('[Socket] Reconnection failed after max attempts');
     });
   }
 
@@ -63,12 +105,20 @@ export function getSocket(): Socket<ServerToClientEvents, ClientToServerEvents> 
 export function useSocket() {
   const [isConnected, setIsConnected] = useState(false);
   const [socketInstance, setSocketInstance] = useState<Socket<ServerToClientEvents, ClientToServerEvents> | null>(socket);
+  const [currentUsername, setCurrentUsername] = useState<string>('');
   const heartbeatIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const initializingRef = useRef(false);
 
   // Use the new session hook
-  const { session, loginAsGuest, isLoading: isSessionLoading } = useUserSession();
+  const { session, loginAsGuest, updateUsername: updateSessionUsername, isLoading: isSessionLoading } = useUserSession();
   const currentTokenRef = useRef<string | null>(null);
+
+  // Sync username from session
+  useEffect(() => {
+    if (session?.username) {
+      setCurrentUsername(session.username);
+    }
+  }, [session?.username]);
 
   useEffect(() => {
     // Initialize socket on client side
@@ -214,6 +264,24 @@ export function useSocket() {
     }
   }, [session, isSessionLoading, loginAsGuest, socketInstance, isConnected]); // Re-run if session changes
 
+  // Listen for username updates from server
+  useEffect(() => {
+    if (!socketInstance) return;
+
+    const handleUserUpdate = (data: { username: string }) => {
+      console.log('[Socket] Username updated to:', data.username);
+      setCurrentUsername(data.username);
+      // Also update the session storage
+      updateSessionUsername(data.username);
+    };
+
+    socketInstance.on(SOCKET_EVENTS.USER_UPDATE, handleUserUpdate);
+
+    return () => {
+      socketInstance.off(SOCKET_EVENTS.USER_UPDATE, handleUserUpdate);
+    };
+  }, [socketInstance, updateSessionUsername]);
+
   // ... rest of the hook
 
 
@@ -224,17 +292,24 @@ export function useSocket() {
     }
   }, []);
 
-  // Send chat message
-  const sendChatMessage = useCallback((content: string, options: { isPrivate?: boolean; locale?: 'pt' | 'en' } = {}) => {
+  // Send chat message with idempotency key
+  const sendChatMessage = useCallback((content: string, options: { isPrivate?: boolean; locale?: 'pt' | 'en'; clientMessageId?: string } = {}) => {
     if (socket?.connected) {
+      // Generate clientMessageId if not provided (for idempotency on retry)
+      const clientMessageId = options.clientMessageId || `${session?.userId || 'anon'}-${Date.now()}-${nanoid()}`;
+
       socket.emit(SOCKET_EVENTS.CHAT_MESSAGE, {
         content,
         type: 'user',
         isPrivate: options.isPrivate,
-        locale: options.locale
+        locale: options.locale,
+        clientMessageId, // Prevents duplicate processing if message is retried
       });
+
+      return clientMessageId;
     }
-  }, []);
+    return null;
+  }, [session?.userId]);
 
   // Vote for track
   const voteForTrack = useCallback((trackId: string) => {
@@ -247,6 +322,7 @@ export function useSocket() {
     socket: socketInstance,
     isConnected,
     userId: session?.userId || '', // Return the userId from session
+    username: currentUsername || session?.username || '', // Return current username
     requestSync,
     sendChatMessage,
     voteForTrack,
@@ -335,6 +411,7 @@ export interface PendingChatMessage extends ChatMessage {
     content: string;
     isPrivate?: boolean;
     locale?: 'pt' | 'en';
+    clientMessageId?: string; // For idempotency on retry
   };
 }
 
@@ -348,12 +425,16 @@ export function useChat() {
   const [pendingMessageId, setPendingMessageId] = useState<string | null>(null);
   const { socket, userId, isConnected, sendChatMessage } = useSocket();
   const pendingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const aiLoadingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   // Use ref to avoid stale closure issues with pendingMessageId
   const pendingMessageIdRef = useRef<string | null>(null);
 
   // Add a pending message (optimistic update)
   const addPendingMessage = useCallback((content: string, options: { isPrivate?: boolean; username?: string; locale?: 'pt' | 'en' }) => {
     const tempId = `pending-${nanoid()}`;
+    // Generate unique clientMessageId for idempotency
+    const clientMessageId = `${userId || 'anon'}-${Date.now()}-${nanoid()}`;
+
     const pendingMessage: PendingChatMessage = {
       id: tempId,
       tempId,
@@ -364,11 +445,12 @@ export function useChat() {
       type: 'user',
       isPrivate: options.isPrivate,
       isPending: true,
-      // Store retry data
+      // Store retry data with clientMessageId for idempotency on retry
       retryData: {
         content,
         isPrivate: options.isPrivate,
         locale: options.locale,
+        clientMessageId, // Used for retry to prevent duplicate processing
       },
     };
 
@@ -397,7 +479,7 @@ export function useChat() {
       }
     }, 15000); // 15 second timeout - allows for slower connections and AI processing
 
-    return tempId;
+    return { tempId, clientMessageId };
   }, [userId]);
 
   // Clear pending state when message is confirmed
@@ -429,16 +511,28 @@ export function useChat() {
       const messageToRetry = prev.find(m => m.tempId === tempId);
       if (!messageToRetry?.retryData) return prev;
 
-      // Send the message again
+      // Generate NEW clientMessageId for retry (the old one may be marked as processed)
+      // This is intentional - if the original was processed but response was lost,
+      // a new ID ensures the retry goes through
+      const newClientMessageId = `${userId}-${Date.now()}-retry-${nanoid()}`;
+
+      // Send the message again with new idempotency key
       sendChatMessage(messageToRetry.retryData.content, {
         isPrivate: messageToRetry.retryData.isPrivate,
         locale: messageToRetry.retryData.locale,
+        clientMessageId: newClientMessageId,
       });
 
-      // Update the message to pending state
+      // Update the message to pending state with new clientMessageId
       return prev.map(m =>
         m.tempId === tempId
-          ? { ...m, isPending: true, isFailed: false, timestamp: Date.now() }
+          ? {
+              ...m,
+              isPending: true,
+              isFailed: false,
+              timestamp: Date.now(),
+              retryData: { ...m.retryData!, clientMessageId: newClientMessageId }
+            }
           : m
       );
     });
@@ -509,6 +603,19 @@ export function useChat() {
 
       if (message.type === 'user' && message.userId === userId) {
         setIsLoadingAI(true);
+
+        // Clear any existing AI loading timeout
+        if (aiLoadingTimeoutRef.current) {
+          clearTimeout(aiLoadingTimeoutRef.current);
+        }
+
+        // Set timeout to reset isLoadingAI if AI_MESSAGE_COMPLETE never arrives
+        // 30 seconds should be enough for AI processing + network latency
+        aiLoadingTimeoutRef.current = setTimeout(() => {
+          console.warn('[Chat] AI loading timeout - resetting isLoadingAI state');
+          setIsLoadingAI(false);
+          aiLoadingTimeoutRef.current = null;
+        }, 30000);
       }
     };
 
@@ -548,7 +655,13 @@ export function useChat() {
     };
 
     // Handle AI message completion
-    const onAIMessageComplete = ({ messageId }: { messageId: string }) => {
+    const onAIMessageComplete = ({ messageId }: { messageId: string; skipped?: boolean }) => {
+      // Clear the AI loading timeout since we received completion
+      if (aiLoadingTimeoutRef.current) {
+        clearTimeout(aiLoadingTimeoutRef.current);
+        aiLoadingTimeoutRef.current = null;
+      }
+
       setIsLoadingAI(false);
       setAiMessageBuffers((prev) => {
         const { [messageId]: _completedMessage, ...rest } = prev;
@@ -580,7 +693,27 @@ export function useChat() {
       const filteredHistory = data.messages.filter(msg =>
         !aiMessageBuffers[msg.id] // Don't include messages still being buffered
       );
-      setMessages(filteredHistory);
+
+      // Preserve pending messages when syncing history
+      // This prevents losing optimistic updates during reconnection
+      setMessages((prev) => {
+        const pendingMessages = prev.filter(m => m.isPending || m.isFailed);
+
+        if (pendingMessages.length === 0) {
+          return filteredHistory;
+        }
+
+        // Merge history with pending messages, avoiding duplicates
+        const historyIds = new Set(filteredHistory.map(m => m.id));
+        const uniquePendingMessages = pendingMessages.filter(
+          m => m.tempId && !historyIds.has(m.tempId)
+        );
+
+        // Sort by timestamp to maintain chronological order
+        return [...filteredHistory, ...uniquePendingMessages].sort(
+          (a, b) => a.timestamp - b.timestamp
+        );
+      });
     };
 
     // Register event listeners

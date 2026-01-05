@@ -50,6 +50,17 @@ export function useUserSession() {
         }
     };
 
+    // Update username in session
+    const updateUsername = (newUsername: string) => {
+        if (!session) return;
+
+        const updatedSession: UserSession = {
+            ...session,
+            username: newUsername,
+        };
+        setSession(updatedSession);
+    };
+
     // Login function (calls API and saves session)
     const loginAsGuest = async (username?: string) => {
         try {
@@ -82,6 +93,7 @@ export function useUserSession() {
         session,
         isLoading,
         loginAsGuest,
+        updateUsername,
         logout: clearSession,
     };
 }

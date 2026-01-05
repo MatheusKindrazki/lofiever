@@ -12,14 +12,68 @@ import { ProactiveEngagementService } from '@/services/moderation/proactive-enga
 import { ContentModerationService } from '@/services/moderation/content-moderation.service';
 import type { Track } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
+import { createAdapter } from '@socket.io/redis-adapter';
+import {
+  ChatMessagePayloadSchema,
+  TrackIdSchema,
+  SocketAuthSchema,
+  safeValidate,
+} from './schemas';
 
 const AI_HISTORY_LIMIT = 12;
 const PROACTIVE_MESSAGE_INTERVAL = 5 * 60 * 1000; // 5 minutes
 const LISTENER_CLEANUP_INTERVAL = 15 * 1000; // 15 seconds
 const LISTENER_TIMEOUT = 30 * 1000; // 30 seconds
 const ANNOUNCEMENT_FREQUENCY = 10; // Announce every 10 tracks (reduced from 5)
+const MESSAGE_RATE_LIMIT = 10; // Max messages per minute per user
+const MESSAGE_RATE_WINDOW = 60; // Rate limit window in seconds
+const IDEMPOTENCY_TTL = 300; // 5 minutes TTL for idempotency keys
+
 type AIMessagesPayload = Array<{ role: 'user' | 'assistant'; content: string }>;
 const normalizeLocale = (locale?: string | null): 'pt' | 'en' => (locale === 'en' ? 'en' : 'pt');
+
+/**
+ * Check if user is rate limited using Redis for multi-instance consistency
+ * @returns true if rate limited, false if allowed
+ */
+async function isRateLimited(userId: string): Promise<boolean> {
+  const key = `ratelimit:chat:${userId}`;
+
+  try {
+    const count = await redis.incr(key);
+
+    if (count === 1) {
+      // Set expiry on first message of the window
+      await redis.expire(key, MESSAGE_RATE_WINDOW);
+    }
+
+    return count > MESSAGE_RATE_LIMIT;
+  } catch (error) {
+    console.error('[RateLimit] Redis error, allowing message:', error);
+    // Fail open - allow message if Redis is unavailable
+    return false;
+  }
+}
+
+/**
+ * Check if message was already processed (idempotency)
+ * @returns true if duplicate, false if new message
+ */
+async function isDuplicateMessage(clientMessageId: string | undefined): Promise<boolean> {
+  if (!clientMessageId) return false;
+
+  const key = `idempotency:${clientMessageId}`;
+  const exists = await redis.exists(key);
+
+  if (exists) {
+    console.log(`[Idempotency] Duplicate message detected: ${clientMessageId}`);
+    return true;
+  }
+
+  // Mark as processed with TTL
+  await redis.set(key, '1', 'EX', IDEMPOTENCY_TTL);
+  return false;
+}
 
 // Generate short, unique IDs for clients
 const nanoid = customAlphabet('1234567890abcdefghijklmnopqrstuvwxyz', 10);
@@ -27,6 +81,8 @@ const nanoid = customAlphabet('1234567890abcdefghijklmnopqrstuvwxyz', 10);
 // Track active Socket.IO instances to prevent duplicates
 let io: SocketIOServer<ClientToServerEvents, ServerToClientEvents> | null = null;
 let redisSubscriber: Redis | null = null;
+let redisPubClient: Redis | null = null;
+let redisSubClient: Redis | null = null;
 let proactiveMessageInterval: NodeJS.Timeout | null = null;
 let listenerCleanupInterval: NodeJS.Timeout | null = null;
 
@@ -46,7 +102,12 @@ export function createSocketServer(httpServer: HTTPServer): SocketIOServer<Clien
     connectionStateRecovery: {
       maxDisconnectionDuration: 2 * 60 * 1000, // 2 minutes
     },
-    // adapter: createRedisAdapter(redis), // Future scaling
+  });
+
+  // Setup Redis adapter for multi-instance scaling (runs async, non-blocking)
+  // The adapter will be ready before most connections since Redis connects quickly
+  setupRedisAdapter(io).catch((error) => {
+    console.error('[Socket.IO] Unexpected error in Redis adapter setup:', error);
   });
 
   // Add connection middleware
@@ -69,21 +130,49 @@ export function createSocketServer(httpServer: HTTPServer): SocketIOServer<Clien
   return io;
 }
 
+// Setup Redis adapter for multi-instance scaling
+async function setupRedisAdapter(io: SocketIOServer<ClientToServerEvents, ServerToClientEvents>): Promise<void> {
+  try {
+    // Create dedicated Redis clients for the adapter (separate from main redis client)
+    redisPubClient = new Redis(config.redis.url, {
+      lazyConnect: true,
+      retryStrategy: (times) => Math.min(times * 100, 3000),
+    });
+    redisSubClient = redisPubClient.duplicate();
+
+    // Connect both clients and wait for them to be ready
+    await Promise.all([redisPubClient.connect(), redisSubClient.connect()]);
+    io.adapter(createAdapter(redisPubClient, redisSubClient));
+    console.log('[Socket.IO] Redis adapter enabled for multi-instance scaling');
+  } catch (error) {
+    console.error('[Socket.IO] Failed to setup Redis adapter:', error);
+    console.log('[Socket.IO] Falling back to in-memory adapter (single instance only)');
+  }
+}
+
 // Middleware setup
 function setupMiddleware(io: SocketIOServer<ClientToServerEvents, ServerToClientEvents>): void {
   io.use(async (socket, next) => {
     try {
-      const userId = socket.handshake.auth.userId || nanoid();
+      // Validate socket auth data with Zod
+      const authValidation = safeValidate(SocketAuthSchema, socket.handshake.auth);
+      const auth = authValidation.success ? authValidation.data : {};
 
-      // Try to get persisted username from Redis first
-      const persistedName = await redisHelpers.getUserName(userId);
-      const username = persistedName || (socket.handshake.auth.username as string) || `user_${userId.substring(0, 5)}`;
-      const handshakeLocale = socket.handshake.auth?.locale as string | undefined;
+      const userId = auth.userId || nanoid();
+
+      // Try to get persisted username with database fallback
+      const persistedName = await redisHelpers.getUserNameWithFallback(userId, prisma);
+      const handshakeUsername = auth.username;
+
+      // Priority: Redis/DB cached name > handshake name > generated name
+      const username = persistedName || handshakeUsername || `user_${userId.substring(0, 5)}`;
+
+      const handshakeLocale = auth.locale;
       const parsedHandshakeLocale = handshakeLocale === 'en' ? 'en' : handshakeLocale === 'pt' ? 'pt' : null;
       const persistedLocale = await redisHelpers.getUserLocale(userId);
       const activeLocale = persistedLocale || parsedHandshakeLocale || 'pt';
 
-      console.log(`[Connection] UserId: ${userId}, PersistedName: ${persistedName}, HandshakeName: ${socket.handshake.auth.username}, FinalUsername: ${username}`);
+      console.log(`[Connection] UserId: ${userId}, PersistedName: ${persistedName}, HandshakeName: ${handshakeUsername}, FinalUsername: ${username}`);
 
       // Store user info in socket data
       socket.data.userId = userId;
@@ -116,12 +205,14 @@ function setupEventHandlers(io: SocketIOServer<ClientToServerEvents, ServerToCli
     console.log(`Client connected: ${socket.id} (${username})`);
 
     try {
-      const listenersCount = await redisHelpers.addListener(socket.id);
-      console.log(`Active listeners: ${listenersCount}`);
-
+      await redisHelpers.addListener(socket.id);
       await redisHelpers.markUserActive(userId);
 
       await syncClientState(socket);
+
+      // Get fresh count after all operations to avoid race conditions
+      const listenersCount = await redisHelpers.getListenersCount();
+      console.log(`Active listeners: ${listenersCount}`);
 
       io.emit(SOCKET_EVENTS.LISTENERS_UPDATE, { count: listenersCount });
 
@@ -146,18 +237,47 @@ function setupEventHandlers(io: SocketIOServer<ClientToServerEvents, ServerToCli
 
 
     socket.on(SOCKET_EVENTS.CHAT_MESSAGE, async (message) => {
+      // 0. Validate message payload with Zod schema
+      const validation = safeValidate(ChatMessagePayloadSchema, message);
+      if (!validation.success) {
+        console.log(`[Validation] Invalid message from ${userId}: ${validation.error}`);
+        socket.emit(SOCKET_EVENTS.ERROR, { message: validation.error });
+        return;
+      }
+
+      const validatedMessage = validation.data;
       const userMessageId = nanoid();
       const aiMessageId = nanoid(); // Unique ID for AI's response
-      const isPrivate = message.isPrivate || false;
-      const incomingLocale = message.locale === 'en' ? 'en' : message.locale === 'pt' ? 'pt' : null;
+      const isPrivate = validatedMessage.isPrivate || false;
+      const incomingLocale = validatedMessage.locale;
       const locale = normalizeLocale(incomingLocale || (socket.data.locale as string | null));
       socket.data.locale = locale;
 
+      // Get current username from socket data (may have been updated)
+      const currentUsername = socket.data.username as string;
+
       try {
-        // 0. Moderate content
-        const moderation = await ContentModerationService.validateMessage(message.content);
+        // 0a. Check rate limit
+        if (await isRateLimited(userId)) {
+          console.log(`[RateLimit] User ${userId} exceeded rate limit`);
+          const errorMsg = locale === 'en'
+            ? 'Too many messages. Please wait a moment.'
+            : 'Muitas mensagens. Por favor, aguarde um momento.';
+          socket.emit(SOCKET_EVENTS.ERROR, { message: errorMsg });
+          return;
+        }
+
+        // 0b. Check idempotency (prevent duplicate processing on retry)
+        if (await isDuplicateMessage(validatedMessage.clientMessageId)) {
+          console.log(`[Idempotency] Skipping duplicate message from ${userId}`);
+          // Don't send error - client may be retrying, just acknowledge silently
+          return;
+        }
+
+        // 0c. Moderate content
+        const moderation = await ContentModerationService.validateMessage(validatedMessage.content);
         if (!moderation.safe) {
-          console.log(`Blocked offensive message from ${username}: ${message.content}`);
+          console.log(`Blocked offensive message from ${currentUsername}: ${validatedMessage.content}`);
           socket.emit(SOCKET_EVENTS.ERROR, { message: `Mensagem bloqueada: ${moderation.reason}` });
           return;
         }
@@ -169,8 +289,8 @@ function setupEventHandlers(io: SocketIOServer<ClientToServerEvents, ServerToCli
         const chatMessage: RedisChatMessage = {
           id: userMessageId,
           userId,
-          username,
-          content: message.content,
+          username: currentUsername,
+          content: validatedMessage.content,
           timestamp: Date.now(),
           type: 'user',
           isPrivate,
@@ -187,13 +307,23 @@ function setupEventHandlers(io: SocketIOServer<ClientToServerEvents, ServerToCli
           io.emit(SOCKET_EVENTS.CHAT_MESSAGE, chatMessage);
         }
 
+        // Check if there are other listeners before processing AI response
+        // Skip AI processing for public messages if user is alone (waste of API calls)
+        const listenersCount = await redisHelpers.getListenersCount();
+        if (!isPrivate && listenersCount <= 1) {
+          console.log(`[Chat] Skipping AI response - only ${listenersCount} listener(s) connected`);
+          // Emit completion event so client knows not to wait for AI
+          socket.emit(SOCKET_EVENTS.AI_MESSAGE_COMPLETE, { messageId: aiMessageId, skipped: true });
+          return;
+        }
+
         // 2. Forward message to AI agent
         const conversationMessages = await buildAIConversationHistory();
         if (
           conversationMessages.length === 0 ||
           conversationMessages[conversationMessages.length - 1]?.role !== 'user'
         ) {
-          conversationMessages.push({ role: 'user', content: message.content });
+          conversationMessages.push({ role: 'user', content: validatedMessage.content });
         }
 
         if (conversationMessages.length > AI_HISTORY_LIMIT) {
@@ -267,14 +397,24 @@ function setupEventHandlers(io: SocketIOServer<ClientToServerEvents, ServerToCli
     });
 
     socket.on(SOCKET_EVENTS.PLAYLIST_VOTE, async (trackId) => {
+      // Validate track ID
+      const validation = safeValidate(TrackIdSchema, trackId);
+      if (!validation.success) {
+        console.log(`[Validation] Invalid track ID from ${userId}: ${validation.error}`);
+        socket.emit(SOCKET_EVENTS.ERROR, { message: 'Invalid track ID' });
+        return;
+      }
+
+      const validatedTrackId = validation.data;
+
       try {
-        const key = `${KEYS.PLAYLIST_VOTE}:${trackId}`;
+        const key = `${KEYS.PLAYLIST_VOTE}:${validatedTrackId}`;
         await redis.sadd(key, userId);
         const votesCount = await redis.scard(key);
 
-        console.log(`Vote for track ${trackId} by ${userId}. Total votes: ${votesCount}`);
+        console.log(`Vote for track ${validatedTrackId} by ${userId}. Total votes: ${votesCount}`);
 
-        io.emit(SOCKET_EVENTS.PLAYLIST_VOTE_UPDATE, { trackId, votes: votesCount });
+        io.emit(SOCKET_EVENTS.PLAYLIST_VOTE_UPDATE, { trackId: validatedTrackId, votes: votesCount });
       } catch (error) {
         console.error('Vote error:', error);
         socket.emit(SOCKET_EVENTS.ERROR, { message: 'Failed to register vote' });
@@ -292,8 +432,11 @@ function setupEventHandlers(io: SocketIOServer<ClientToServerEvents, ServerToCli
 
     socket.on('disconnect', async (reason) => {
       try {
-        console.log(`Client disconnected: ${socket.id} (${username}). Reason: ${reason}`);
-        const listenersCount = await redisHelpers.removeListener(socket.id);
+        const currentUsername = socket.data.username as string;
+        console.log(`Client disconnected: ${socket.id} (${currentUsername}). Reason: ${reason}`);
+        await redisHelpers.removeListener(socket.id);
+        // Get fresh count after removal to avoid race conditions
+        const listenersCount = await redisHelpers.getListenersCount();
         io.emit(SOCKET_EVENTS.LISTENERS_UPDATE, { count: listenersCount });
       } catch (error) {
         console.error('Error during client disconnection:', error);
@@ -738,11 +881,24 @@ export async function closeSocketServer(): Promise<void> {
       if (server) {
         server.close(() => {
           io = null;
+
+          // Close Redis subscriber
           if (redisSubscriber) {
             redisSubscriber.unsubscribe();
             redisSubscriber.quit();
             redisSubscriber = null;
           }
+
+          // Close Redis adapter clients
+          if (redisPubClient) {
+            redisPubClient.quit();
+            redisPubClient = null;
+          }
+          if (redisSubClient) {
+            redisSubClient.quit();
+            redisSubClient = null;
+          }
+
           resolve();
         });
       } else {

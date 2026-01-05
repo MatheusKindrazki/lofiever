@@ -6,7 +6,6 @@ import { useLocale, useTranslations } from 'next-intl';
 import type { PendingChatMessage } from '../lib/socket/client';
 import { useChat as useSocketChat, useSocket, usePlaybackSync } from '../lib/socket/client';
 import DOMPurify from 'isomorphic-dompurify';
-import { SOCKET_EVENTS } from '../lib/socket/types';
 
 export default function ChatRoom() {
   const t = useTranslations('chat');
@@ -15,13 +14,14 @@ export default function ChatRoom() {
   const { data: session } = useSession();
   // Prefer socket userId, fallback to session or anonymous
   const { messages, isLoadingAI, hasPendingMessage, addPendingMessage, retryMessage, removeFailedMessage } = useSocketChat();
-  const { socket, sendChatMessage, userId: socketUserId, isConnected } = useSocket();
+  const { sendChatMessage, userId: socketUserId, username: socketUsername, isConnected } = useSocket();
   const youLabel = normalizedLocale === 'en' ? 'you' : 'você';
 
   // Use the socket's userId for consistency with the backend
   const userId = socketUserId || (session?.user as any)?.id || 'anonymous-user';
 
-  const [username, setUsername] = useState(session?.user?.name || `user_${userId.substring(0, 6)}`);
+  // Use username from socket (which syncs with server updates)
+  const username = socketUsername || session?.user?.name || `user_${userId.substring(0, 6)}`;
   const { currentTrack } = usePlaybackSync();
 
   const [input, setInput] = useState('');
@@ -48,24 +48,6 @@ export default function ChatRoom() {
     }
   }, [messages, userId, isPrivateMode]);
 
-  // Listen for username updates
-  useEffect(() => {
-    if (!socket) return;
-
-    const handleUserUpdate = (data: { username: string }) => {
-      console.log('Username updated to:', data.username);
-      setUsername(data.username);
-      // Persist to localStorage so it survives refresh
-      localStorage.setItem('username', data.username);
-    };
-
-    socket.on(SOCKET_EVENTS.USER_UPDATE, handleUserUpdate);
-
-    return () => {
-      socket.off(SOCKET_EVENTS.USER_UPDATE, handleUserUpdate);
-    };
-  }, [socket]);
-
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
     if (chatContainerRef.current) {
@@ -77,9 +59,9 @@ export default function ChatRoom() {
     e.preventDefault();
     if (input.trim() && sendChatMessage && !hasPendingMessage && isConnected) {
       // Add pending message immediately for feedback (optimistic update)
-      addPendingMessage(input, { isPrivate: isPrivateMode, username, locale: normalizedLocale });
-      // Send to server for moderation
-      sendChatMessage(input, { isPrivate: isPrivateMode, locale: normalizedLocale });
+      const { clientMessageId } = addPendingMessage(input, { isPrivate: isPrivateMode, username, locale: normalizedLocale });
+      // Send to server with same clientMessageId for idempotency
+      sendChatMessage(input, { isPrivate: isPrivateMode, locale: normalizedLocale, clientMessageId });
       setInput('');
     }
   };
@@ -98,8 +80,9 @@ export default function ChatRoom() {
     if (sendChatMessage && !isLoadingAI && !hasPendingMessage && isConnected) {
       const action = t(`quickActionsMessages.${actionKey}`);
       // Add pending message immediately for feedback (optimistic update)
-      addPendingMessage(action, { isPrivate: isPrivateMode, username, locale: normalizedLocale });
-      sendChatMessage(action, { isPrivate: isPrivateMode, locale: normalizedLocale });
+      const { clientMessageId } = addPendingMessage(action, { isPrivate: isPrivateMode, username, locale: normalizedLocale });
+      // Send to server with same clientMessageId for idempotency
+      sendChatMessage(action, { isPrivate: isPrivateMode, locale: normalizedLocale, clientMessageId });
     }
   };
 

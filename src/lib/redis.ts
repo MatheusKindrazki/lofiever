@@ -366,7 +366,45 @@ export const redisHelpers = {
     const key = `${KEYS.USER_PREFERENCES}:${userId}`;
     const username = await redis.hget(key, 'username');
     console.log(`[Redis] Getting username for ${userId} (Key: ${key}) -> ${username}`);
+
+    // If username not in Redis, this will be handled by the caller
+    // which should check the database as fallback
     return username;
+  },
+
+  /**
+   * Get username with database fallback
+   * First checks Redis, then falls back to Prisma database
+   */
+  async getUserNameWithFallback(userId: string, prismaClient: any): Promise<string | null> {
+    // 1. Try Redis first (fastest)
+    const key = `${KEYS.USER_PREFERENCES}:${userId}`;
+    const cachedUsername = await redis.hget(key, 'username');
+
+    if (cachedUsername) {
+      console.log(`[Redis] Username found in cache for ${userId}: ${cachedUsername}`);
+      return cachedUsername;
+    }
+
+    // 2. Fallback to database
+    try {
+      const user = await prismaClient.user.findUnique({
+        where: { id: userId },
+        select: { username: true }
+      });
+
+      if (user?.username) {
+        console.log(`[Redis] Username found in DB for ${userId}: ${user.username}, caching...`);
+        // Cache it in Redis for future lookups with TTL to keep cache fresh (24 hours)
+        await redis.hset(key, { username: user.username });
+        await redis.expire(key, 86400); // 24 hours TTL
+        return user.username;
+      }
+    } catch (error) {
+      console.error(`[Redis] Error fetching username from DB for ${userId}:`, error);
+    }
+
+    return null;
   },
 
   async setUserLocale(userId: string, locale: 'pt' | 'en'): Promise<void> {
