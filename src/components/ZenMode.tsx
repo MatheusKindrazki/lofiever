@@ -127,10 +127,12 @@ const AuroraBackground = () => {
         };
 
         let time = 0;
+        const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        const timeIncrement = prefersReducedMotion ? 0.0005 : 0.003;
 
         const draw = () => {
             animationRef.current = requestAnimationFrame(draw);
-            time += 0.003;
+            time += timeIncrement;
 
             // Dark gradient base
             const baseGradient = ctx.createLinearGradient(0, 0, 0, height);
@@ -427,7 +429,7 @@ export default function ZenMode({
 
     const handleSendMessage = useCallback(() => {
         if (inputValue.trim() && sendChatMessage && isConnected) {
-            sendChatMessage(inputValue, { isPrivate: false, locale });
+            sendChatMessage(inputValue, { isPrivate: false, locale: locale as 'pt' | 'en' });
             setInputValue('');
             setShowInput(false);
         }
@@ -505,7 +507,7 @@ export default function ZenMode({
                         ? 'bg-white/20 text-white border-white/40'
                         : 'bg-black/30 text-white/80 border-white/20 hover:bg-black/50 hover:text-white'
                 }`}
-                aria-label={showChat ? 'Hide chat' : 'Show chat'}
+                aria-label={showChat ? chatT('hideChat') : chatT('showChat')}
             >
                 <ChatBubbleLeftRightIcon className="w-5 h-5" />
             </button>
@@ -542,11 +544,14 @@ export default function ZenMode({
                                 disabled={!inputValue.trim()}
                                 className="px-4 py-2.5 bg-gradient-to-r from-[var(--mood-accent)] to-[var(--mood-accent-2)] text-white rounded-full font-medium text-sm disabled:opacity-50 transition-all hover:brightness-110"
                             >
-                                Enviar
+                                {chatT('input.send')}
                             </button>
                         </div>
                         <p className="text-xs text-white/40 mt-2 text-center">
-                            Pressione <kbd className="px-1.5 py-0.5 bg-white/10 rounded text-white/60">Enter</kbd> para enviar ou <kbd className="px-1.5 py-0.5 bg-white/10 rounded text-white/60">Esc</kbd> para cancelar
+                            {playerT.rich('zenMode.hints.pressEnterOrEsc', {
+                                enter: (chunks) => <kbd className="px-1.5 py-0.5 bg-white/10 rounded text-white/60">{chunks}</kbd>,
+                                esc: (chunks) => <kbd className="px-1.5 py-0.5 bg-white/10 rounded text-white/60">{chunks}</kbd>
+                            })}
                         </p>
                     </div>
                 </div>
@@ -649,7 +654,7 @@ export default function ZenMode({
                 ) : (
                     <div className="text-center">
                         <div className="w-16 h-16 border-4 border-white/20 border-t-white/80 rounded-full animate-spin mb-4" />
-                        <p className="text-white/60">Carregando...</p>
+                        <p className="text-white/60">{playerT('zenMode.loading')}</p>
                     </div>
                 )}
             </div>
@@ -658,11 +663,11 @@ export default function ZenMode({
             {showHints && (
                 <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-40">
                     <div className="flex items-center gap-4 bg-black/40 backdrop-blur-md rounded-full px-5 py-2.5 border border-white/10">
-                        <CommandHint shortcut="Esc" label="Sair" />
-                        <CommandHint shortcut="C" label="Chat" active={showChat} />
-                        {showChat && <CommandHint shortcut="R" label="Responder" />}
-                        <CommandHint shortcut="Espaço" label="Play/Pause" />
-                        <CommandHint shortcut="H" label="Ocultar dicas" />
+                        <CommandHint shortcut="Esc" label={playerT('zenMode.hints.exit')} />
+                        <CommandHint shortcut="C" label={playerT('zenMode.hints.chat')} active={showChat} />
+                        {showChat && <CommandHint shortcut="R" label={playerT('zenMode.hints.reply')} />}
+                        <CommandHint shortcut={playerT('zenMode.hints.spaceKey')} label={playerT('zenMode.hints.playPause')} />
+                        <CommandHint shortcut="H" label={playerT('zenMode.hints.hideHints')} />
                     </div>
                 </div>
             )}
@@ -695,6 +700,16 @@ export default function ZenMode({
                     100% {
                         opacity: 0;
                         transform: translateX(-50px) translateY(-40px);
+                    }
+                }
+                @media (prefers-reduced-motion: reduce) {
+                    .animate-spin-slow,
+                    .floating-message {
+                        animation: none !important;
+                    }
+                    .floating-message {
+                        opacity: 1;
+                        transform: none;
                     }
                 }
             `}</style>
