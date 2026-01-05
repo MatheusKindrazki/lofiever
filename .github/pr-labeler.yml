@@ -1,0 +1,32 @@
+# Configuration for TimonVS/pr-labeler-action
+# Automatically labels PRs based on branch name patterns
+
+# Feature branches
+feature: ['feature/*', 'feature/**/*', 'feat/*', 'feat/**/*']
+
+# Bug fix branches
+bug: ['fix/*', 'fix/**/*', 'bugfix/*', 'bugfix/**/*', 'hotfix/*', 'hotfix/**/*']
+
+# Chore/maintenance branches
+chore: ['chore/*', 'chore/**/*', 'maintenance/*', 'maintenance/**/*']
+
+# Documentation branches
+docs: ['docs/*', 'docs/**/*', 'documentation/*', 'documentation/**/*']
+
+# Refactoring branches
+refactor: ['refactor/*', 'refactor/**/*']
+
+# Performance improvements
+performance: ['perf/*', 'perf/**/*', 'performance/*', 'performance/**/*']
+
+# Test-related branches
+test: ['test/*', 'test/**/*', 'tests/*', 'tests/**/*']
+
+# Release branches
+release: ['release/*', 'release/**/*']
+
+# Dependency updates
+dependencies: ['deps/*', 'deps/**/*', 'dependencies/*', 'dependencies/**/*']
+
+# CI/CD changes
+ci: ['ci/*', 'ci/**/*', 'github-actions/*', 'github-actions/**/*']

@@ -1,0 +1,110 @@
+name: Setup Repository Labels
+
+on:
+  workflow_dispatch:
+
+permissions:
+  issues: write
+
+jobs:
+  setup-labels:
+    name: Create Labels
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup repository labels
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const labels = [
+              // Type labels (for PR classification)
+              { name: 'bug', color: 'd73a4a', description: 'Something isn\'t working' },
+              { name: 'feature', color: 'a2eeef', description: 'New feature or request' },
+              { name: 'chore', color: 'fef2c0', description: 'Maintenance tasks' },
+              { name: 'docs', color: '0075ca', description: 'Documentation improvements' },
+              { name: 'refactor', color: 'cfd3d7', description: 'Code refactoring' },
+              { name: 'performance', color: 'fbca04', description: 'Performance improvements' },
+              { name: 'test', color: 'bfdadc', description: 'Test related changes' },
+              { name: 'dependencies', color: '0366d6', description: 'Dependency updates' },
+              { name: 'ci', color: 'f9d0c4', description: 'CI/CD related changes' },
+              { name: 'release', color: '5319e7', description: 'Release related' },
+
+              // Area labels (auto-applied by labeler)
+              { name: 'frontend', color: '1d76db', description: 'Frontend/UI changes' },
+              { name: 'backend', color: 'b60205', description: 'Backend/Server changes' },
+              { name: 'api', color: 'e99695', description: 'API changes' },
+              { name: 'database', color: 'd4c5f9', description: 'Database/Prisma changes' },
+              { name: 'infrastructure', color: 'f9d0c4', description: 'Infrastructure/DevOps' },
+              { name: 'documentation', color: '0075ca', description: 'Documentation updates' },
+              { name: 'tests', color: 'bfdadc', description: 'Test files changed' },
+              { name: 'config', color: 'c5def5', description: 'Configuration changes' },
+              { name: 'ai', color: '7057ff', description: 'AI/Chat related' },
+              { name: 'realtime', color: 'ff7619', description: 'Socket/Real-time features' },
+              { name: 'i18n', color: 'c2e0c6', description: 'Internationalization' },
+
+              // Size labels
+              { name: 'size/XS', color: '3CBF00', description: 'Extra small PR (< 10 lines)' },
+              { name: 'size/S', color: '5D9801', description: 'Small PR (10-100 lines)' },
+              { name: 'size/M', color: '7F7203', description: 'Medium PR (100-500 lines)' },
+              { name: 'size/L', color: 'A14C05', description: 'Large PR (500-1000 lines)' },
+              { name: 'size/XL', color: 'C32607', description: 'Extra large PR (> 1000 lines)' },
+
+              // Status labels
+              { name: 'stale', color: 'ededed', description: 'No recent activity' },
+              { name: 'pinned', color: '006b75', description: 'Pinned - won\'t be marked stale' },
+              { name: 'do not close', color: 'b60205', description: 'Keep open regardless of stale' },
+              { name: 'do not merge', color: 'd93f0b', description: 'Do not merge this PR' },
+              { name: 'needs review', color: 'fbca04', description: 'Awaiting review' },
+              { name: 'needs work', color: 'e4e669', description: 'Changes requested' },
+              { name: 'ready to merge', color: '0e8a16', description: 'Approved and ready' },
+              { name: 'blocked', color: 'b60205', description: 'Blocked by something' },
+              { name: 'wip', color: 'fef2c0', description: 'Work in progress' },
+
+              // Priority labels
+              { name: 'priority/critical', color: 'b60205', description: 'Critical priority' },
+              { name: 'priority/high', color: 'd93f0b', description: 'High priority' },
+              { name: 'priority/medium', color: 'fbca04', description: 'Medium priority' },
+              { name: 'priority/low', color: '0e8a16', description: 'Low priority' },
+
+              // Special labels
+              { name: 'good first issue', color: '7057ff', description: 'Good for newcomers' },
+              { name: 'help wanted', color: '008672', description: 'Extra attention needed' },
+              { name: 'security', color: 'b60205', description: 'Security related' },
+              { name: 'breaking change', color: 'd93f0b', description: 'Contains breaking changes' },
+              { name: 'automated', color: 'ededed', description: 'Automated PR (bots)' },
+              { name: 'duplicate', color: 'cfd3d7', description: 'Duplicate issue/PR' },
+              { name: 'invalid', color: 'e4e669', description: 'Invalid issue/PR' },
+              { name: 'wontfix', color: 'ffffff', description: 'Won\'t be fixed' },
+            ];
+
+            for (const label of labels) {
+              try {
+                await github.rest.issues.createLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  name: label.name,
+                  color: label.color,
+                  description: label.description
+                });
+                console.log(`Created label: ${label.name}`);
+              } catch (error) {
+                if (error.status === 422) {
+                  // Label exists, update it
+                  try {
+                    await github.rest.issues.updateLabel({
+                      owner: context.repo.owner,
+                      repo: context.repo.repo,
+                      name: label.name,
+                      color: label.color,
+                      description: label.description
+                    });
+                    console.log(`Updated label: ${label.name}`);
+                  } catch (updateError) {
+                    console.log(`Failed to update label ${label.name}: ${updateError.message}`);
+                  }
+                } else {
+                  console.log(`Failed to create label ${label.name}: ${error.message}`);
+                }
+              }
+            }
+
+            console.log('Label setup complete!');

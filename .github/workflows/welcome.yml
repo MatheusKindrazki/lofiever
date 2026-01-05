@@ -1,0 +1,45 @@
+name: Welcome New Contributors
+
+on:
+  pull_request_target:
+    types: [opened]
+  issues:
+    types: [opened]
+
+permissions:
+  issues: write
+  pull-requests: write
+
+jobs:
+  welcome:
+    name: Welcome
+    runs-on: ubuntu-latest
+    steps:
+      - name: Welcome first-time contributors
+        uses: actions/first-interaction@v1
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          issue-message: |
+            Welcome to Lofiever! Thanks for opening your first issue.
+
+            A maintainer will review it soon. In the meantime:
+            - Make sure you've searched existing issues to avoid duplicates
+            - Provide as much detail as possible to help us understand the problem
+            - If this is a bug report, include steps to reproduce
+
+            Thanks for contributing!
+          pr-message: |
+            Welcome to Lofiever! Thanks for opening your first pull request.
+
+            Here's what happens next:
+            1. Our CI will run automated checks on your code
+            2. A maintainer will review your changes
+            3. We may request some changes or ask questions
+
+            **Checklist for your PR:**
+            - [ ] PR title follows [conventional commits](https://www.conventionalcommits.org/) format
+            - [ ] Description explains the changes
+            - [ ] Tests pass locally
+            - [ ] Code follows the project style
+
+            Thanks for your contribution!
