@@ -3,6 +3,11 @@ name: lofiever-dev
 services:
   redis:
     image: redis:7-alpine
+    deploy:
+      resources:
+        limits:
+          cpus: "0.1"
+          memory: 128M
     ports:
       - 6379:6379
     volumes:
@@ -10,6 +15,11 @@ services:
 
   postgres:
     image: postgres:16-alpine
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 256M
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
@@ -21,6 +31,11 @@ services:
 
   icecast:
     image: moul/icecast
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
     ports:
       - "${ICECAST_PORT:-8000}:8000"
     environment:
@@ -34,6 +49,11 @@ services:
 
   liquidsoap:
     image: savonet/liquidsoap:v2.3.3
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 256M
     depends_on:
       - icecast
     environment:
