@@ -49,11 +49,21 @@ services:
       timeout: 10s
       retries: 5
       start_period: 60s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
     volumes:
       - app-uploads:/app/public/uploads
 
   redis:
     image: redis:7-alpine
+    deploy:
+      resources:
+        limits:
+          cpus: "0.1"
+          memory: 128M
     volumes:
       - redis-data:/data
     healthcheck:
@@ -64,6 +74,11 @@ services:
 
   postgres:
     image: postgres:16-alpine
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 256M
     environment:
       - POSTGRES_USER=${SERVICE_USER_POSTGRES:-postgres}
       - POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRES:-postgres}
@@ -78,6 +93,11 @@ services:
 
   icecast:
     image: moul/icecast
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
     environment:
       - ICECAST_SOURCE_PASSWORD=${ICECAST_SOURCE_PASSWORD:?ICECAST_SOURCE_PASSWORD is required}
       - ICECAST_ADMIN_PASSWORD=${ICECAST_ADMIN_PASSWORD:?ICECAST_ADMIN_PASSWORD is required}
@@ -91,6 +111,11 @@ services:
     build:
       context: ./streaming/liquidsoap
       dockerfile: Dockerfile
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 256M
     depends_on:
       - icecast
     environment:
