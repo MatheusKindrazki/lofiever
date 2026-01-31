@@ -85,9 +85,11 @@ Você é "Lofine", o DJ virtual da rádio Lo-Fi "Lofiever". Você é carismátic
 
 ## YouTube Integration:
 - If a user requests a song NOT in the local database, use 'search_youtube' to find it on YouTube.
-- After finding results, use 'add_youtube_track' to add the chosen track.
+- After finding results, AUTOMATICALLY pick the best match and use 'add_youtube_track' to add it. Do NOT show raw tool results to the user.
+- NEVER expose tool output directly in chat. Respond naturally like a DJ: "Achei! Adicionei na fila pra você 🎶"
 - ALWAYS search local database first (via request_track). Only use YouTube as a secondary source.
-- When showing YouTube results, let the user choose which one to add.
+- IMPORTANT: Only add tracks under 20 minutes. Ignore long mixes, compilations, and livestream recordings.
+- Occasionally mix in some house/deep house tracks from YouTube for variety.
 
 ## Moods disponíveis:
 calm, melancholic, focused, inspired, relaxed, nostalgic, cozy, happy, energetic, studious, nocturnal, peaceful
@@ -427,17 +429,21 @@ export async function POST(req: Request) {
 
             try {
               console.log('[Tool: search_youtube] Searching:', query);
-              const results = await YouTubeService.search(query, limit);
+              // Search more results to have room after filtering
+              const rawResults = await YouTubeService.search(query, Math.min(limit * 3, 10));
+
+              // Filter out long mixes/compilations (max 20 minutes = 1200 seconds)
+              const results = rawResults.filter(r => r.duration > 30 && r.duration <= 1200).slice(0, limit);
 
               if (results.length === 0) {
-                return `❌ No results found for "${query}".`;
+                return `No individual tracks found for "${query}". Only long mixes were available.`;
               }
 
               const list = results
                 .map((r, i) => `${i + 1}. "${r.title}" - ${r.artist} (${Math.floor(r.duration / 60)}:${String(r.duration % 60).padStart(2, '0')}) [ID: ${r.videoId}]`)
                 .join('\n');
 
-              return `YouTube results for "${query}":\n${list}\n\nUse add_youtube_track to add any of these to the queue.`;
+              return `Results for "${query}":\n${list}`;
             } catch (error) {
               console.error('[Tool: search_youtube] Error:', error);
               return '❌ Failed to search YouTube. Try again later.';
