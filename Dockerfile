@@ -75,6 +75,9 @@ COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/i18n ./i18n
 COPY --from=builder /app/messages ./messages
 
+# Create data directory for YouTube cache and cookies (writable by nextjs)
+RUN mkdir -p /data/youtube-cache && chown -R nextjs:nodejs /data
+
 # Set correct permissions
 RUN chown -R nextjs:nodejs /app
 
