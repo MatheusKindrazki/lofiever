@@ -6,6 +6,9 @@ import { ModerationService } from '@/services/moderation/moderation.service';
 import { prisma } from '@/lib/prisma';
 import { redisHelpers, redis } from '@/lib/redis';
 import { handleApiError } from '@/lib/api-utils';
+import { YouTubeService } from '@/services/youtube';
+import { PlaylistManagerService } from '@/services/playlist/playlist-manager.service';
+import { config } from '@/lib/config';
 
 export const maxDuration = 30;
 
@@ -79,6 +82,12 @@ Você é "Lofine", o DJ virtual da rádio Lo-Fi "Lofiever". Você é carismátic
 - **Público**: Você está falando com TODOS. Seja breve e inclusivo.
 - **Privado**: Você está falando apenas com UM usuário. Pode ser mais pessoal, mas mantenha o estilo "chill".
 - Se o usuário disser que está em "modo privado" ou "conversa privada", saiba que só ele está lendo.
+
+## YouTube Integration:
+- If a user requests a song NOT in the local database, use 'search_youtube' to find it on YouTube.
+- After finding results, use 'add_youtube_track' to add the chosen track.
+- ALWAYS search local database first (via request_track). Only use YouTube as a secondary source.
+- When showing YouTube results, let the user choose which one to add.
 
 ## Moods disponíveis:
 calm, melancholic, focused, inspired, relaxed, nostalgic, cozy, happy, energetic, studious, nocturnal, peaceful
@@ -401,6 +410,109 @@ export async function POST(req: Request) {
             } catch (error) {
               console.error('[Tool: update_username] Error:', error);
               return "❌ Tive um problema pra salvar seu nome. Tenta de novo?";
+            }
+          },
+        }),
+
+        search_youtube: tool({
+          description: 'Search YouTube for tracks. Use when a user requests a song not found in the local database, or when exploring new music.',
+          inputSchema: z.object({
+            query: z.string().describe('Search query (e.g. "lofi chill beats", "nujabes feather")'),
+            limit: z.number().min(1).max(5).default(3).describe('Max results'),
+          }),
+          execute: async ({ query, limit }) => {
+            if (!config.youtube.enabled) {
+              return '❌ YouTube integration is currently disabled.';
+            }
+
+            try {
+              console.log('[Tool: search_youtube] Searching:', query);
+              const results = await YouTubeService.search(query, limit);
+
+              if (results.length === 0) {
+                return `❌ No results found for "${query}".`;
+              }
+
+              const list = results
+                .map((r, i) => `${i + 1}. "${r.title}" - ${r.artist} (${Math.floor(r.duration / 60)}:${String(r.duration % 60).padStart(2, '0')}) [ID: ${r.videoId}]`)
+                .join('\n');
+
+              return `YouTube results for "${query}":\n${list}\n\nUse add_youtube_track to add any of these to the queue.`;
+            } catch (error) {
+              console.error('[Tool: search_youtube] Error:', error);
+              return '❌ Failed to search YouTube. Try again later.';
+            }
+          },
+        }),
+
+        add_youtube_track: tool({
+          description: 'Add a YouTube track to the radio queue. Use after search_youtube to add a specific result.',
+          inputSchema: z.object({
+            videoId: z.string().describe('The YouTube video ID'),
+            title: z.string().describe('Track title'),
+            artist: z.string().describe('Track artist'),
+          }),
+          execute: async ({ videoId, title, artist }) => {
+            if (!config.youtube.enabled) {
+              return '❌ YouTube integration is currently disabled.';
+            }
+
+            try {
+              console.log('[Tool: add_youtube_track] Adding:', videoId, title, artist);
+
+              // Check cooldown
+              const cooldownCheck = await ModerationService.checkCooldown(userId);
+              if (!cooldownCheck.approved) {
+                return `❌ ${cooldownCheck.reason}`;
+              }
+
+              // Get full metadata if needed
+              let duration = 180;
+              try {
+                const info = await YouTubeService.getTrackInfo(videoId);
+                duration = info.duration;
+              } catch {
+                console.warn('[Tool: add_youtube_track] Could not get metadata, using defaults');
+              }
+
+              // Upsert track in database
+              const track = await prisma.track.upsert({
+                where: {
+                  sourceType_sourceId: {
+                    sourceType: 'youtube',
+                    sourceId: videoId,
+                  },
+                },
+                update: { title, artist, duration },
+                create: {
+                  title,
+                  artist,
+                  sourceType: 'youtube',
+                  sourceId: videoId,
+                  duration,
+                  mood: 'relaxed',
+                },
+              });
+
+              // Check duplicate in queue
+              const dupCheck = await ModerationService.checkDuplicate(track.id);
+              if (!dupCheck.approved) {
+                return `🎧 "${title}" already in queue! It'll play soon.`;
+              }
+
+              // Check rate limit
+              const rateCheck = await ModerationService.checkRateLimit(userId);
+              if (!rateCheck.approved) {
+                return `❌ ${rateCheck.reason}`;
+              }
+
+              // Queue track directly by ID (avoids fuzzy title search finding wrong track)
+              await PlaylistManagerService.queueTrack(track.id, username, false, userId);
+
+              return `✅ Added "${title}" by ${artist} from YouTube! It'll play soon.`;
+            } catch (error) {
+              console.error('[Tool: add_youtube_track] Error:', error);
+              return '❌ Failed to add YouTube track. Try again later.';
             }
           },
         }),

@@ -45,6 +45,14 @@ export const config = {
     bucket: process.env.R2_BUCKET_NAME || '',
     publicUrl: process.env.R2_PUBLIC_URL || '', // Ex: https://pub-<bucket_id>.r2.dev
   },
+  youtube: {
+    cookiesPath: process.env.YOUTUBE_COOKIES_PATH || '',
+    cacheDir: process.env.YOUTUBE_CACHE_DIR || '/data/youtube-cache',
+    cacheTtlDays: parseInt(process.env.YOUTUBE_CACHE_TTL_DAYS || '7', 10),
+    audioFormat: process.env.YOUTUBE_AUDIO_FORMAT || 'opus',
+    audioQuality: process.env.YOUTUBE_AUDIO_QUALITY || '0',
+    enabled: process.env.YOUTUBE_ENABLED === 'true',
+  },
 } as const;
 
 // Create a separate type declaration file for environment variables

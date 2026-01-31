@@ -34,6 +34,7 @@ model Track {
   history     PlaybackHistory[]
   requests    TrackRequest[]
 
+  @@unique([sourceType, sourceId])
   @@map("tracks")
 }
 

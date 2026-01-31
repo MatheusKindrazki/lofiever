@@ -45,7 +45,7 @@ export interface Track {
   id: string;
   title: string;
   artist: string;
-  sourceType: 'spotify' | 'youtube';
+  sourceType: 'spotify' | 'youtube' | 'local' | 's3' | 'r2';
   sourceId: string;
   duration: number;
   bpm?: number;
