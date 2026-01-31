@@ -4,6 +4,8 @@ import { redis } from "@/lib/redis";
 import { prisma } from "@/lib/prisma";
 import { R2Lib } from "@/lib/r2";
 import type { Track } from "@prisma/client";
+import { YouTubeCacheService } from '@/services/youtube';
+import { config } from '@/lib/config';
 
 interface QueueTrack extends Track {
   addedBy?: string;
@@ -66,6 +68,22 @@ export async function GET(): Promise<NextResponse> {
         // Gerar URL pré-assinada do R2/S3 (expira em 1 hora)
         trackUrl = await R2Lib.getPresignedUrl(nextTrack.sourceId, 3600);
         break;
+      case "youtube": {
+        if (!config.youtube.enabled) {
+          console.warn('[Next Track] YouTube disabled, using fallback');
+          trackUrl = "/music/example.mp3";
+          break;
+        }
+        const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+        try {
+          await YouTubeCacheService.ensureCached(nextTrack.sourceId);
+          trackUrl = `${baseUrl}/api/youtube/serve/${nextTrack.sourceId}`;
+        } catch (error) {
+          console.error(`[Next Track] YouTube cache failed for ${nextTrack.sourceId}:`, error);
+          trackUrl = "/music/example.mp3";
+        }
+        break;
+      }
       default:
         console.warn(
           `[Next Track] Unknown sourceType: ${nextTrack.sourceType}, using fallback`,

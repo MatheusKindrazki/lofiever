@@ -38,6 +38,13 @@ services:
       - API_SECRET_KEY=${API_SECRET_KEY:?API_SECRET_KEY is required}
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:3000}
       - RATE_LIMIT_ENABLED=${RATE_LIMIT_ENABLED:-true}
+      # YouTube Music Integration
+      - YOUTUBE_ENABLED=${YOUTUBE_ENABLED:-false}
+      - YOUTUBE_COOKIES_PATH=${YOUTUBE_COOKIES_PATH:-/data/youtube-cookies.txt}
+      - YOUTUBE_CACHE_DIR=${YOUTUBE_CACHE_DIR:-/data/youtube-cache}
+      - YOUTUBE_CACHE_TTL_DAYS=${YOUTUBE_CACHE_TTL_DAYS:-7}
+      - YOUTUBE_AUDIO_FORMAT=${YOUTUBE_AUDIO_FORMAT:-opus}
+      - YOUTUBE_AUDIO_QUALITY=${YOUTUBE_AUDIO_QUALITY:-0}
     depends_on:
       postgres:
         condition: service_healthy
@@ -53,9 +60,10 @@ services:
       resources:
         limits:
           cpus: "0.5"
-          memory: 512M
+          memory: 768M
     volumes:
       - app-uploads:/app/public/uploads
+      - youtube-cache:/data/youtube-cache
 
   redis:
     image: redis:7-alpine
@@ -130,3 +138,4 @@ volumes:
   postgres-data:
   app-uploads:
   music-data:
+  youtube-cache:

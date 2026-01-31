@@ -63,6 +63,11 @@ RUN npm ci --only=production && \
     npx prisma generate && \
     npm cache clean --force
 
+# Install yt-dlp and ffmpeg (for YouTube audio extraction)
+RUN apk add --no-cache python3 ffmpeg curl \
+    && curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp \
+    && chmod a+rx /usr/local/bin/yt-dlp
+
 # Copy built application from builder stage
 COPY --from=builder /app/.next ./.next
 COPY --from=builder /app/public ./public

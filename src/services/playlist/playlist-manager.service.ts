@@ -2,6 +2,8 @@ import { prisma } from '@/lib/prisma';
 import type { Track } from '@prisma/client';
 import { redis, redisHelpers, type ChatMessage } from '@/lib/redis';
 import { recommendNextTrack } from './ai-recommendation.service';
+import { YouTubeCacheService } from '@/services/youtube';
+import { config } from '@/lib/config';
 
 /**
  * Retorna uma faixa aleatória do banco de dados como fallback.
@@ -33,6 +35,25 @@ async function getFallbackTrack(): Promise<Track> {
   }
 
   return track;
+}
+
+/**
+ * Triggers background pre-fetch for YouTube tracks in the queue.
+ * Fire-and-forget: errors are logged but don't block the queue.
+ */
+function triggerYouTubePreFetch(track: Track): void {
+  if (track.sourceType !== 'youtube' || !config.youtube.enabled) return;
+
+  YouTubeCacheService.has(track.sourceId).then((cached) => {
+    if (!cached) {
+      console.log(`[Pre-fetch] Starting download for YouTube track: ${track.sourceId}`);
+      YouTubeCacheService.ensureCached(track.sourceId).catch((err) => {
+        console.error(`[Pre-fetch] Failed for ${track.sourceId}:`, err);
+      });
+    }
+  }).catch(() => {
+    // Silently ignore has() errors
+  });
 }
 
 export const PlaylistManagerService = {
@@ -75,6 +96,7 @@ export const PlaylistManagerService = {
 
         // Injeta no início da fila (fura fila)
         await redis.lpush(QUEUE_KEY, JSON.stringify(queueItem));
+        triggerYouTubePreFetch(req.track);
 
         await prisma.trackRequest.update({
           where: { id: req.id },
@@ -134,6 +156,7 @@ export const PlaylistManagerService = {
           addedBy: 'ai-curator',
         };
         await redis.rpush(QUEUE_KEY, JSON.stringify(queueItem));
+        triggerYouTubePreFetch(recommendedTrack);
         generatedIds.push(recommendedTrack.id);
       } catch (err) {
         console.error('Erro ao gerar recomendação para a fila:', err);
