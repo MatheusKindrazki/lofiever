@@ -158,6 +158,9 @@ ffmpeg -version
 mkdir -p "$YOUTUBE_CACHE_DIR" && test -w "$YOUTUBE_CACHE_DIR"
 ```
 
+If logs show `Sign in to confirm you’re not a bot`, refresh `YOUTUBE_COOKIES_PATH`
+with a new exported cookies file, or set `YOUTUBE_COOKIES_PATH=""` temporarily.
+
 ## R2 Bucket Setup
 
 1. Create R2 bucket in Cloudflare Dashboard

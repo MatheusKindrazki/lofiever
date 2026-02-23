@@ -84,6 +84,7 @@ jest.mock('@/services/youtube', () => ({
   },
   normalizeYouTubeVideoId: jest.fn((videoId: string) => videoId),
   InvalidYouTubeVideoIdError: class InvalidYouTubeVideoIdError extends Error {},
+  YouTubeAuthenticationError: class YouTubeAuthenticationError extends Error {},
 }));
 
 jest.mock('@/lib/prisma', () => ({
@@ -188,5 +189,25 @@ describe('POST /api/curation/process-message - YouTube fallback', () => {
     expect(YouTubeService.search).toHaveBeenCalledWith('Nujabes Feather', 8);
     expect(PlaylistManagerService.queueTrack).toHaveBeenCalledWith('track-youtube-1', 'Matheus', false, 'user-1');
     expect(ModerationService.incrementUserStats).toHaveBeenCalledWith('user-1', true);
+  });
+
+  it('should return explicit auth message when YouTube blocks requests', async () => {
+    const { YouTubeAuthenticationError } = jest.requireMock('@/services/youtube');
+    (YouTubeService.search as jest.Mock).mockRejectedValue(
+      new YouTubeAuthenticationError('auth required'),
+    );
+
+    const request = {
+      json: async () => ({
+        messages: [{ role: 'user', content: 'Toca nujabes' }],
+        data: { userId: 'user-1', username: 'Matheus', isPrivate: true, locale: 'pt' },
+      }),
+    } as unknown as Request;
+
+    const response = await POST(request);
+    const text = await response.text();
+
+    expect(text).toContain('autenticação/cookies');
+    expect(PlaylistManagerService.queueTrack).not.toHaveBeenCalled();
   });
 });

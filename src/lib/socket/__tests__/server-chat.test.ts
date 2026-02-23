@@ -1,4 +1,4 @@
-import { getAIFallbackContent, shouldSkipAIReply } from '../chat-policy';
+import { getAIFallbackContent, resolveAIMessageContent, shouldSkipAIReply } from '../chat-policy';
 
 describe('socket server chat policy helpers', () => {
   it('should skip AI reply for public chat when listeners are below minimum', () => {
@@ -16,5 +16,14 @@ describe('socket server chat policy helpers', () => {
   it('should return localized fallback content', () => {
     expect(getAIFallbackContent('pt')).toContain('mini bug');
     expect(getAIFallbackContent('en')).toContain('hiccup');
+  });
+
+  it('should fallback when AI content is empty', () => {
+    expect(resolveAIMessageContent('', 'pt')).toContain('mini bug');
+    expect(resolveAIMessageContent('   ', 'en')).toContain('hiccup');
+  });
+
+  it('should keep non-empty AI content unchanged', () => {
+    expect(resolveAIMessageContent('ola, tudo certo?', 'pt')).toBe('ola, tudo certo?');
   });
 });

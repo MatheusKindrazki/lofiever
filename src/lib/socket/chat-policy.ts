@@ -43,3 +43,12 @@ export function getAIFallbackContent(locale: 'pt' | 'en'): string {
     ? 'Had a little hiccup here. Try again in a sec and we keep the vibe going.'
     : 'Deu um mini bug aqui. Tenta de novo em instantes que seguimos na vibe.';
 }
+
+export function resolveAIMessageContent(content: string, locale: 'pt' | 'en'): string {
+  const trimmed = content.trim();
+  if (trimmed.length > 0) {
+    return content;
+  }
+
+  return getAIFallbackContent(locale);
+}

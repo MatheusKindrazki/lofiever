@@ -8,7 +8,7 @@ import { redis, redisHelpers, KEYS } from '../redis';
 import { config } from '../config';
 import { Redis } from 'ioredis';
 import type { ChatMessage as RedisChatMessage, Track as RedisTrack } from '../redis';
-import { getAIFallbackContent, shouldSkipAIReply } from './chat-policy';
+import { getAIFallbackContent, resolveAIMessageContent, shouldSkipAIReply } from './chat-policy';
 import { ProactiveEngagementService } from '@/services/moderation/proactive-engagement.service';
 import { ContentModerationService } from '@/services/moderation/content-moderation.service';
 import type { Track } from '@prisma/client';
@@ -376,6 +376,8 @@ function setupEventHandlers(io: SocketIOServer<ClientToServerEvents, ServerToCli
           }
         }
 
+        aiFullContent = resolveAIMessageContent(aiFullContent, locale);
+
         // 4. Store full AI message and broadcast completion
         const aiChatMessage: RedisChatMessage = {
           id: aiMessageId,
@@ -391,8 +393,10 @@ function setupEventHandlers(io: SocketIOServer<ClientToServerEvents, ServerToCli
         await redisHelpers.addChatMessage(aiChatMessage);
 
         if (isPrivate) {
+          socket.emit(SOCKET_EVENTS.CHAT_MESSAGE, aiChatMessage);
           socket.emit(SOCKET_EVENTS.AI_MESSAGE_COMPLETE, { messageId: aiMessageId });
         } else {
+          io.emit(SOCKET_EVENTS.CHAT_MESSAGE, aiChatMessage);
           io.emit(SOCKET_EVENTS.AI_MESSAGE_COMPLETE, { messageId: aiMessageId });
         }
 

@@ -40,9 +40,19 @@ export class YouTubeCommandError extends Error {
   }
 }
 
-function getBaseArgs(): string[] {
+export class YouTubeAuthenticationError extends YouTubeCommandError {
+  readonly stderr: string;
+
+  constructor(action: string, stderr: string, cause?: unknown) {
+    super(action, cause);
+    this.name = 'YouTubeAuthenticationError';
+    this.stderr = stderr;
+  }
+}
+
+function getBaseArgs(includeCookies: boolean = true): string[] {
   const args: string[] = [];
-  if (config.youtube.cookiesPath) {
+  if (includeCookies && config.youtube.cookiesPath) {
     args.push('--cookies', config.youtube.cookiesPath);
   }
   args.push('--no-warnings', '--no-update');
@@ -111,32 +121,98 @@ function parseTrackInfo(data: YtDlpJsonOutput): YouTubeTrackInfo {
   };
 }
 
+function getCommandStderr(error: unknown): string {
+  if (!error || typeof error !== 'object') return '';
+
+  const maybe = error as { stderr?: unknown; message?: unknown };
+  if (typeof maybe.stderr === 'string') return maybe.stderr;
+  if (typeof maybe.message === 'string') return maybe.message;
+  return '';
+}
+
+function isAuthenticationOrCookieChallenge(stderr: string): boolean {
+  if (!stderr) return false;
+  const lower = stderr.toLowerCase();
+
+  return (
+    lower.includes('sign in to confirm you’re not a bot')
+    || lower.includes("sign in to confirm you're not a bot")
+    || lower.includes('use --cookies-from-browser')
+    || lower.includes('use --cookies for the authentication')
+    || lower.includes('cookies file')
+    || lower.includes('cookie')
+  );
+}
+
+function wrapYouTubeError(action: string, cause: unknown): YouTubeCommandError {
+  const stderr = getCommandStderr(cause);
+  if (isAuthenticationOrCookieChallenge(stderr)) {
+    return new YouTubeAuthenticationError(action, stderr, cause);
+  }
+
+  return new YouTubeCommandError(action, cause);
+}
+
+function shouldRetryWithoutCookies(cause: unknown): boolean {
+  if (!config.youtube.cookiesPath) return false;
+  return isAuthenticationOrCookieChallenge(getCommandStderr(cause));
+}
+
+async function executeYtDlpWithOptionalCookieRetry(
+  action: string,
+  buildArgs: (includeCookies: boolean) => string[],
+  timeout: number,
+): Promise<{ stdout: string; stderr: string }> {
+  try {
+    return await execFileAsync('yt-dlp', buildArgs(true), { timeout });
+  } catch (error) {
+    if (!shouldRetryWithoutCookies(error)) {
+      throw wrapYouTubeError(action, error);
+    }
+
+    try {
+      console.warn(`[YouTube] Retry without cookies after failure while trying to ${action}`);
+      return await execFileAsync('yt-dlp', buildArgs(false), { timeout });
+    } catch (retryError) {
+      if (isAuthenticationOrCookieChallenge(getCommandStderr(retryError))) {
+        console.error('[YouTube] Authentication challenge persists after retry without cookies. Refresh the cookies file or disable YOUTUBE_COOKIES_PATH temporarily.');
+      }
+      throw wrapYouTubeError(action, retryError);
+    }
+  }
+}
+
 export const YouTubeService = {
   async getTrackInfo(videoId: string): Promise<YouTubeTrackInfo> {
     const normalizedVideoId = normalizeYouTubeVideoId(videoId);
-    const args = [
-      ...getBaseArgs(),
+    const buildArgs = (includeCookies: boolean) => [
+      ...getBaseArgs(includeCookies),
       '--dump-json',
       '--no-download',
       `https://www.youtube.com/watch?v=${normalizedVideoId}`,
     ];
 
     try {
-      const { stdout } = await execFileAsync('yt-dlp', args, {
-        timeout: 30_000,
-      });
+      const { stdout } = await executeYtDlpWithOptionalCookieRetry(
+        `fetch metadata for ${normalizedVideoId}`,
+        buildArgs,
+        30_000,
+      );
 
       const data: YtDlpJsonOutput = JSON.parse(stdout);
       return parseTrackInfo(data);
     } catch (error) {
-      throw new YouTubeCommandError(`fetch metadata for ${normalizedVideoId}`, error);
+      if (error instanceof YouTubeCommandError) {
+        throw error;
+      }
+      throw wrapYouTubeError(`fetch metadata for ${normalizedVideoId}`, error);
     }
   },
 
   async downloadAudio(videoId: string, outputPath: string): Promise<void> {
     const normalizedVideoId = normalizeYouTubeVideoId(videoId);
-    const args = [
-      ...getBaseArgs(),
+    const buildArgs = (includeCookies: boolean) => [
+      ...getBaseArgs(includeCookies),
       '-x',
       '--audio-format', config.youtube.audioFormat,
       '--audio-quality', config.youtube.audioQuality,
@@ -147,46 +223,58 @@ export const YouTubeService = {
     ];
 
     try {
-      await execFileAsync('yt-dlp', args, {
-        timeout: 120_000,
-      });
+      await executeYtDlpWithOptionalCookieRetry(
+        `download audio for ${normalizedVideoId}`,
+        buildArgs,
+        120_000,
+      );
     } catch (error) {
-      throw new YouTubeCommandError(`download audio for ${normalizedVideoId}`, error);
+      if (error instanceof YouTubeCommandError) {
+        throw error;
+      }
+      throw wrapYouTubeError(`download audio for ${normalizedVideoId}`, error);
     }
   },
 
   async getDirectAudioUrl(videoId: string): Promise<string> {
     const normalizedVideoId = normalizeYouTubeVideoId(videoId);
-    const args = [
-      ...getBaseArgs(),
+    const buildArgs = (includeCookies: boolean) => [
+      ...getBaseArgs(includeCookies),
       '-f', 'bestaudio',
       '--get-url',
       `https://www.youtube.com/watch?v=${normalizedVideoId}`,
     ];
 
     try {
-      const { stdout } = await execFileAsync('yt-dlp', args, {
-        timeout: 30_000,
-      });
+      const { stdout } = await executeYtDlpWithOptionalCookieRetry(
+        `resolve direct audio URL for ${normalizedVideoId}`,
+        buildArgs,
+        30_000,
+      );
 
       return stdout.trim();
     } catch (error) {
-      throw new YouTubeCommandError(`resolve direct audio URL for ${normalizedVideoId}`, error);
+      if (error instanceof YouTubeCommandError) {
+        throw error;
+      }
+      throw wrapYouTubeError(`resolve direct audio URL for ${normalizedVideoId}`, error);
     }
   },
 
   async search(query: string, limit: number = 5): Promise<YouTubeTrackInfo[]> {
-    const args = [
-      ...getBaseArgs(),
+    const buildArgs = (includeCookies: boolean) => [
+      ...getBaseArgs(includeCookies),
       '--dump-json',
       '--no-download',
       `ytsearch${limit}:${query}`,
     ];
 
     try {
-      const { stdout } = await execFileAsync('yt-dlp', args, {
-        timeout: 30_000,
-      });
+      const { stdout } = await executeYtDlpWithOptionalCookieRetry(
+        `search tracks for query "${query}"`,
+        buildArgs,
+        30_000,
+      );
 
       const results = stdout
         .trim()
@@ -199,7 +287,10 @@ export const YouTubeService = {
 
       return results;
     } catch (error) {
-      throw new YouTubeCommandError(`search tracks for query "${query}"`, error);
+      if (error instanceof YouTubeCommandError) {
+        throw error;
+      }
+      throw wrapYouTubeError(`search tracks for query "${query}"`, error);
     }
   },
 };

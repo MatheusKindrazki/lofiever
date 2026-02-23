@@ -9,6 +9,7 @@ import { handleApiError } from '@/lib/api-utils';
 import {
   InvalidYouTubeVideoIdError,
   normalizeYouTubeVideoId,
+  YouTubeAuthenticationError,
   YouTubeService,
   type YouTubeTrackInfo,
 } from '@/services/youtube';
@@ -95,6 +96,58 @@ function pickBestYouTubeMatch(results: YouTubeTrackInfo[], query: string): YouTu
     .sort((a, b) => scoreYouTubeMatch(b, query) - scoreYouTubeMatch(a, query))[0];
 }
 
+function normalizeToolOutput(value: unknown): string {
+  if (typeof value === 'string') return value;
+
+  if (Array.isArray(value)) {
+    return value
+      .map(normalizeToolOutput)
+      .filter(Boolean)
+      .join('\n')
+      .trim();
+  }
+
+  if (!value || typeof value !== 'object') return '';
+
+  const data = value as Record<string, unknown>;
+
+  if (typeof data.text === 'string') return data.text;
+  if (typeof data.message === 'string') return data.message;
+  if (typeof data.content === 'string') return data.content;
+
+  if (Array.isArray(data.content)) {
+    const text = data.content
+      .map((entry) => {
+        if (typeof entry === 'string') return entry;
+        if (entry && typeof entry === 'object' && typeof (entry as { text?: unknown }).text === 'string') {
+          return (entry as { text: string }).text;
+        }
+        return '';
+      })
+      .filter(Boolean)
+      .join('\n')
+      .trim();
+
+    if (text) return text;
+  }
+
+  return '';
+}
+
+function getToolResultText(toolResult: unknown): string {
+  if (!toolResult || typeof toolResult !== 'object') {
+    return normalizeToolOutput(toolResult);
+  }
+
+  const data = toolResult as Record<string, unknown>;
+  return (
+    normalizeToolOutput(data.output)
+    || normalizeToolOutput(data.result)
+    || normalizeToolOutput(data.text)
+    || normalizeToolOutput(data.content)
+  );
+}
+
 export async function POST(req: Request) {
   try {
     const { messages, data } = await req.json();
@@ -119,6 +172,9 @@ export async function POST(req: Request) {
       youtubeSearchError: locale === 'en'
         ? 'Failed to search YouTube right now. Try again in a moment.'
         : 'Falhei ao buscar no YouTube agora. Tenta de novo em instantes.',
+      youtubeAuthError: locale === 'en'
+        ? 'YouTube is temporarily unavailable due to authentication. Please try again in a bit.'
+        : 'O YouTube está indisponível no momento por autenticação/cookies. Tenta de novo em instantes.',
       youtubeAddError: locale === 'en'
         ? 'Could not add this YouTube track right now.'
         : 'Não consegui adicionar essa faixa do YouTube agora.',
@@ -225,6 +281,10 @@ export async function POST(req: Request) {
         info = await YouTubeService.getTrackInfo(normalizedVideoId);
       } catch (error) {
         console.error('[AI Curation] Failed to load YouTube metadata:', error);
+        if (error instanceof YouTubeAuthenticationError) {
+          await recordTrackRequest(query, 'rejected', 'YouTube authentication required');
+          return `❌ ${t.youtubeAuthError}`;
+        }
         await recordTrackRequest(query, 'rejected', 'Failed to fetch YouTube metadata');
         return `❌ ${t.youtubeAddError}`;
       }
@@ -300,6 +360,10 @@ export async function POST(req: Request) {
         });
       } catch (error) {
         console.error('[AI Curation] YouTube fallback search failed:', error);
+        if (error instanceof YouTubeAuthenticationError) {
+          await recordTrackRequest(query, 'rejected', 'YouTube authentication required');
+          return `❌ ${t.youtubeAuthError}`;
+        }
         await recordTrackRequest(query, 'rejected', 'YouTube search fallback failed');
         return `❌ ${t.youtubeSearchError}`;
       }
@@ -618,6 +682,9 @@ export async function POST(req: Request) {
                 : `Resultados no YouTube para "${query}":\n${list}`;
             } catch (error) {
               console.error('[Tool: search_youtube] Error:', error);
+              if (error instanceof YouTubeAuthenticationError) {
+                return `❌ ${t.youtubeAuthError}`;
+              }
               return `❌ ${t.youtubeSearchError}`;
             }
           },
@@ -661,12 +728,21 @@ export async function POST(req: Request) {
             console.log('[AI Curation] No text generated, using tool results');
 
             if (toolResults && toolResults.length > 0) {
+              let wroteToolOutput = false;
               for (const toolResult of toolResults) {
-                const output = (toolResult as { output?: string; result?: string }).output
-                  || (toolResult as { output?: string; result?: string }).result;
+                const output = getToolResultText(toolResult).trim();
                 if (output) {
+                  wroteToolOutput = true;
                   controller.enqueue(encoder.encode(output));
                 }
+              }
+
+              if (!wroteToolOutput) {
+                controller.enqueue(encoder.encode(
+                  locale === 'en'
+                    ? 'I had a small issue while handling your request. Please try again in a moment.'
+                    : 'Tive um pequeno problema pra processar isso. Tenta novamente em instantes.',
+                ));
               }
             } else {
               controller.enqueue(encoder.encode(

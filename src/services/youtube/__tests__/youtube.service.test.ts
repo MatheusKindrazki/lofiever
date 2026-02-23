@@ -1,6 +1,7 @@
 import {
   InvalidYouTubeVideoIdError,
   normalizeYouTubeVideoId,
+  YouTubeAuthenticationError,
   YouTubeService,
 } from '../youtube.service';
 import { execFile } from 'child_process';
@@ -9,7 +10,7 @@ import { execFile } from 'child_process';
 jest.mock('@/lib/config', () => ({
   config: {
     youtube: {
-      cookiesPath: '',
+      cookiesPath: '/data/youtube-cookies.txt',
       cacheDir: '/data/youtube-cache',
       cacheTtlDays: 7,
       audioFormat: 'opus',
@@ -95,6 +96,43 @@ describe('YouTubeService', () => {
       expect(results).toHaveLength(2);
       expect(results[0].videoId).toBe('dQw4w9WgXcQ');
       expect(results[1].videoId).toBe('jNQXAC9IVRw');
+    });
+
+    it('should retry search without cookies when auth challenge happens', async () => {
+      const signInError = new Error('sign in required') as Error & { stderr?: string };
+      signInError.stderr = "ERROR: [youtube] abc: Sign in to confirm you're not a bot. Use --cookies-from-browser or --cookies";
+
+      const mockOutput = JSON.stringify({
+        id: 'dQw4w9WgXcQ',
+        title: 'Track A',
+        channel: 'Ch1',
+        uploader: 'Ch1',
+        duration: 120,
+        thumbnail: '',
+      });
+
+      mockExecFile
+        .mockRejectedValueOnce(signInError)
+        .mockResolvedValueOnce({ stdout: mockOutput });
+
+      const results = await YouTubeService.search('lofi', 1);
+
+      expect(results).toHaveLength(1);
+      expect(mockExecFile).toHaveBeenCalledTimes(2);
+      expect(mockExecFile.mock.calls[1]?.[1]).not.toContain('--cookies');
+    });
+
+    it('should throw YouTubeAuthenticationError when auth challenge persists', async () => {
+      const signInError = new Error('sign in required') as Error & { stderr?: string };
+      signInError.stderr = "ERROR: [youtube] abc: Sign in to confirm you're not a bot. Use --cookies-from-browser or --cookies";
+
+      mockExecFile
+        .mockRejectedValueOnce(signInError)
+        .mockRejectedValueOnce(signInError);
+
+      await expect(YouTubeService.search('lofi', 1))
+        .rejects
+        .toBeInstanceOf(YouTubeAuthenticationError);
     });
   });
 

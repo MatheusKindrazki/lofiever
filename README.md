@@ -122,6 +122,16 @@ ffmpeg -version
 mkdir -p "$YOUTUBE_CACHE_DIR" && test -w "$YOUTUBE_CACHE_DIR"
 \`\`\`
 
+Se aparecer erro `Sign in to confirm you’re not a bot` nos logs:
+
+\`\`\`bash
+# opção 1: atualizar cookies exportados do YouTube para o arquivo configurado
+YOUTUBE_COOKIES_PATH=/data/youtube-cookies.txt
+
+# opção 2: remover cookies temporariamente (o serviço tenta sem cookies)
+YOUTUBE_COOKIES_PATH=
+\`\`\`
+
 ### 3. Start all services
 
 \`\`\`bash
