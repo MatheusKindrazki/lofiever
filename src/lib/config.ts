@@ -1,9 +1,36 @@
+function pickFirstValidUrl(
+  input: string | undefined,
+  fallback: string,
+): string {
+  const values = [input || '', fallback]
+    .flatMap((value) => value.split(/[,\s]+/))
+    .map((value) => value.trim())
+    .filter(Boolean);
+
+  for (const value of values) {
+    const candidate = value.startsWith('http://') || value.startsWith('https://')
+      ? value
+      : `https://${value}`;
+
+    try {
+      return new URL(candidate).toString().replace(/\/$/, '');
+    } catch {
+      // Try next candidate.
+    }
+  }
+
+  return fallback;
+}
+
+const PUBLIC_APP_URL = pickFirstValidUrl(process.env.NEXT_PUBLIC_APP_URL, 'http://localhost:3000');
+const INTERNAL_APP_URL = pickFirstValidUrl(process.env.APP_INTERNAL_URL, PUBLIC_APP_URL);
+
 export const config = {
   app: {
     name: 'Lofiever',
     description: '24/7 Lofi Streaming with AI Curation',
-    url: process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000',
-    internalUrl: process.env.APP_INTERNAL_URL || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000',
+    url: PUBLIC_APP_URL,
+    internalUrl: INTERNAL_APP_URL,
     env: process.env.NODE_ENV || 'development',
   },
   admin: {

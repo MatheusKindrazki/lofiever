@@ -1,7 +1,28 @@
 import type { Metadata } from 'next';
 import { routing } from '@/i18n/routing';
 
-const BASE_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://lofiever.com';
+function resolveBaseUrl(input?: string): string {
+  const values = [input || '', 'https://lofiever.com']
+    .flatMap((value) => value.split(/[,\s]+/))
+    .map((value) => value.trim())
+    .filter(Boolean);
+
+  for (const value of values) {
+    const candidate = value.startsWith('http://') || value.startsWith('https://')
+      ? value
+      : `https://${value}`;
+
+    try {
+      return new URL(candidate).toString().replace(/\/$/, '');
+    } catch {
+      // Try next value.
+    }
+  }
+
+  return 'https://lofiever.com';
+}
+
+const BASE_URL = resolveBaseUrl(process.env.NEXT_PUBLIC_APP_URL);
 
 // SEO content by locale
 export const seoContent = {

@@ -1,7 +1,8 @@
 import type { MetadataRoute } from 'next';
 import { routing } from '@/i18n/routing';
+import { config } from '@/lib/config';
 
-const BASE_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://lofiever.com';
+const BASE_URL = config.app.url;
 
 export default function sitemap(): MetadataRoute.Sitemap {
   const locales = routing.locales;
