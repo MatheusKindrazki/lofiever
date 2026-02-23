@@ -14,6 +14,8 @@ services:
       - REDIS_URL=redis://redis:6379
       # Auth (required)
       - NEXTAUTH_URL=${SERVICE_FQDN_APP:-http://localhost:3000}
+      - NEXT_PUBLIC_APP_URL=${SERVICE_FQDN_APP:-http://localhost:3000}
+      - APP_INTERNAL_URL=${APP_INTERNAL_URL:-http://app:3000}
       - AUTH_SECRET=${AUTH_SECRET:?AUTH_SECRET is required}
       # Admin access
       - ADMIN_EMAILS=${ADMIN_EMAILS:-}
@@ -38,6 +40,7 @@ services:
       - API_SECRET_KEY=${API_SECRET_KEY:?API_SECRET_KEY is required}
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:3000}
       - RATE_LIMIT_ENABLED=${RATE_LIMIT_ENABLED:-true}
+      - AI_REPLY_MIN_LISTENERS=${AI_REPLY_MIN_LISTENERS:-1}
       # YouTube Music Integration
       - YOUTUBE_ENABLED=${YOUTUBE_ENABLED:-false}
       - YOUTUBE_COOKIES_PATH=${YOUTUBE_COOKIES_PATH:-/data/youtube-cookies.txt}

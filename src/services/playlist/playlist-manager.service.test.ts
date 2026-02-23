@@ -40,6 +40,21 @@ jest.mock('./ai-recommendation.service', () => ({
   determineMoodFromChat: jest.fn().mockResolvedValue(undefined),
 }));
 
+jest.mock('@/services/youtube', () => ({
+  YouTubeCacheService: {
+    has: jest.fn().mockResolvedValue(false),
+    ensureCached: jest.fn().mockResolvedValue('/data/youtube-cache/dQw4w9WgXcQ.opus'),
+  },
+}));
+
+jest.mock('@/lib/config', () => ({
+  config: {
+    youtube: {
+      enabled: true,
+    },
+  },
+}));
+
 // Mocks tipados
 const mockedPrisma = prisma as unknown as {
   track: {
@@ -89,6 +104,21 @@ const track2: Track = {
   artworkKey: null,
   duration: 200,
   bpm: 90,
+  mood: 'relaxed',
+  createdAt: new Date(),
+  updatedAt: new Date(),
+  lastPlayed: null,
+};
+
+const trackYouTube: Track = {
+  id: 'track-youtube',
+  title: 'YT Track',
+  artist: 'YT Artist',
+  sourceType: 'youtube',
+  sourceId: 'dQw4w9WgXcQ',
+  artworkKey: null,
+  duration: 180,
+  bpm: null,
   mood: 'relaxed',
   createdAt: new Date(),
   updatedAt: new Date(),
@@ -191,6 +221,18 @@ describe('PlaylistManagerService', () => {
         'lofiever:playlist:upcoming',
         expect.stringContaining('track1')
       );
+    });
+
+    it('should trigger YouTube prefetch for YouTube tracks', async () => {
+      const { YouTubeCacheService } = jest.requireMock('@/services/youtube');
+      mockedPrisma.track.findUnique.mockResolvedValue(trackYouTube);
+
+      await PlaylistManagerService.queueTrack('track-youtube', 'admin', false);
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(YouTubeCacheService.has).toHaveBeenCalledWith('dQw4w9WgXcQ');
+      expect(YouTubeCacheService.ensureCached).toHaveBeenCalledWith('dQw4w9WgXcQ');
     });
   });
 });

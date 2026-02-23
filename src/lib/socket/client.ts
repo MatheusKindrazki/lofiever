@@ -7,6 +7,7 @@ import { config } from '../config';
 import type { Track, ChatMessage } from '../redis';
 import { customAlphabet } from 'nanoid';
 import { useUserSession } from '@/hooks/useUserSession';
+import { calculateBackoff, DEFAULT_RECONNECTION_CONFIG } from './chat-policy';
 
 const nanoid = customAlphabet('1234567890abcdefghijklmnopqrstuvwxyz', 10);
 
@@ -17,30 +18,7 @@ let socket: Socket<ServerToClientEvents, ClientToServerEvents> | null = null;
  * Exponential backoff configuration for reconnection
  * Starts at 1s, maxes at 30s, with full jitter to prevent thundering herd
  */
-const RECONNECTION_CONFIG = {
-  initialDelay: 1000,      // Start at 1 second
-  maxDelay: 30000,         // Max 30 seconds
-  factor: 2,               // Double each time
-  maxAttempts: 10,         // Max 10 attempts before giving up
-  jitter: true,            // Add randomness to prevent thundering herd
-};
-
-/**
- * Calculate delay with exponential backoff and optional jitter
- */
-function calculateBackoff(attempt: number): number {
-  const baseDelay = Math.min(
-    RECONNECTION_CONFIG.initialDelay * Math.pow(RECONNECTION_CONFIG.factor, attempt),
-    RECONNECTION_CONFIG.maxDelay
-  );
-
-  if (RECONNECTION_CONFIG.jitter) {
-    // Full jitter: random value between 0 and baseDelay
-    return Math.random() * baseDelay;
-  }
-
-  return baseDelay;
-}
+const RECONNECTION_CONFIG = DEFAULT_RECONNECTION_CONFIG;
 
 /**
  * Initialize socket connection (should be called only once)
@@ -426,15 +404,18 @@ export function useChat() {
   const [messages, setMessages] = useState<PendingChatMessage[]>([]);
   const [aiMessageBuffers, setAiMessageBuffers] = useState<Record<string, string>>({});
   const [isLoadingAI, setIsLoadingAI] = useState<boolean>(false);
+  const [chatError, setChatError] = useState<string | null>(null);
   const [pendingMessageId, setPendingMessageId] = useState<string | null>(null);
   const { socket, userId, isConnected, sendChatMessage } = useSocket();
   const pendingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const aiLoadingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const chatErrorTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   // Use ref to avoid stale closure issues with pendingMessageId
   const pendingMessageIdRef = useRef<string | null>(null);
 
   // Add a pending message (optimistic update)
   const addPendingMessage = useCallback((content: string, options: { isPrivate?: boolean; username?: string; locale?: 'pt' | 'en' }) => {
+    setChatError(null);
     const tempId = `pending-${nanoid()}`;
     // Generate unique clientMessageId for idempotency
     const clientMessageId = `${userId || 'anon'}-${Date.now()}-${nanoid()}`;
@@ -659,7 +640,7 @@ export function useChat() {
     };
 
     // Handle AI message completion
-    const onAIMessageComplete = ({ messageId }: { messageId: string; skipped?: boolean }) => {
+    const onAIMessageComplete = ({ messageId, skipped }: { messageId: string; skipped?: boolean }) => {
       // Clear the AI loading timeout since we received completion
       if (aiLoadingTimeoutRef.current) {
         clearTimeout(aiLoadingTimeoutRef.current);
@@ -667,6 +648,9 @@ export function useChat() {
       }
 
       setIsLoadingAI(false);
+      if (skipped) {
+        console.log('[Chat] AI message skipped by server policy');
+      }
       setAiMessageBuffers((prev) => {
         const { [messageId]: _completedMessage, ...rest } = prev;
         // The full message is already in the `messages` state from the last chunk update
@@ -674,6 +658,25 @@ export function useChat() {
         // The server sends the full message in the final chatMessage event.
         return rest;
       });
+    };
+
+    const onSocketError = ({ message }: { message: string }) => {
+      if (aiLoadingTimeoutRef.current) {
+        clearTimeout(aiLoadingTimeoutRef.current);
+        aiLoadingTimeoutRef.current = null;
+      }
+
+      setIsLoadingAI(false);
+      setChatError(message);
+
+      if (chatErrorTimeoutRef.current) {
+        clearTimeout(chatErrorTimeoutRef.current);
+      }
+
+      chatErrorTimeoutRef.current = setTimeout(() => {
+        setChatError(null);
+        chatErrorTimeoutRef.current = null;
+      }, 6000);
     };
 
     // Handle DJ announcements
@@ -726,20 +729,28 @@ export function useChat() {
     socket.on(SOCKET_EVENTS.AI_MESSAGE_COMPLETE, onAIMessageComplete);
     socket.on(SOCKET_EVENTS.DJ_ANNOUNCEMENT, onDJAnnouncement);
     socket.on(SOCKET_EVENTS.CHAT_HISTORY, onChatHistory);
+    socket.on(SOCKET_EVENTS.ERROR, onSocketError);
 
     // Cleanup
     return () => {
+      if (chatErrorTimeoutRef.current) {
+        clearTimeout(chatErrorTimeoutRef.current);
+        chatErrorTimeoutRef.current = null;
+      }
+
       socket.off(SOCKET_EVENTS.CHAT_MESSAGE, onChatMessage);
       socket.off(SOCKET_EVENTS.AI_MESSAGE_CHUNK, onAIMessageChunk);
       socket.off(SOCKET_EVENTS.AI_MESSAGE_COMPLETE, onAIMessageComplete);
       socket.off(SOCKET_EVENTS.DJ_ANNOUNCEMENT, onDJAnnouncement);
       socket.off(SOCKET_EVENTS.CHAT_HISTORY, onChatHistory);
+      socket.off(SOCKET_EVENTS.ERROR, onSocketError);
     };
   }, [socket, aiMessageBuffers, userId]); // Removed pendingMessageId - using ref instead to avoid stale closures
 
   return {
     messages,
     isLoadingAI,
+    chatError,
     hasPendingMessage: !!pendingMessageId,
     addPendingMessage,
     confirmPendingMessage,

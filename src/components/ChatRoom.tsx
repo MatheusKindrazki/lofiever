@@ -13,7 +13,7 @@ export default function ChatRoom() {
   const normalizedLocale: 'pt' | 'en' = locale === 'en' ? 'en' : 'pt';
   const { data: session } = useSession();
   // Prefer socket userId, fallback to session or anonymous
-  const { messages, isLoadingAI, hasPendingMessage, addPendingMessage, retryMessage, removeFailedMessage } = useSocketChat();
+  const { messages, isLoadingAI, chatError, hasPendingMessage, addPendingMessage, retryMessage, removeFailedMessage } = useSocketChat();
   const { sendChatMessage, userId: socketUserId, username: socketUsername, isConnected } = useSocket();
   const youLabel = normalizedLocale === 'en' ? 'you' : 'você';
 
@@ -330,6 +330,16 @@ export default function ChatRoom() {
             <div className="w-2 h-2 bg-amber-400 rounded-full animate-pulse"></div>
             <span className="text-xs text-amber-200">
               {normalizedLocale === 'en' ? 'Reconnecting...' : 'Reconectando...'}
+            </span>
+          </div>
+        )}
+
+        {chatError && (
+          <div className="bg-red-500/20 px-4 py-2 border-b border-red-300/30 flex items-center gap-2 backdrop-blur-sm">
+            <span className="text-xs text-red-100">
+              {normalizedLocale === 'en'
+                ? `DJ temporarily unavailable: ${chatError}`
+                : `DJ indisponível momentaneamente: ${chatError}`}
             </span>
           </div>
         )}

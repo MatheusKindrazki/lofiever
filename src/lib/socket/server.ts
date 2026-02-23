@@ -8,6 +8,7 @@ import { redis, redisHelpers, KEYS } from '../redis';
 import { config } from '../config';
 import { Redis } from 'ioredis';
 import type { ChatMessage as RedisChatMessage, Track as RedisTrack } from '../redis';
+import { getAIFallbackContent, shouldSkipAIReply } from './chat-policy';
 import { ProactiveEngagementService } from '@/services/moderation/proactive-engagement.service';
 import { ContentModerationService } from '@/services/moderation/content-moderation.service';
 import type { Track } from '@prisma/client';
@@ -28,6 +29,7 @@ const ANNOUNCEMENT_FREQUENCY = 10; // Announce every 10 tracks (reduced from 5)
 const MESSAGE_RATE_LIMIT = 10; // Max messages per minute per user
 const MESSAGE_RATE_WINDOW = 60; // Rate limit window in seconds
 const IDEMPOTENCY_TTL = 300; // 5 minutes TTL for idempotency keys
+const AI_REPLY_MIN_LISTENERS = config.chat.aiReplyMinListeners;
 
 type AIMessagesPayload = Array<{ role: 'user' | 'assistant'; content: string }>;
 const normalizeLocale = (locale?: string | null): 'pt' | 'en' => (locale === 'en' ? 'en' : 'pt');
@@ -314,8 +316,8 @@ function setupEventHandlers(io: SocketIOServer<ClientToServerEvents, ServerToCli
         // Check if there are other listeners before processing AI response
         // Skip AI processing for public messages if user is alone (waste of API calls)
         const listenersCount = await redisHelpers.getListenersCount();
-        if (!isPrivate && listenersCount <= 1) {
-          console.log(`[Chat] Skipping AI response - only ${listenersCount} listener(s) connected`);
+        if (shouldSkipAIReply(listenersCount, isPrivate, AI_REPLY_MIN_LISTENERS)) {
+          console.log(`[Chat] Skipping AI response - ${listenersCount} listener(s), minimum is ${AI_REPLY_MIN_LISTENERS}`);
           // Emit completion event so client knows not to wait for AI
           socket.emit(SOCKET_EVENTS.AI_MESSAGE_COMPLETE, { messageId: aiMessageId, skipped: true });
           return;
@@ -334,7 +336,7 @@ function setupEventHandlers(io: SocketIOServer<ClientToServerEvents, ServerToCli
           conversationMessages.splice(0, conversationMessages.length - AI_HISTORY_LIMIT);
         }
 
-        const aiResponse = await fetch(`${config.app.url}/api/curation/process-message`, {
+        const aiResponse = await fetch(`${config.app.internalUrl}/api/curation/process-message`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -396,6 +398,34 @@ function setupEventHandlers(io: SocketIOServer<ClientToServerEvents, ServerToCli
 
       } catch (error) {
         console.error('Chat AI integration error:', error);
+        const fallbackContent = getAIFallbackContent(locale);
+
+        const fallbackMessage: RedisChatMessage = {
+          id: aiMessageId,
+          userId: 'ai',
+          username: 'Lofine',
+          content: fallbackContent,
+          timestamp: Date.now(),
+          type: 'ai',
+          isPrivate,
+          targetUserId: isPrivate ? userId : undefined,
+          locale,
+        };
+
+        try {
+          await redisHelpers.addChatMessage(fallbackMessage);
+
+          if (isPrivate) {
+            socket.emit(SOCKET_EVENTS.CHAT_MESSAGE, fallbackMessage);
+            socket.emit(SOCKET_EVENTS.AI_MESSAGE_COMPLETE, { messageId: aiMessageId });
+          } else {
+            io.emit(SOCKET_EVENTS.CHAT_MESSAGE, fallbackMessage);
+            io.emit(SOCKET_EVENTS.AI_MESSAGE_COMPLETE, { messageId: aiMessageId });
+          }
+        } catch (fallbackError) {
+          console.error('Failed to persist/broadcast AI fallback message:', fallbackError);
+        }
+
         socket.emit(SOCKET_EVENTS.ERROR, { message: 'Failed to process message with AI' });
       }
     });
@@ -817,7 +847,7 @@ async function triggerAIGreeting(
   try {
     const conversationMessages = [{ role: 'system' as const, content: systemPrompt }];
 
-    const aiResponse = await fetch(`${config.app.url}/api/curation/process-message`, {
+    const aiResponse = await fetch(`${config.app.internalUrl}/api/curation/process-message`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

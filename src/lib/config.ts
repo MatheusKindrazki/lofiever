@@ -3,6 +3,7 @@ export const config = {
     name: 'Lofiever',
     description: '24/7 Lofi Streaming with AI Curation',
     url: process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000',
+    internalUrl: process.env.APP_INTERNAL_URL || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000',
     env: process.env.NODE_ENV || 'development',
   },
   admin: {
@@ -52,6 +53,12 @@ export const config = {
     audioFormat: process.env.YOUTUBE_AUDIO_FORMAT || 'opus',
     audioQuality: process.env.YOUTUBE_AUDIO_QUALITY || '0',
     enabled: process.env.YOUTUBE_ENABLED === 'true',
+  },
+  chat: {
+    aiReplyMinListeners: (() => {
+      const parsed = parseInt(process.env.AI_REPLY_MIN_LISTENERS || '1', 10);
+      return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
+    })(),
   },
 } as const;
 

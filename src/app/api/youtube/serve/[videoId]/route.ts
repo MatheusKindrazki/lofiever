@@ -3,6 +3,7 @@ import type { NextRequest } from 'next/server';
 import fs from 'fs/promises';
 import { statSync } from 'fs';
 import { YouTubeCacheService } from '@/services/youtube';
+import { InvalidYouTubeVideoIdError, normalizeYouTubeVideoId } from '@/services/youtube';
 import { config } from '@/lib/config';
 import { prisma } from '@/lib/prisma';
 
@@ -20,15 +21,19 @@ export async function GET(
     return new NextResponse('YouTube integration disabled', { status: 503 });
   }
 
-  // Sanitize videoId
-  const sanitized = videoId.replace(/[^a-zA-Z0-9_-]/g, '');
-  if (!sanitized || sanitized !== videoId) {
-    return new NextResponse('Invalid video ID', { status: 400 });
+  let normalizedVideoId = '';
+  try {
+    normalizedVideoId = normalizeYouTubeVideoId(videoId);
+  } catch (error) {
+    if (error instanceof InvalidYouTubeVideoIdError) {
+      return new NextResponse('Invalid video ID', { status: 400 });
+    }
+    throw error;
   }
 
   // Verify track exists in database (prevents use as open YouTube proxy)
   const track = await prisma.track.findFirst({
-    where: { sourceType: 'youtube', sourceId: sanitized },
+    where: { sourceType: 'youtube', sourceId: normalizedVideoId },
   });
   if (!track) {
     return new NextResponse('Track not found', { status: 404 });
@@ -36,7 +41,7 @@ export async function GET(
 
   try {
     // Ensure file is cached (downloads if needed)
-    const filePath = await YouTubeCacheService.ensureCached(videoId);
+    const filePath = await YouTubeCacheService.ensureCached(normalizedVideoId);
 
     // Get file stats
     const stats = statSync(filePath);
@@ -86,7 +91,7 @@ export async function GET(
       },
     });
   } catch (error) {
-    console.error(`[YouTube Serve] Error serving ${videoId}:`, error);
+    console.error(`[YouTube Serve] Error serving ${normalizedVideoId}:`, error);
     return new NextResponse('Audio not available', { status: 404 });
   }
 }

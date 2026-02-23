@@ -220,6 +220,7 @@ export const PlaylistManagerService = {
       await redis.rpush(QUEUE_KEY, JSON.stringify(queueItem)); // Coloca no fim
     }
 
+    triggerYouTubePreFetch(track);
     await redis.publish('lofi-ever:queue-update', 'updated');
   },
 

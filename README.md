@@ -106,6 +106,22 @@ cp .env.example .env
 # Edit .env with your values
 \`\`\`
 
+Para habilitar fallback/caching dinâmico de YouTube e evitar silêncio no DJ:
+
+\`\`\`bash
+YOUTUBE_ENABLED=true
+APP_INTERNAL_URL=http://localhost:3000
+AI_REPLY_MIN_LISTENERS=1
+\`\`\`
+
+Valide as dependências locais:
+
+\`\`\`bash
+yt-dlp --version
+ffmpeg -version
+mkdir -p "$YOUTUBE_CACHE_DIR" && test -w "$YOUTUBE_CACHE_DIR"
+\`\`\`
+
 ### 3. Start all services
 
 \`\`\`bash

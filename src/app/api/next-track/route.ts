@@ -1,3 +1,4 @@
+import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { PlaylistManagerService } from "@/services/playlist/playlist-manager.service";
 import { redis } from "@/lib/redis";
@@ -5,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { R2Lib } from "@/lib/r2";
 import type { Track } from "@prisma/client";
 import { YouTubeCacheService } from '@/services/youtube';
+import { normalizeYouTubeVideoId } from '@/services/youtube';
 import { config } from '@/lib/config';
 
 interface QueueTrack extends Track {
@@ -13,11 +15,30 @@ interface QueueTrack extends Track {
   requestId?: string;
 }
 
+function resolveInternalServeBaseUrl(request: NextRequest): string {
+  if (process.env.APP_INTERNAL_URL) {
+    return process.env.APP_INTERNAL_URL.replace(/\/$/, '');
+  }
+
+  const forwardedProto = request.headers.get('x-forwarded-proto');
+  const forwardedHost = request.headers.get('x-forwarded-host') || request.headers.get('host');
+  if (forwardedHost) {
+    const protocol = forwardedProto || request.nextUrl.protocol.replace(':', '') || 'http';
+    return `${protocol}://${forwardedHost}`.replace(/\/$/, '');
+  }
+
+  if (config.app.internalUrl) {
+    return config.app.internalUrl.replace(/\/$/, '');
+  }
+
+  return 'http://localhost:3000';
+}
+
 /**
  * GET - Endpoint para o Liquidsoap obter a próxima faixa
  * Esta rota é chamada pelo script Liquidsoap para obter a URL da próxima música
  */
-export async function GET(): Promise<NextResponse> {
+export async function GET(request: NextRequest): Promise<NextResponse> {
   try {
     // 1. Obter a próxima faixa da fila dinâmica (Redis)
     // Isso já lida com refill automático via IA e prioridade de pedidos
@@ -74,10 +95,12 @@ export async function GET(): Promise<NextResponse> {
           trackUrl = "/music/example.mp3";
           break;
         }
-        const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+
         try {
-          await YouTubeCacheService.ensureCached(nextTrack.sourceId);
-          trackUrl = `${baseUrl}/api/youtube/serve/${nextTrack.sourceId}`;
+          const normalizedVideoId = normalizeYouTubeVideoId(nextTrack.sourceId);
+          await YouTubeCacheService.ensureCached(normalizedVideoId);
+          const baseUrl = resolveInternalServeBaseUrl(request);
+          trackUrl = `${baseUrl}/api/youtube/serve/${normalizedVideoId}`;
         } catch (error) {
           console.error(`[Next Track] YouTube cache failed for ${nextTrack.sourceId}:`, error);
           trackUrl = "/music/example.mp3";

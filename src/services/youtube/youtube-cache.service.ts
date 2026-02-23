@@ -1,14 +1,15 @@
 import fs from 'fs/promises';
 import path from 'path';
 import { config } from '@/lib/config';
-import { YouTubeService } from './youtube.service';
+import { YouTubeService, normalizeYouTubeVideoId } from './youtube.service';
 
 const downloadLocks = new Map<string, Promise<string>>();
 
 export const YouTubeCacheService = {
   async has(videoId: string): Promise<boolean> {
     try {
-      await fs.access(this.getPath(videoId));
+      const normalizedVideoId = normalizeYouTubeVideoId(videoId);
+      await fs.access(this.getPath(normalizedVideoId));
       return true;
     } catch {
       return false;
@@ -16,21 +17,22 @@ export const YouTubeCacheService = {
   },
 
   getPath(videoId: string): string {
-    const sanitized = videoId.replace(/[^a-zA-Z0-9_-]/g, '');
-    return path.join(config.youtube.cacheDir, `${sanitized}.opus`);
+    const normalizedVideoId = normalizeYouTubeVideoId(videoId);
+    return path.join(config.youtube.cacheDir, `${normalizedVideoId}.opus`);
   },
 
   async ensureCached(videoId: string): Promise<string> {
-    const filePath = this.getPath(videoId);
+    const normalizedVideoId = normalizeYouTubeVideoId(videoId);
+    const filePath = this.getPath(normalizedVideoId);
 
-    if (await this.has(videoId)) {
+    if (await this.has(normalizedVideoId)) {
       const now = new Date();
       await fs.utimes(filePath, now, now);
       return filePath;
     }
 
     // Check if download is already in progress
-    const existing = downloadLocks.get(videoId);
+    const existing = downloadLocks.get(normalizedVideoId);
     if (existing) {
       return existing;
     }
@@ -39,16 +41,16 @@ export const YouTubeCacheService = {
     const downloadPromise = (async () => {
       try {
         await fs.mkdir(config.youtube.cacheDir, { recursive: true });
-        console.log(`[YouTubeCache] Downloading ${videoId} to cache...`);
-        await YouTubeService.downloadAudio(videoId, filePath);
-        console.log(`[YouTubeCache] Cached: ${videoId}`);
+        console.log(`[YouTubeCache] Downloading ${normalizedVideoId} to cache...`);
+        await YouTubeService.downloadAudio(normalizedVideoId, filePath);
+        console.log(`[YouTubeCache] Cached: ${normalizedVideoId}`);
         return filePath;
       } finally {
-        downloadLocks.delete(videoId);
+        downloadLocks.delete(normalizedVideoId);
       }
     })();
 
-    downloadLocks.set(videoId, downloadPromise);
+    downloadLocks.set(normalizedVideoId, downloadPromise);
     return downloadPromise;
   },
 

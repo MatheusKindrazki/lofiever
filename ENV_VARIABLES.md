@@ -35,6 +35,16 @@ AUTH_SECRET=""  # Generate: openssl rand -base64 32
 OPENAI_API_KEY="sk-your-openai-api-key"
 ```
 
+### App URL Settings
+
+```bash
+# Public URL used by browser/SEO/socket CORS
+NEXT_PUBLIC_APP_URL="http://localhost:3000"
+
+# Internal URL used by server-side calls (Docker-friendly)
+APP_INTERNAL_URL="http://localhost:3000"
+```
+
 ## Cloudflare R2 Storage
 
 ```bash
@@ -64,6 +74,18 @@ openssl rand -base64 32
 API_SECRET_KEY=""  # Generate: openssl rand -base64 32
 ALLOWED_ORIGINS="http://localhost:3000"
 RATE_LIMIT_ENABLED="true"
+AI_REPLY_MIN_LISTENERS="1" # 1 = DJ always replies
+```
+
+## YouTube Integration
+
+```bash
+YOUTUBE_ENABLED="false"
+YOUTUBE_COOKIES_PATH=""
+YOUTUBE_CACHE_DIR="/tmp/lofiever-youtube-cache"
+YOUTUBE_CACHE_TTL_DAYS="7"
+YOUTUBE_AUDIO_FORMAT="opus"
+YOUTUBE_AUDIO_QUALITY="0"
 ```
 
 ## Coolify Deployment
@@ -110,6 +132,8 @@ R2_ENDPOINT="https://account-id.r2.cloudflarestorage.com"
 R2_BUCKET_NAME="lofiever"
 R2_PUBLIC_URL="https://cdn.lofiever.dev"
 OPENAI_API_KEY="sk-your-key"
+NEXT_PUBLIC_APP_URL="http://localhost:3000"
+APP_INTERNAL_URL="http://localhost:3000"
 ICECAST_SOURCE_PASSWORD="hackme"
 ICECAST_ADMIN_PASSWORD="hackme"
 ICECAST_RELAY_PASSWORD="hackme"
@@ -117,6 +141,21 @@ AUTH_SECRET="dev-secret"
 API_SECRET_KEY="dev-api-key"
 ALLOWED_ORIGINS="http://localhost:3000"
 RATE_LIMIT_ENABLED="true"
+AI_REPLY_MIN_LISTENERS="1"
+YOUTUBE_ENABLED="false"
+YOUTUBE_COOKIES_PATH=""
+YOUTUBE_CACHE_DIR="/tmp/lofiever-youtube-cache"
+YOUTUBE_CACHE_TTL_DAYS="7"
+YOUTUBE_AUDIO_FORMAT="opus"
+YOUTUBE_AUDIO_QUALITY="0"
+```
+
+## Quick Operational Check (YouTube)
+
+```bash
+yt-dlp --version
+ffmpeg -version
+mkdir -p "$YOUTUBE_CACHE_DIR" && test -w "$YOUTUBE_CACHE_DIR"
 ```
 
 ## R2 Bucket Setup

@@ -1,4 +1,9 @@
-import { YouTubeService } from '../youtube.service';
+import {
+  InvalidYouTubeVideoIdError,
+  normalizeYouTubeVideoId,
+  YouTubeService,
+} from '../youtube.service';
+import { execFile } from 'child_process';
 
 // Mock config before importing the module that uses it
 jest.mock('@/lib/config', () => ({
@@ -24,7 +29,7 @@ jest.mock('util', () => ({
   promisify: (fn: unknown) => fn,
 }));
 
-const { execFile } = require('child_process');
+const mockExecFile = execFile as unknown as jest.Mock;
 
 describe('YouTubeService', () => {
   beforeEach(() => {
@@ -42,7 +47,7 @@ describe('YouTubeService', () => {
         thumbnail: 'https://example.com/thumb.jpg',
       });
 
-      execFile.mockResolvedValue({ stdout: mockOutput });
+      mockExecFile.mockResolvedValue({ stdout: mockOutput });
 
       const result = await YouTubeService.getTrackInfo('dQw4w9WgXcQ');
 
@@ -67,7 +72,7 @@ describe('YouTubeService', () => {
         track: 'Track Name',
       });
 
-      execFile.mockResolvedValue({ stdout: mockOutput });
+      mockExecFile.mockResolvedValue({ stdout: mockOutput });
 
       const result = await YouTubeService.getTrackInfo('jNQXAC9IVRw');
 
@@ -79,17 +84,33 @@ describe('YouTubeService', () => {
   describe('search', () => {
     it('should parse multiple JSON lines from search results', async () => {
       const mockOutput = [
-        JSON.stringify({ id: 'a', title: 'Track A', channel: 'Ch1', uploader: 'Ch1', duration: 120, thumbnail: '' }),
-        JSON.stringify({ id: 'b', title: 'Track B', channel: 'Ch2', uploader: 'Ch2', duration: 180, thumbnail: '' }),
+        JSON.stringify({ id: 'dQw4w9WgXcQ', title: 'Track A', channel: 'Ch1', uploader: 'Ch1', duration: 120, thumbnail: '' }),
+        JSON.stringify({ id: 'jNQXAC9IVRw', title: 'Track B', channel: 'Ch2', uploader: 'Ch2', duration: 180, thumbnail: '' }),
       ].join('\n');
 
-      execFile.mockResolvedValue({ stdout: mockOutput });
+      mockExecFile.mockResolvedValue({ stdout: mockOutput });
 
       const results = await YouTubeService.search('lofi', 2);
 
       expect(results).toHaveLength(2);
-      expect(results[0].videoId).toBe('a');
-      expect(results[1].videoId).toBe('b');
+      expect(results[0].videoId).toBe('dQw4w9WgXcQ');
+      expect(results[1].videoId).toBe('jNQXAC9IVRw');
+    });
+  });
+
+  describe('normalizeYouTubeVideoId', () => {
+    it('should parse a regular YouTube URL', () => {
+      const result = normalizeYouTubeVideoId('https://www.youtube.com/watch?v=dQw4w9WgXcQ');
+      expect(result).toBe('dQw4w9WgXcQ');
+    });
+
+    it('should parse a short youtu.be URL', () => {
+      const result = normalizeYouTubeVideoId('https://youtu.be/jNQXAC9IVRw');
+      expect(result).toBe('jNQXAC9IVRw');
+    });
+
+    it('should throw for invalid IDs', () => {
+      expect(() => normalizeYouTubeVideoId('invalid-id')).toThrow(InvalidYouTubeVideoIdError);
     });
   });
 });

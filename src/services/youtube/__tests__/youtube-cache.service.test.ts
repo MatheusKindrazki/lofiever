@@ -21,6 +21,7 @@ jest.mock('../youtube.service', () => ({
   YouTubeService: {
     downloadAudio: jest.fn().mockResolvedValue(undefined),
   },
+  normalizeYouTubeVideoId: jest.fn((videoId: string) => videoId),
 }));
 
 const mockFs = fs as jest.Mocked<typeof fs>;
@@ -33,25 +34,19 @@ describe('YouTubeCacheService', () => {
   describe('has', () => {
     it('should return true when file exists', async () => {
       mockFs.access.mockResolvedValue(undefined);
-      expect(await YouTubeCacheService.has('abc123')).toBe(true);
+      expect(await YouTubeCacheService.has('dQw4w9WgXcQ')).toBe(true);
     });
 
     it('should return false when file does not exist', async () => {
       mockFs.access.mockRejectedValue(new Error('ENOENT'));
-      expect(await YouTubeCacheService.has('abc123')).toBe(false);
+      expect(await YouTubeCacheService.has('dQw4w9WgXcQ')).toBe(false);
     });
   });
 
   describe('getPath', () => {
-    it('should sanitize video ID and return .opus path', () => {
-      const result = YouTubeCacheService.getPath('abc-123_XY');
-      expect(result).toContain('abc-123_XY.opus');
-    });
-
-    it('should strip invalid characters', () => {
-      const result = YouTubeCacheService.getPath('abc/../evil');
-      expect(result).toContain('abcevil.opus');
-      expect(result).not.toContain('..');
+    it('should keep normalized video ID and return .opus path', () => {
+      const result = YouTubeCacheService.getPath('dQw4w9WgXcQ');
+      expect(result).toContain('dQw4w9WgXcQ.opus');
     });
   });
 });

@@ -25,7 +25,12 @@ jest.mock('next/server', () => {
 });
 
 jest.mock('@/services/playlist/playlist-manager.service');
-jest.mock('@/services/youtube');
+jest.mock('@/services/youtube', () => ({
+  YouTubeCacheService: {
+    ensureCached: jest.fn(),
+  },
+  normalizeYouTubeVideoId: jest.fn((videoId: string) => videoId),
+}));
 jest.mock('@/lib/prisma', () => ({
   prisma: { playbackHistory: { create: jest.fn() } },
 }));
@@ -41,7 +46,10 @@ jest.mock('@/lib/r2', () => ({
   R2Lib: { getPresignedUrl: jest.fn() },
 }));
 jest.mock('@/lib/config', () => ({
-  config: { youtube: { enabled: true } },
+  config: {
+    youtube: { enabled: true },
+    app: { internalUrl: 'http://app:3000' },
+  },
 }));
 
 // Import route after all mocks are set up
@@ -58,7 +66,7 @@ describe('GET /api/next-track (YouTube)', () => {
       title: 'Lofi Beat',
       artist: 'Artist',
       sourceType: 'youtube',
-      sourceId: 'abc123',
+      sourceId: 'dQw4w9WgXcQ',
       duration: 180,
       bpm: null,
       mood: 'relaxed',
@@ -66,12 +74,20 @@ describe('GET /api/next-track (YouTube)', () => {
     };
 
     (PlaylistManagerService.getNextTrack as jest.Mock).mockResolvedValue(mockTrack);
-    (YouTubeCacheService.ensureCached as jest.Mock).mockResolvedValue('/data/youtube-cache/abc123.opus');
+    (YouTubeCacheService.ensureCached as jest.Mock).mockResolvedValue('/data/youtube-cache/dQw4w9WgXcQ.opus');
 
-    const response = await GET();
+    const request = {
+      headers: new Map([
+        ['x-forwarded-proto', 'http'],
+        ['host', 'app:3000'],
+      ]),
+      nextUrl: { protocol: 'http:' },
+    } as any;
+
+    const response = await GET(request);
     const text = await response.text();
 
-    expect(text).toContain('/api/youtube/serve/abc123');
-    expect(YouTubeCacheService.ensureCached).toHaveBeenCalledWith('abc123');
+    expect(text).toContain('/api/youtube/serve/dQw4w9WgXcQ');
+    expect(YouTubeCacheService.ensureCached).toHaveBeenCalledWith('dQw4w9WgXcQ');
   });
 });
