@@ -110,9 +110,12 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<string | null>(null);
+  const [playbackIntent, setPlaybackIntent] = useState(false);
   const [visualizerBars, setVisualizerBars] = useState<number[]>(() => buildVisualizerBars(false));
   const [playerFocused, setPlayerFocused] = useState(false);
   const wasPlayingRef = useRef(false);
+  const recoveryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastFinishedTrackIdRef = useRef<string | null>(null);
   const glowPulse = useRef(new Animated.Value(0)).current;
   const ringRotation = useRef(new Animated.Value(0)).current;
   const ambientDrift = useRef(new Animated.Value(0)).current;
@@ -266,14 +269,91 @@ export default function App() {
       return;
     }
 
-    const shouldResume = wasPlayingRef.current;
     player.replace({ uri: tvPlaybackUrl });
     player.volume = DEFAULT_VOLUME;
 
-    if (shouldResume) {
+    if (playbackIntent || wasPlayingRef.current) {
       player.play();
     }
-  }, [player, tvPlaybackUrl]);
+  }, [playbackIntent, player, tvPlaybackUrl]);
+
+  useEffect(() => {
+    if (currentSong?.id !== lastFinishedTrackIdRef.current) {
+      lastFinishedTrackIdRef.current = null;
+    }
+  }, [currentSong?.id]);
+
+  useEffect(() => {
+    if (recoveryTimeoutRef.current) {
+      clearTimeout(recoveryTimeoutRef.current);
+      recoveryTimeoutRef.current = null;
+    }
+
+    if (!playbackIntent || !tvPlaybackUrl) {
+      return;
+    }
+
+    if (playbackStatus.playing) {
+      return;
+    }
+
+    if (playbackStatus.didJustFinish && currentSong?.id) {
+      if (lastFinishedTrackIdRef.current === currentSong.id) {
+        return;
+      }
+
+      lastFinishedTrackIdRef.current = currentSong.id;
+      void loadStreamData(false);
+      recoveryTimeoutRef.current = setTimeout(() => {
+        void loadStreamData(false);
+      }, 2200);
+
+      return () => {
+        if (recoveryTimeoutRef.current) {
+          clearTimeout(recoveryTimeoutRef.current);
+          recoveryTimeoutRef.current = null;
+        }
+      };
+    }
+
+    if (playbackStatus.timeControlStatus === 'waiting' || playbackStatus.isBuffering) {
+      recoveryTimeoutRef.current = setTimeout(() => {
+        void loadStreamData(false);
+        player.play();
+      }, 6500);
+
+      return () => {
+        if (recoveryTimeoutRef.current) {
+          clearTimeout(recoveryTimeoutRef.current);
+          recoveryTimeoutRef.current = null;
+        }
+      };
+    }
+
+    if (playbackStatus.currentTime > 0) {
+      recoveryTimeoutRef.current = setTimeout(() => {
+        player.play();
+      }, 1400);
+
+      return () => {
+        if (recoveryTimeoutRef.current) {
+          clearTimeout(recoveryTimeoutRef.current);
+          recoveryTimeoutRef.current = null;
+        }
+      };
+    }
+  }, [
+    currentSong?.id,
+    loadStreamData,
+    playbackIntent,
+    playbackStatus.currentTime,
+    playbackStatus.didJustFinish,
+    playbackStatus.isBuffering,
+    playbackStatus.playing,
+    playbackStatus.timeControlStatus,
+    player,
+    tvPlaybackUrl,
+  ]);
 
   const handleTogglePlayback = useCallback(() => {
     if (API_BASE_URL.includes('app.lofiever.dev') && !currentSong?.appleTvPlaybackUrl) {
@@ -288,21 +368,34 @@ export default function App() {
       return;
     }
 
-    if (playbackStatus.playing) {
+    if (playbackIntent && (playbackStatus.playing || playbackStatus.timeControlStatus === 'waiting')) {
+      setPlaybackIntent(false);
       player.pause();
       return;
     }
 
+    setPlaybackIntent(true);
     setError(null);
     player.play();
-  }, [currentSong?.appleTvPlaybackUrl, player, playbackStatus.playing, tvPlaybackUrl]);
+  }, [
+    currentSong?.appleTvPlaybackUrl,
+    playbackIntent,
+    player,
+    playbackStatus.playing,
+    playbackStatus.timeControlStatus,
+    tvPlaybackUrl,
+  ]);
 
   const liveLabel = playbackStatus.playing
     ? 'ao vivo'
     : playbackStatus.timeControlStatus === 'waiting'
       ? 'conectando'
       : 'em pausa';
-  const playerHint = playbackStatus.playing ? 'Clique no player para pausar' : 'Clique no player para tocar';
+  const playerHint = playbackIntent
+    ? playbackStatus.playing
+      ? 'Clique no player para pausar'
+      : 'O player vai tentar retomar sozinho'
+    : 'Clique no player para tocar';
   const artworkSize = Math.round(Math.min(width * 0.28, height * 0.42, 430));
   const curtainWidth = Math.round(Math.min(width * 0.24, 360));
   const curtainHeight = Math.round(height * 0.94);
