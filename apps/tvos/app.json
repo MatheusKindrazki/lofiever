@@ -1,0 +1,48 @@
+{
+  "expo": {
+    "name": "Lofiever TV",
+    "slug": "lofiever-tv",
+    "scheme": "lofievertv",
+    "orientation": "landscape",
+    "plugins": [
+      [
+        "@react-native-tvos/config-tv",
+        {
+          "androidTVBanner": "./assets/images/icon-400x240.png",
+          "appleTVImages": {
+            "icon": "./assets/images/icon-1280x768.png",
+            "iconSmall": "./assets/images/icon-400x240.png",
+            "iconSmall2x": "./assets/images/icon-800x480.png",
+            "topShelf": "./assets/images/icon-1920x720.png",
+            "topShelf2x": "./assets/images/icon-3840x1440.png",
+            "topShelfWide": "./assets/images/icon-2320x720.png",
+            "topShelfWide2x": "./assets/images/icon-4640x1440.png"
+          }
+        }
+      ],
+      "expo-audio"
+    ],
+    "android": {
+      "splash": {
+        "image": "./assets/images/icon-1920x720.png"
+      },
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"
+      ],
+      "package": "com.matheuskindrazki.lofievertv"
+    },
+    "ios": {
+      "bundleIdentifier": "com.matheuskindrazki.lofievertv",
+      "splash": {
+        "image": "./assets/images/icon-1920x720.png"
+      }
+    },
+    "newArchEnabled": true,
+    "extra": {
+      "projectName": "lofiever-tv"
+    }
+  }
+}

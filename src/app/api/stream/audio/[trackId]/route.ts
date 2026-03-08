@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server';
 import { prismaHelpers } from '@/lib/prisma';
+import { resolveTrackPlaybackUrl, type PlaybackPlatform } from '@/lib/stream-playback';
 
 /**
- * GET - Proxy para stream de áudio individual
- * Esta rota serve como fallback para desenvolvimento quando não há stream direto
+ * GET - Resolve a playable URL for the current track.
+ * tvOS clients use `platform=tvos` so we can avoid serving unsupported codecs.
  */
 export async function GET(
   request: Request,
@@ -11,8 +12,9 @@ export async function GET(
 ): Promise<NextResponse> {
   try {
     const { trackId } = await params;
+    const { searchParams } = new URL(request.url);
+    const platform = searchParams.get('platform') === 'tvos' ? 'tvos' : 'generic';
 
-    // Buscar informações da track no banco
     const track = await prismaHelpers.getTrackById(trackId);
 
     if (!track) {
@@ -22,28 +24,32 @@ export async function GET(
       );
     }
 
-    // Para desenvolvimento, redirecionar para arquivo local se existir
-    if (track.sourceType === 'local') {
-      const audioUrl = `/music/${track.sourceId}`;
-      return NextResponse.redirect(new URL(audioUrl, request.url));
+    const playbackUrl = await resolveTrackPlaybackUrl(
+      track,
+      request,
+      platform as PlaybackPlatform
+    );
+
+    if (!playbackUrl) {
+      return NextResponse.json(
+        {
+          error: platform === 'tvos'
+            ? 'Current track is not available in a tvOS-compatible format yet'
+            : 'Playable track URL could not be resolved',
+          code: 'UNSUPPORTED_FORMAT',
+          sourceType: track.sourceType,
+          sourceId: track.sourceId,
+        },
+        { status: 415 }
+      );
     }
 
-    // Para outros tipos, retornar informações da track
-    return NextResponse.json({
-      id: track.id,
-      title: track.title,
-      artist: track.artist,
-      duration: track.duration,
-      sourceType: track.sourceType,
-      sourceId: track.sourceId,
-      streamUrl: `/music/${track.sourceId}`, // Fallback para arquivo local
-    });
-
+    return NextResponse.redirect(playbackUrl);
   } catch (error) {
-    console.error('Error serving audio track:', error);
+    console.error('Error resolving track playback URL:', error);
     return NextResponse.json(
       { error: 'Failed to serve audio track', code: 'INTERNAL_ERROR' },
       { status: 500 }
     );
   }
-} 
+}

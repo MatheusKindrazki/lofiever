@@ -33,6 +33,8 @@ export async function GET(): Promise<NextResponse> {
       currentSong: {
         ...currentRedisTrack,
         streamUrl: '/api/stream/audio-stream?proxy=true',
+        playbackUrl: `/api/stream/audio/${currentRedisTrack.id}`,
+        appleTvPlaybackUrl: `/api/stream/audio/${currentRedisTrack.id}?platform=tvos`,
       },
       listeners: streamStats.currentListeners,
       daysActive: streamStats.daysActive,

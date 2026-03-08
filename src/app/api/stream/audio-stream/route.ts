@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { validateRequest, RATE_LIMITS } from '@/lib/api-security';
+import { resolvePublicBaseUrl } from '@/lib/stream-playback';
 
 // Force Node.js runtime
 export const runtime = 'nodejs';
@@ -106,7 +107,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     }
 
     // Retornar informações do stream com URL de proxy
-    const proxyUrl = new URL('/api/stream/audio-stream?proxy=true', request.url);
+    const proxyUrl = new URL('/api/stream/audio-stream?proxy=true', `${resolvePublicBaseUrl(request)}/`);
 
     return NextResponse.json({
       streamUrl: proxyUrl.toString(),
