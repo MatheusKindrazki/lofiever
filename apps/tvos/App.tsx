@@ -1,25 +1,27 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Animated,
+  Easing,
   Image,
+  ImageBackground,
+  LogBox,
+  Platform,
   Pressable,
   SafeAreaView,
-  ScrollView,
   StyleSheet,
   Text,
+  useWindowDimensions,
   View,
 } from 'react-native';
+import { MaterialIcons } from '@expo/vector-icons';
 import { setAudioModeAsync, useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 
 type QueueTrack = {
   id: string;
   title: string;
   artist: string;
-  duration?: number;
   artworkUrl?: string;
-  sourceType?: string;
-  sourceId?: string;
-  streamUrl?: string;
   playbackUrl?: string;
   appleTvPlaybackUrl?: string;
 };
@@ -27,14 +29,17 @@ type QueueTrack = {
 type StreamData = {
   currentSong: QueueTrack | null;
   listeners: number;
-  daysActive?: number;
-  songsPlayed?: number;
-  nextUp: QueueTrack[];
 };
 
 const DEFAULT_API_BASE_URL = 'http://localhost:3000';
 const API_BASE_URL = (process.env.EXPO_PUBLIC_LOFIEVER_API_URL ?? DEFAULT_API_BASE_URL).replace(/\/$/, '');
 const STREAM_METADATA_URL = `${API_BASE_URL}/api/stream`;
+const DEFAULT_VOLUME = 0.8;
+const VISUALIZER_BAR_COUNT = 34;
+
+if (__DEV__ && Platform.isTV) {
+  LogBox.ignoreAllLogs(true);
+}
 
 function resolveAbsoluteUrl(pathOrUrl: string): string {
   try {
@@ -69,62 +74,32 @@ function formatNumber(value?: number) {
   return `${value ?? 0}`;
 }
 
-function formatDuration(seconds?: number) {
-  if (!seconds || seconds <= 0) return '--';
+function buildVisualizerBars(active: boolean) {
+  const now = Date.now() / 170;
 
-  const minutes = Math.floor(seconds / 60);
-  const remainingSeconds = seconds % 60;
-  return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
-}
+  return Array.from({ length: VISUALIZER_BAR_COUNT }, (_, index) => {
+    if (!active) {
+      return 0.12 + (index % 7 === 0 ? 0.08 : 0);
+    }
 
-type TvActionButtonProps = {
-  label: string;
-  onPress: () => void;
-  variant?: 'primary' | 'secondary';
-  hasTVPreferredFocus?: boolean;
-};
-
-function TvActionButton({
-  label,
-  onPress,
-  variant = 'secondary',
-  hasTVPreferredFocus = false,
-}: TvActionButtonProps) {
-  const [focused, setFocused] = useState(false);
-  const isPrimary = variant === 'primary';
-
-  return (
-    <Pressable
-      hasTVPreferredFocus={hasTVPreferredFocus}
-      onBlur={() => setFocused(false)}
-      onFocus={() => setFocused(true)}
-      onPress={onPress}
-      style={[
-        styles.actionButton,
-        isPrimary ? styles.actionButtonPrimary : styles.actionButtonSecondary,
-        focused ? styles.actionButtonFocused : null,
-      ]}
-    >
-      <Text
-        style={[
-          styles.actionButtonLabel,
-          isPrimary ? styles.actionButtonLabelPrimary : styles.actionButtonLabelSecondary,
-        ]}
-      >
-        {label}
-      </Text>
-    </Pressable>
-  );
+    const pulse = Math.abs(Math.sin(now + index * 0.58));
+    const sway = Math.abs(Math.cos(now * 0.55 + index * 0.27)) * 0.18;
+    return clamp(Number((0.14 + pulse * 0.68 + sway).toFixed(2)), 0.12, 1);
+  });
 }
 
 export default function App() {
   const [streamData, setStreamData] = useState<StreamData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<string | null>(null);
-  const [volume, setVolume] = useState(0.8);
+  const [visualizerBars, setVisualizerBars] = useState<number[]>(() => buildVisualizerBars(false));
+  const [playerFocused, setPlayerFocused] = useState(false);
   const wasPlayingRef = useRef(false);
+  const glowPulse = useRef(new Animated.Value(0)).current;
+  const ringRotation = useRef(new Animated.Value(0)).current;
+
+  const { width, height } = useWindowDimensions();
 
   const player = useAudioPlayer(null, {
     keepAudioSessionActive: true,
@@ -137,25 +112,74 @@ export default function App() {
       interruptionMode: 'doNotMix',
       playsInSilentMode: true,
       shouldPlayInBackground: true,
-    }).catch((audioModeError) => {
-      console.warn('Falha ao configurar a sessão de áudio:', audioModeError);
+    }).catch(() => {
+      // tvOS pode recusar parte da configuracao da sessao sem afetar o player.
     });
   }, []);
 
   useEffect(() => {
-    player.volume = volume;
-  }, [player, volume]);
+    player.volume = DEFAULT_VOLUME;
+  }, [player]);
 
   useEffect(() => {
     wasPlayingRef.current = playbackStatus.playing;
   }, [playbackStatus.playing]);
 
+  useEffect(() => {
+    const pulseAnimation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(glowPulse, {
+          duration: 3200,
+          easing: Easing.inOut(Easing.quad),
+          toValue: 1,
+          useNativeDriver: true,
+        }),
+        Animated.timing(glowPulse, {
+          duration: 3200,
+          easing: Easing.inOut(Easing.quad),
+          toValue: 0,
+          useNativeDriver: true,
+        }),
+      ])
+    );
+
+    const ringAnimation = Animated.loop(
+      Animated.timing(ringRotation, {
+        duration: 20000,
+        easing: Easing.linear,
+        toValue: 1,
+        useNativeDriver: true,
+      })
+    );
+
+    pulseAnimation.start();
+    ringAnimation.start();
+
+    return () => {
+      pulseAnimation.stop();
+      ringAnimation.stop();
+    };
+  }, [glowPulse, ringRotation]);
+
+  useEffect(() => {
+    const isActive = playbackStatus.playing || playbackStatus.timeControlStatus === 'waiting';
+    setVisualizerBars(buildVisualizerBars(isActive));
+
+    if (!isActive) {
+      return;
+    }
+
+    const interval = setInterval(() => {
+      setVisualizerBars(buildVisualizerBars(true));
+    }, 150);
+
+    return () => clearInterval(interval);
+  }, [playbackStatus.playing, playbackStatus.timeControlStatus]);
+
   const loadStreamData = useCallback(
     async (showLoader: boolean) => {
       if (showLoader) {
         setIsLoading(true);
-      } else {
-        setIsRefreshing(true);
       }
 
       try {
@@ -181,7 +205,6 @@ export default function App() {
         );
       } finally {
         setIsLoading(false);
-        setIsRefreshing(false);
       }
     },
     []
@@ -198,28 +221,8 @@ export default function App() {
   }, [loadStreamData]);
 
   const currentSong = streamData?.currentSong ?? null;
-  const nextTracks = streamData?.nextUp ?? [];
+  const currentArtworkUrl = currentSong?.artworkUrl ? resolveAbsoluteUrl(currentSong.artworkUrl) : null;
   const tvPlaybackUrl = useMemo(() => resolveTvPlaybackUrl(currentSong), [currentSong]);
-  const connectionModeMessage =
-    API_BASE_URL === DEFAULT_API_BASE_URL
-      ? 'Modo simulador: localhost funciona no Apple TV Simulator. Em Apple TV fisica, troque para o IP da sua maquina.'
-      : `Conectando em ${API_BASE_URL}`;
-
-  const playbackModeMessage = useMemo(() => {
-    if (!currentSong) {
-      return 'Sem faixa atual para a TV resolver.';
-    }
-
-    if (currentSong.appleTvPlaybackUrl) {
-      return 'TV usando a URL compativel exposta pelo backend.';
-    }
-
-    if (API_BASE_URL.includes('app.lofiever.dev')) {
-      return 'A API de producao ainda precisa expor a URL de playback tvOS para tocar a faixa atual.';
-    }
-
-    return 'TV usando a rota de fallback por faixa atual.';
-  }, [currentSong, API_BASE_URL]);
 
   useEffect(() => {
     if (!tvPlaybackUrl) {
@@ -228,24 +231,12 @@ export default function App() {
 
     const shouldResume = wasPlayingRef.current;
     player.replace({ uri: tvPlaybackUrl });
-    player.volume = volume;
+    player.volume = DEFAULT_VOLUME;
 
     if (shouldResume) {
       player.play();
     }
-  }, [player, tvPlaybackUrl, volume]);
-
-  const playbackLabel = useMemo(() => {
-    if (playbackStatus.playing) {
-      return 'Pausar radio';
-    }
-
-    if (playbackStatus.timeControlStatus === 'waiting') {
-      return 'Conectando...';
-    }
-
-    return 'Tocar radio';
-  }, [playbackStatus.playing, playbackStatus.timeControlStatus]);
+  }, [player, tvPlaybackUrl]);
 
   const handleTogglePlayback = useCallback(() => {
     if (API_BASE_URL.includes('app.lofiever.dev') && !currentSong?.appleTvPlaybackUrl) {
@@ -269,120 +260,190 @@ export default function App() {
     player.play();
   }, [currentSong?.appleTvPlaybackUrl, player, playbackStatus.playing, tvPlaybackUrl]);
 
-  const handleVolumeChange = useCallback((delta: number) => {
-    setVolume((currentVolume) => clamp(Number((currentVolume + delta).toFixed(2)), 0.1, 1));
-  }, []);
+  const liveLabel = playbackStatus.playing
+    ? 'ao vivo'
+    : playbackStatus.timeControlStatus === 'waiting'
+      ? 'conectando'
+      : 'em pausa';
+  const playerHint = playbackStatus.playing ? 'Clique no player para pausar' : 'Clique no player para tocar';
+  const artworkSize = Math.round(Math.min(width * 0.28, height * 0.42, 430));
+  const glowScale = glowPulse.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.94, 1.08],
+  });
+  const glowOpacity = glowPulse.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.2, 0.42],
+  });
+  const rotatingRing = ringRotation.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '360deg'],
+  });
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.brand}>LOFIEVER TV</Text>
-        <Text style={styles.tagline}>Apple TV app conectada ao backend atual do projeto</Text>
+      <View style={styles.screen}>
+        {currentArtworkUrl ? (
+          <ImageBackground
+            blurRadius={36}
+            imageStyle={styles.backdropImage}
+            source={{ uri: currentArtworkUrl }}
+            style={StyleSheet.absoluteFill}
+          />
+        ) : (
+          <View style={[StyleSheet.absoluteFill, styles.backdropFallback]} />
+        )}
 
-        <View style={styles.statusBar}>
-          <View style={styles.statusPill}>
-            <View style={[styles.statusDot, error ? styles.statusDotError : styles.statusDotSuccess]} />
-            <Text style={styles.statusPillText}>{error ? 'Backend offline' : 'Backend conectado'}</Text>
-          </View>
-          <Text style={styles.statusBarText}>{connectionModeMessage}</Text>
-          <Text style={styles.statusBarText}>{playbackModeMessage}</Text>
-          {lastUpdatedAt ? <Text style={styles.statusBarText}>Atualizado as {lastUpdatedAt}</Text> : null}
-        </View>
+        <View style={[StyleSheet.absoluteFill, styles.backdropShade]} />
+        <View style={[StyleSheet.absoluteFill, styles.backdropTint]} />
 
-        <View style={styles.grid}>
-          <View style={[styles.panel, styles.heroPanel]}>
-            <Text style={styles.sectionEyebrow}>ON AIR</Text>
-            <Text style={styles.sectionTitle}>
+        <View style={styles.chrome}>
+          {error ? (
+            <View style={styles.errorBanner}>
+              <MaterialIcons color="#ffc0b2" name="warning-amber" size={22} />
+              <Text numberOfLines={2} style={styles.errorBannerText}>
+                {error}
+              </Text>
+            </View>
+          ) : null}
+
+          <View style={styles.centerStage}>
+            <Text style={styles.brand}>LOFIEVER</Text>
+            <Text style={styles.brandSubcopy}>apple tv fullscreen player</Text>
+
+            <Pressable
+              hasTVPreferredFocus
+              onBlur={() => setPlayerFocused(false)}
+              onFocus={() => setPlayerFocused(true)}
+              onPress={handleTogglePlayback}
+              style={[
+                styles.playerCard,
+                playerFocused ? styles.playerCardFocused : null,
+              ]}
+            >
+              <Animated.View
+                style={[
+                  styles.artGlow,
+                  {
+                    borderRadius: (artworkSize + 120) / 2,
+                    height: artworkSize + 120,
+                    opacity: glowOpacity,
+                    transform: [{ scale: glowScale }],
+                    width: artworkSize + 120,
+                  },
+                ]}
+              />
+
+              <Animated.View
+                style={[
+                  styles.artRing,
+                  {
+                    borderRadius: (artworkSize + 34) / 2,
+                    height: artworkSize + 34,
+                    transform: [{ rotate: rotatingRing }],
+                    width: artworkSize + 34,
+                  },
+                ]}
+              />
+
+              <View
+                style={[
+                  styles.playerSurface,
+                  {
+                    borderRadius: 36,
+                    height: artworkSize + 10,
+                    width: artworkSize + 10,
+                  },
+                ]}
+              >
+                {currentArtworkUrl ? (
+                  <Image
+                    resizeMode="cover"
+                    source={{ uri: currentArtworkUrl }}
+                    style={[
+                      styles.stageArtwork,
+                      {
+                        borderRadius: 31,
+                        height: artworkSize,
+                        width: artworkSize,
+                      },
+                    ]}
+                  />
+                ) : (
+                  <View
+                    style={[
+                      styles.stageArtwork,
+                      styles.stageArtworkFallback,
+                      {
+                        borderRadius: 31,
+                        height: artworkSize,
+                        width: artworkSize,
+                      },
+                    ]}
+                  >
+                    {isLoading ? (
+                      <ActivityIndicator color="#f4efe6" size="large" />
+                    ) : (
+                      <>
+                        <MaterialIcons color="#8fe1d5" name="graphic-eq" size={72} />
+                        <Text style={styles.stageArtworkFallbackLabel}>LOFI</Text>
+                      </>
+                    )}
+                  </View>
+                )}
+
+                <View style={styles.playerOverlayTop}>
+                  <View style={styles.liveChip}>
+                    <View style={[styles.liveChipDot, playbackStatus.playing ? styles.liveChipDotOn : null]} />
+                    <Text style={styles.liveChipText}>{liveLabel}</Text>
+                  </View>
+                </View>
+
+                <View style={styles.playerOverlayBottom}>
+                  <View style={styles.playIconShell}>
+                    <MaterialIcons
+                      color="#071018"
+                      name={playbackStatus.playing ? 'pause' : 'play-arrow'}
+                      size={52}
+                    />
+                  </View>
+                </View>
+              </View>
+            </Pressable>
+
+            <Text numberOfLines={2} style={styles.trackTitle}>
               {currentSong ? currentSong.title : isLoading ? 'Carregando a programacao...' : 'Sem faixa ativa'}
             </Text>
-            <Text style={styles.sectionSubtitle}>
-              {currentSong ? currentSong.artist : 'Assim que o backend responder, a capa e a fila aparecem aqui.'}
+            <Text numberOfLines={1} style={styles.trackArtist}>
+              {currentSong ? currentSong.artist : 'Assim que a API responder, o player entra no ar.'}
             </Text>
 
-            {currentSong?.artworkUrl ? (
-              <Image source={{ uri: currentSong.artworkUrl }} style={styles.artwork} />
-            ) : (
-              <View style={[styles.artwork, styles.artworkFallback]}>
-                {isLoading ? <ActivityIndicator color="#f4efe6" size="large" /> : <Text style={styles.artworkFallbackText}>LOFI</Text>}
-              </View>
-            )}
-
-            <View style={styles.metricRow}>
-              <View style={styles.metricCard}>
-                <Text style={styles.metricValue}>{formatNumber(streamData?.listeners)}</Text>
-                <Text style={styles.metricLabel}>ouvintes</Text>
-              </View>
-              <View style={styles.metricCard}>
-                <Text style={styles.metricValue}>{formatNumber(streamData?.daysActive)}</Text>
-                <Text style={styles.metricLabel}>dias ativa</Text>
-              </View>
-              <View style={styles.metricCard}>
-                <Text style={styles.metricValue}>{formatNumber(streamData?.songsPlayed)}</Text>
-                <Text style={styles.metricLabel}>faixas tocadas</Text>
+            <View style={styles.visualizerShell}>
+              <View style={styles.visualizerRow}>
+                {visualizerBars.map((bar, index) => (
+                  <View
+                    key={index}
+                    style={[
+                      styles.visualizerBar,
+                      {
+                        height: 18 + bar * 86,
+                        opacity: 0.28 + bar * 0.6,
+                      },
+                    ]}
+                  />
+                ))}
               </View>
             </View>
 
-            <View style={styles.buttonRow}>
-              <TvActionButton
-                hasTVPreferredFocus
-                label={playbackLabel}
-                onPress={handleTogglePlayback}
-                variant="primary"
-              />
-              <TvActionButton
-                label={isRefreshing ? 'Atualizando...' : 'Atualizar dados'}
-                onPress={() => {
-                  void loadStreamData(false);
-                }}
-              />
-              <TvActionButton label="Volume -" onPress={() => handleVolumeChange(-0.1)} />
-              <TvActionButton label="Volume +" onPress={() => handleVolumeChange(0.1)} />
+            <View style={styles.metaRow}>
+              <Text style={styles.metaText}>{formatNumber(streamData?.listeners)} ouvintes</Text>
+              {lastUpdatedAt ? <Text style={styles.metaText}>atualizado {lastUpdatedAt}</Text> : null}
             </View>
 
-            <Text style={styles.playerHint}>
-              Volume atual: {Math.round(volume * 100)}% · {playbackStatus.playing ? 'tocando agora' : 'aguardando comando'}
-            </Text>
-
-            {error ? <Text style={styles.errorText}>{error}</Text> : null}
-          </View>
-
-          <View style={styles.sideColumn}>
-            <View style={styles.panel}>
-              <Text style={styles.sectionEyebrow}>QUEUE</Text>
-              <Text style={styles.sideTitle}>Proximas faixas</Text>
-
-              {nextTracks.length === 0 ? (
-                <Text style={styles.emptyText}>A fila ainda nao apareceu. Quando a API responder, ela entra aqui.</Text>
-              ) : (
-                nextTracks.slice(0, 5).map((track, index) => (
-                  <View key={`${track.id}-${index}`} style={styles.queueItem}>
-                    <Text style={styles.queueIndex}>{String(index + 1).padStart(2, '0')}</Text>
-                    <View style={styles.queueCopy}>
-                      <Text style={styles.queueTitle} numberOfLines={1}>
-                        {track.title}
-                      </Text>
-                      <Text style={styles.queueArtist} numberOfLines={1}>
-                        {track.artist} · {formatDuration(track.duration)}
-                      </Text>
-                    </View>
-                  </View>
-                ))
-              )}
-            </View>
-
-            <View style={styles.panel}>
-              <Text style={styles.sectionEyebrow}>SETUP</Text>
-              <Text style={styles.sideTitle}>Como ligar na TV</Text>
-              <Text style={styles.setupText}>1. Rode o backend web do Lofiever na sua maquina.</Text>
-              <Text style={styles.setupText}>2. No simulador Apple TV, `localhost` funciona por padrao.</Text>
-              <Text style={styles.setupText}>
-                3. Na Apple TV fisica, use `EXPO_PUBLIC_LOFIEVER_API_URL=http://SEU-IP:3000`.
-              </Text>
-              <Text style={styles.setupText}>4. Gere o projeto nativo com `npm run prebuild:tv` e abra no Xcode.</Text>
-            </View>
+            <Text style={styles.playerHint}>{playerHint}</Text>
           </View>
         </View>
-      </ScrollView>
+      </View>
     </SafeAreaView>
   );
 }
@@ -390,241 +451,217 @@ export default function App() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#07111a',
+    backgroundColor: '#040913',
   },
-  content: {
-    minHeight: '100%',
-    paddingHorizontal: 72,
-    paddingVertical: 48,
+  screen: {
+    flex: 1,
+    backgroundColor: '#040913',
+    overflow: 'hidden',
+  },
+  backdropImage: {
+    opacity: 0.28,
+  },
+  backdropFallback: {
+    backgroundColor: '#08111d',
+  },
+  backdropShade: {
+    backgroundColor: 'rgba(2, 5, 9, 0.64)',
+  },
+  backdropTint: {
+    backgroundColor: 'rgba(7, 12, 20, 0.54)',
+  },
+  chrome: {
+    flex: 1,
+    paddingHorizontal: 64,
+    paddingVertical: 40,
+  },
+  errorBanner: {
+    alignItems: 'center',
+    alignSelf: 'center',
+    backgroundColor: 'rgba(84, 22, 14, 0.72)',
+    borderColor: 'rgba(255, 176, 156, 0.22)',
+    borderRadius: 22,
+    borderWidth: 1,
+    flexDirection: 'row',
+    marginTop: 4,
+    maxWidth: 980,
+    paddingHorizontal: 18,
+    paddingVertical: 14,
+  },
+  errorBannerText: {
+    color: '#ffd7cd',
+    flex: 1,
+    fontSize: 15,
+    lineHeight: 22,
+    marginLeft: 12,
+  },
+  centerStage: {
+    alignItems: 'center',
+    flex: 1,
+    justifyContent: 'center',
   },
   brand: {
-    color: '#f7f3ea',
-    fontSize: 44,
+    color: '#f4efe6',
+    fontSize: 24,
     fontWeight: '800',
     letterSpacing: 6,
   },
-  tagline: {
-    color: '#9ab4b9',
-    fontSize: 20,
-    marginTop: 10,
+  brandSubcopy: {
+    color: '#8fa3b1',
+    fontSize: 13,
+    letterSpacing: 1.8,
+    marginTop: 8,
+    textTransform: 'uppercase',
   },
-  statusBar: {
+  playerCard: {
     alignItems: 'center',
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginTop: 28,
+    justifyContent: 'center',
+    marginTop: 34,
+    minHeight: 420,
+    minWidth: 420,
+    transform: [{ scale: 1 }],
   },
-  statusPill: {
+  playerCardFocused: {
+    transform: [{ scale: 1.04 }],
+  },
+  artGlow: {
+    backgroundColor: 'rgba(119, 229, 213, 0.34)',
+    position: 'absolute',
+  },
+  artRing: {
+    borderColor: 'rgba(255, 255, 255, 0.16)',
+    borderStyle: 'dashed',
+    borderWidth: 2,
+    position: 'absolute',
+  },
+  playerSurface: {
     alignItems: 'center',
-    backgroundColor: 'rgba(244, 239, 230, 0.08)',
-    borderColor: 'rgba(244, 239, 230, 0.12)',
-    borderRadius: 999,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderColor: 'rgba(255, 255, 255, 0.16)',
     borderWidth: 1,
-    flexDirection: 'row',
-    marginRight: 18,
-    marginBottom: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-  },
-  statusDot: {
-    borderRadius: 999,
-    height: 10,
-    marginRight: 10,
-    width: 10,
-  },
-  statusDotSuccess: {
-    backgroundColor: '#59d98e',
-  },
-  statusDotError: {
-    backgroundColor: '#ff826a',
-  },
-  statusPillText: {
-    color: '#f7f3ea',
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  statusBarText: {
-    color: '#8ca2ad',
-    fontSize: 15,
-    marginBottom: 8,
-    marginRight: 18,
-  },
-  grid: {
-    flexDirection: 'row',
-    marginTop: 24,
-  },
-  heroPanel: {
-    marginRight: 24,
-    minHeight: 760,
-    width: '62%',
-  },
-  sideColumn: {
-    width: '38%',
-  },
-  panel: {
-    backgroundColor: 'rgba(9, 23, 33, 0.92)',
-    borderColor: 'rgba(111, 168, 176, 0.22)',
-    borderRadius: 34,
-    borderWidth: 1,
-    padding: 28,
+    justifyContent: 'center',
     shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 22 },
-    shadowOpacity: 0.28,
-    shadowRadius: 36,
+    shadowOffset: { width: 0, height: 24 },
+    shadowOpacity: 0.35,
+    shadowRadius: 38,
   },
-  sectionEyebrow: {
-    color: '#7dd0c6',
-    fontSize: 14,
-    fontWeight: '700',
-    letterSpacing: 2.4,
-    marginBottom: 12,
+  stageArtwork: {
+    backgroundColor: '#102131',
   },
-  sectionTitle: {
-    color: '#f6f1e8',
-    fontSize: 42,
-    fontWeight: '800',
-    lineHeight: 50,
-  },
-  sectionSubtitle: {
-    color: '#9bb1b8',
-    fontSize: 18,
-    lineHeight: 26,
-    marginTop: 12,
-  },
-  artwork: {
-    backgroundColor: '#10202c',
-    borderRadius: 28,
-    height: 360,
-    marginTop: 28,
-    width: '100%',
-  },
-  artworkFallback: {
+  stageArtworkFallback: {
     alignItems: 'center',
-    borderColor: 'rgba(125, 208, 198, 0.25)',
+    borderColor: 'rgba(143, 225, 213, 0.28)',
     borderWidth: 1,
     justifyContent: 'center',
   },
-  artworkFallbackText: {
-    color: '#7dd0c6',
-    fontSize: 52,
-    fontWeight: '800',
-    letterSpacing: 8,
-  },
-  metricRow: {
-    flexDirection: 'row',
-    marginTop: 24,
-  },
-  metricCard: {
-    backgroundColor: 'rgba(244, 239, 230, 0.05)',
-    borderRadius: 22,
-    marginRight: 14,
-    paddingHorizontal: 20,
-    paddingVertical: 18,
-    width: 170,
-  },
-  metricValue: {
-    color: '#f7f3ea',
-    fontSize: 30,
-    fontWeight: '800',
-  },
-  metricLabel: {
-    color: '#93a6ad',
-    fontSize: 15,
-    marginTop: 6,
-  },
-  buttonRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginTop: 28,
-  },
-  actionButton: {
-    borderRadius: 20,
-    borderWidth: 2,
-    marginBottom: 12,
-    marginRight: 12,
-    paddingHorizontal: 22,
-    paddingVertical: 18,
-    transform: [{ scale: 1 }],
-  },
-  actionButtonPrimary: {
-    backgroundColor: '#7dd0c6',
-    borderColor: '#7dd0c6',
-  },
-  actionButtonSecondary: {
-    backgroundColor: 'rgba(244, 239, 230, 0.05)',
-    borderColor: 'rgba(244, 239, 230, 0.12)',
-  },
-  actionButtonFocused: {
-    borderColor: '#f7f3ea',
-    shadowColor: '#7dd0c6',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.45,
-    shadowRadius: 22,
-    transform: [{ scale: 1.04 }],
-  },
-  actionButtonLabel: {
-    fontSize: 18,
-    fontWeight: '800',
-    letterSpacing: 0.4,
-  },
-  actionButtonLabelPrimary: {
-    color: '#041018',
-  },
-  actionButtonLabelSecondary: {
-    color: '#f7f3ea',
-  },
-  playerHint: {
-    color: '#8da1aa',
-    fontSize: 15,
-    marginTop: 8,
-  },
-  errorText: {
-    color: '#ff9c8b',
-    fontSize: 16,
-    lineHeight: 24,
-    marginTop: 20,
-  },
-  sideTitle: {
-    color: '#f7f3ea',
+  stageArtworkFallbackLabel: {
+    color: '#95efe1',
     fontSize: 28,
     fontWeight: '800',
-    marginBottom: 18,
+    letterSpacing: 7,
+    marginTop: 10,
   },
-  emptyText: {
-    color: '#8da1aa',
-    fontSize: 17,
-    lineHeight: 24,
+  playerOverlayTop: {
+    left: 22,
+    position: 'absolute',
+    top: 22,
   },
-  queueItem: {
+  playerOverlayBottom: {
+    bottom: 22,
+    position: 'absolute',
+    right: 22,
+  },
+  liveChip: {
     alignItems: 'center',
-    borderBottomColor: 'rgba(244, 239, 230, 0.08)',
-    borderBottomWidth: 1,
+    backgroundColor: 'rgba(7, 14, 22, 0.76)',
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 999,
+    borderWidth: 1,
     flexDirection: 'row',
-    paddingVertical: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
   },
-  queueIndex: {
-    color: '#7dd0c6',
-    fontSize: 18,
+  liveChipDot: {
+    backgroundColor: 'rgba(255, 255, 255, 0.28)',
+    borderRadius: 999,
+    height: 9,
+    marginRight: 8,
+    width: 9,
+  },
+  liveChipDotOn: {
+    backgroundColor: '#67e0c2',
+  },
+  liveChipText: {
+    color: '#f0f6f8',
+    fontSize: 14,
     fontWeight: '800',
-    width: 44,
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
   },
-  queueCopy: {
-    flex: 1,
+  playIconShell: {
+    alignItems: 'center',
+    backgroundColor: '#86e2d4',
+    borderRadius: 999,
+    height: 86,
+    justifyContent: 'center',
+    width: 86,
   },
-  queueTitle: {
-    color: '#f7f3ea',
-    fontSize: 20,
-    fontWeight: '700',
+  trackTitle: {
+    color: '#f7f2e9',
+    fontSize: 56,
+    fontWeight: '800',
+    letterSpacing: -1.3,
+    lineHeight: 62,
+    marginTop: 28,
+    maxWidth: 980,
+    textAlign: 'center',
   },
-  queueArtist: {
-    color: '#91a6ad',
-    fontSize: 16,
-    marginTop: 6,
+  trackArtist: {
+    color: '#c3d0d8',
+    fontSize: 24,
+    fontWeight: '500',
+    marginTop: 12,
+    textAlign: 'center',
   },
-  setupText: {
-    color: '#9bb1b8',
+  visualizerShell: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.2)',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderRadius: 999,
+    borderWidth: 1,
+    marginTop: 30,
+    paddingHorizontal: 22,
+    paddingVertical: 18,
+    width: 720,
+  },
+  visualizerRow: {
+    alignItems: 'flex-end',
+    flexDirection: 'row',
+    height: 112,
+    justifyContent: 'space-between',
+    width: '100%',
+  },
+  visualizerBar: {
+    backgroundColor: '#dffaf5',
+    borderRadius: 999,
+    width: 8,
+  },
+  metaRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    marginTop: 22,
+  },
+  metaText: {
+    color: '#b8c6cf',
     fontSize: 17,
-    lineHeight: 25,
-    marginBottom: 10,
+    marginHorizontal: 12,
+  },
+  playerHint: {
+    color: '#8fa3b1',
+    fontSize: 16,
+    marginTop: 18,
+    textAlign: 'center',
   },
 });
