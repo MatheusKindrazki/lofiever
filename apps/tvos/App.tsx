@@ -16,6 +16,7 @@ import {
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { setAudioModeAsync, useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
+import { LinearGradient } from 'expo-linear-gradient';
 
 type QueueTrack = {
   id: string;
@@ -31,11 +32,27 @@ type StreamData = {
   listeners: number;
 };
 
+type BackgroundSpark = {
+  top: `${number}%`;
+  size: number;
+  opacity: number;
+  left?: `${number}%`;
+  right?: `${number}%`;
+};
+
 const DEFAULT_API_BASE_URL = 'http://localhost:3000';
 const API_BASE_URL = (process.env.EXPO_PUBLIC_LOFIEVER_API_URL ?? DEFAULT_API_BASE_URL).replace(/\/$/, '');
 const STREAM_METADATA_URL = `${API_BASE_URL}/api/stream`;
 const DEFAULT_VOLUME = 0.8;
 const VISUALIZER_BAR_COUNT = 34;
+const BACKGROUND_SPARKS: BackgroundSpark[] = [
+  { top: '18%', left: '12%', size: 5, opacity: 0.5 },
+  { top: '24%', right: '18%', size: 4, opacity: 0.36 },
+  { top: '31%', left: '74%', size: 6, opacity: 0.22 },
+  { top: '56%', left: '11%', size: 3, opacity: 0.32 },
+  { top: '62%', right: '14%', size: 4, opacity: 0.28 },
+  { top: '72%', left: '26%', size: 5, opacity: 0.26 },
+];
 
 if (__DEV__ && Platform.isTV) {
   LogBox.ignoreAllLogs(true);
@@ -98,6 +115,7 @@ export default function App() {
   const wasPlayingRef = useRef(false);
   const glowPulse = useRef(new Animated.Value(0)).current;
   const ringRotation = useRef(new Animated.Value(0)).current;
+  const ambientDrift = useRef(new Animated.Value(0)).current;
 
   const { width, height } = useWindowDimensions();
 
@@ -152,14 +170,33 @@ export default function App() {
       })
     );
 
+    const ambientAnimation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(ambientDrift, {
+          duration: 5400,
+          easing: Easing.inOut(Easing.sin),
+          toValue: 1,
+          useNativeDriver: true,
+        }),
+        Animated.timing(ambientDrift, {
+          duration: 5400,
+          easing: Easing.inOut(Easing.sin),
+          toValue: 0,
+          useNativeDriver: true,
+        }),
+      ])
+    );
+
     pulseAnimation.start();
     ringAnimation.start();
+    ambientAnimation.start();
 
     return () => {
       pulseAnimation.stop();
       ringAnimation.stop();
+      ambientAnimation.stop();
     };
-  }, [glowPulse, ringRotation]);
+  }, [ambientDrift, glowPulse, ringRotation]);
 
   useEffect(() => {
     const isActive = playbackStatus.playing || playbackStatus.timeControlStatus === 'waiting';
@@ -267,6 +304,11 @@ export default function App() {
       : 'em pausa';
   const playerHint = playbackStatus.playing ? 'Clique no player para pausar' : 'Clique no player para tocar';
   const artworkSize = Math.round(Math.min(width * 0.28, height * 0.42, 430));
+  const curtainWidth = Math.round(Math.min(width * 0.24, 360));
+  const curtainHeight = Math.round(height * 0.94);
+  const rippleOuterSize = Math.round(Math.min(width * 0.64, 920));
+  const rippleInnerSize = Math.round(rippleOuterSize * 0.74);
+  const horizonWidth = Math.round(Math.min(width * 0.78, 1380));
   const glowScale = glowPulse.interpolate({
     inputRange: [0, 1],
     outputRange: [0.94, 1.08],
@@ -278,6 +320,46 @@ export default function App() {
   const rotatingRing = ringRotation.interpolate({
     inputRange: [0, 1],
     outputRange: ['0deg', '360deg'],
+  });
+  const curtainTranslateX = ambientDrift.interpolate({
+    inputRange: [0, 1],
+    outputRange: [-22, 18],
+  });
+  const curtainTranslateY = ambientDrift.interpolate({
+    inputRange: [0, 1],
+    outputRange: [-34, 24],
+  });
+  const curtainReverseX = ambientDrift.interpolate({
+    inputRange: [0, 1],
+    outputRange: [28, -16],
+  });
+  const curtainReverseY = ambientDrift.interpolate({
+    inputRange: [0, 1],
+    outputRange: [22, -24],
+  });
+  const curtainScale = ambientDrift.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.96, 1.05],
+  });
+  const curtainOpacity = ambientDrift.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.34, 0.52],
+  });
+  const ribbonOpacity = glowPulse.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.16, 0.28],
+  });
+  const rippleInnerScale = glowPulse.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.96, 1.03],
+  });
+  const rippleOuterScale = glowPulse.interpolate({
+    inputRange: [0, 1],
+    outputRange: [1.02, 1.12],
+  });
+  const horizonOpacity = glowPulse.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.24, 0.42],
   });
 
   return (
@@ -296,6 +378,166 @@ export default function App() {
 
         <View style={[StyleSheet.absoluteFill, styles.backdropShade]} />
         <View style={[StyleSheet.absoluteFill, styles.backdropTint]} />
+
+        <View pointerEvents="none" style={styles.backgroundAtmosphere}>
+          <Animated.View
+            style={[
+              styles.lightCurtain,
+              {
+                height: curtainHeight,
+                left: width * 0.12,
+                top: -height * 0.06,
+                transform: [
+                  { translateX: curtainTranslateX },
+                  { translateY: curtainTranslateY },
+                  { rotate: '-18deg' },
+                  { scaleY: curtainScale },
+                ],
+                width: curtainWidth,
+              },
+            ]}
+          >
+            <LinearGradient
+              colors={[
+                'rgba(76, 234, 214, 0)',
+                'rgba(76, 234, 214, 0.24)',
+                'rgba(97, 163, 233, 0.16)',
+                'rgba(76, 234, 214, 0)',
+              ]}
+              end={{ x: 0.5, y: 1 }}
+              start={{ x: 0.5, y: 0 }}
+              style={StyleSheet.absoluteFill}
+            />
+          </Animated.View>
+
+          <Animated.View
+            style={[
+              styles.lightCurtain,
+              {
+                height: curtainHeight * 0.9,
+                left: width * 0.5 - curtainWidth * 0.46,
+                opacity: curtainOpacity,
+                top: height * 0.03,
+                transform: [
+                  { translateY: curtainReverseY },
+                  { rotate: '8deg' },
+                  { scaleY: curtainScale },
+                ],
+                width: curtainWidth * 0.92,
+              },
+            ]}
+          >
+            <LinearGradient
+              colors={[
+                'rgba(84, 132, 235, 0)',
+                'rgba(84, 132, 235, 0.14)',
+                'rgba(129, 225, 214, 0.24)',
+                'rgba(84, 132, 235, 0)',
+              ]}
+              end={{ x: 0.5, y: 1 }}
+              start={{ x: 0.5, y: 0 }}
+              style={StyleSheet.absoluteFill}
+            />
+          </Animated.View>
+
+          <Animated.View
+            style={[
+              styles.lightCurtain,
+              {
+                height: curtainHeight * 0.88,
+                right: width * 0.11,
+                top: -height * 0.04,
+                transform: [
+                  { translateX: curtainReverseX },
+                  { translateY: curtainReverseY },
+                  { rotate: '18deg' },
+                  { scaleY: curtainScale },
+                ],
+                width: curtainWidth * 0.88,
+              },
+            ]}
+          >
+            <LinearGradient
+              colors={[
+                'rgba(255, 158, 107, 0)',
+                'rgba(255, 158, 107, 0.18)',
+                'rgba(255, 208, 153, 0.1)',
+                'rgba(255, 158, 107, 0)',
+              ]}
+              end={{ x: 0.5, y: 1 }}
+              start={{ x: 0.5, y: 0 }}
+              style={StyleSheet.absoluteFill}
+            />
+          </Animated.View>
+
+          <Animated.View
+            style={[
+              styles.soundRipple,
+              {
+                borderRadius: rippleOuterSize / 2,
+                height: rippleOuterSize,
+                opacity: ribbonOpacity,
+                transform: [{ scale: rippleOuterScale }],
+                width: rippleOuterSize,
+              },
+            ]}
+          />
+          <Animated.View
+            style={[
+              styles.soundRipple,
+              styles.soundRippleInner,
+              {
+                borderRadius: rippleInnerSize / 2,
+                height: rippleInnerSize,
+                opacity: glowOpacity,
+                transform: [{ scale: rippleInnerScale }],
+                width: rippleInnerSize,
+              },
+            ]}
+          />
+
+          <Animated.View
+            style={[
+              styles.horizonGlow,
+              {
+                opacity: horizonOpacity,
+                top: height * 0.62,
+                width: horizonWidth,
+              },
+            ]}
+          >
+            <LinearGradient
+              colors={[
+                'rgba(0, 0, 0, 0)',
+                'rgba(92, 232, 214, 0.1)',
+                'rgba(132, 190, 255, 0.26)',
+                'rgba(255, 178, 133, 0.12)',
+                'rgba(0, 0, 0, 0)',
+              ]}
+              end={{ x: 1, y: 0.5 }}
+              start={{ x: 0, y: 0.5 }}
+              style={StyleSheet.absoluteFill}
+            />
+          </Animated.View>
+
+          {BACKGROUND_SPARKS.map((spark, index) => (
+            <Animated.View
+              key={index}
+              style={[
+                styles.backgroundSpark,
+                {
+                  height: spark.size,
+                  left: spark.left,
+                  opacity: spark.opacity,
+                  right: spark.right,
+                  top: spark.top,
+                  transform: [{ scale: glowScale }],
+                  width: spark.size,
+                },
+              ]}
+            />
+          ))}
+        </View>
 
         <View style={styles.chrome}>
           {error ? (
@@ -469,6 +711,35 @@ const styles = StyleSheet.create({
   },
   backdropTint: {
     backgroundColor: 'rgba(7, 12, 20, 0.54)',
+  },
+  backgroundAtmosphere: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  lightCurtain: {
+    borderRadius: 999,
+    overflow: 'hidden',
+    position: 'absolute',
+  },
+  soundRipple: {
+    borderColor: 'rgba(159, 240, 229, 0.14)',
+    borderWidth: 1,
+    position: 'absolute',
+  },
+  soundRippleInner: {
+    borderColor: 'rgba(255, 255, 255, 0.12)',
+  },
+  horizonGlow: {
+    borderRadius: 999,
+    height: 140,
+    overflow: 'hidden',
+    position: 'absolute',
+  },
+  backgroundSpark: {
+    backgroundColor: '#dffaf5',
+    borderRadius: 999,
+    position: 'absolute',
   },
   chrome: {
     flex: 1,
