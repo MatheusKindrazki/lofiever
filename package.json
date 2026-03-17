@@ -88,7 +88,7 @@
     "eslint-config-next": "15.3.0",
     "jest": "^29.7.0",
     "jest-environment-jsdom": "^29.7.0",
-    "music-metadata": "^11.10.2",
+    "music-metadata": "^11.12.3",
     "postcss": "^8.5.3",
     "prisma": "^6.19.2",
     "tailwindcss": "^4.1.3",
