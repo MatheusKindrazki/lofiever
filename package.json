@@ -60,7 +60,7 @@
     "nanoid": "^5.1.5",
     "next": "15.3.0",
     "next-auth": "^4.24.11",
-    "next-intl": "^4.5.5",
+    "next-intl": "^4.9.2",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "socket.io": "^4.8.1",
