@@ -61,6 +61,7 @@
     ".next/types/**/*.ts"
   ],
   "exclude": [
-    "node_modules"
+    "node_modules",
+    "apps/tvos" // Excluído para evitar incompatibilidades de tipos do Expo tvOS
   ]
 }
