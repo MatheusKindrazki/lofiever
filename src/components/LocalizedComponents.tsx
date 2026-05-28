@@ -21,8 +21,15 @@ export function LocalizedComponents() {
     const [analyser, setAnalyser] = useState<AnalyserNode | null>(null);
     const sourceRef = useRef<MediaElementAudioSourceNode | null>(null);
 
-    const { preferences, isLoaded } = useUserPreferences();
+    const { preferences, isLoaded, setVolume: saveVolume } = useUserPreferences();
     const volume = preferences.volume;
+
+    const handleVolumeChange = useCallback(
+        (e: React.ChangeEvent<HTMLInputElement>) => {
+            saveVolume(Number(e.target.value));
+        },
+        [saveVolume],
+    );
 
     // Setup audio element
     useEffect(() => {
@@ -181,7 +188,16 @@ export function LocalizedComponents() {
                             </div>
 
                             <div className="relative min-h-[380px] flex-1 sm:min-h-[420px] lg:min-h-0">
-                                <RadioPlayer key={`player-${locale}`} zen={false} />
+                                <RadioPlayer
+                                    key={`player-${locale}`}
+                                    zen={false}
+                                    playing={playing}
+                                    isLoading={isLoading}
+                                    togglePlayPause={togglePlayPause}
+                                    volume={volume}
+                                    handleVolumeChange={handleVolumeChange}
+                                    analyser={analyser}
+                                />
                             </div>
                         </div>
 

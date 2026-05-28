@@ -1,10 +1,9 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useTranslations } from 'next-intl';
 import Image from 'next/image';
 import { useListeners, usePlaybackSync } from '../lib/socket/client';
-import { useUserPreferences } from '../hooks/useUserPreferences';
 import { usePlaylistHistory } from '../hooks/usePlaylistHistory';
 import { DateNavigator } from './DateNavigator';
 import {
@@ -33,24 +32,33 @@ interface PlaylistData {
     history: QueueTrack[];
 }
 
-// Main Component
-export default function RadioPlayer({ zen = false }: { zen?: boolean }): React.ReactNode {
+export interface RadioPlayerProps {
+    zen?: boolean;
+    playing: boolean;
+    isLoading: boolean;
+    togglePlayPause: () => void;
+    volume: number;
+    handleVolumeChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+    analyser: AnalyserNode | null;
+}
+
+// Main Component — audio is owned by LocalizedComponents (shared with ZenMode)
+export default function RadioPlayer({
+    zen = false,
+    playing,
+    isLoading,
+    togglePlayPause,
+    volume,
+    handleVolumeChange,
+    analyser,
+}: RadioPlayerProps): React.ReactNode {
     const t = useTranslations('player');
-    const [playing, setPlaying] = useState(false);
-    const [isLoading, setIsLoading] = useState(true);
     const [isClient, setIsClient] = useState(false);
     const [activeTab, setActiveTab] = useState<'upcoming' | 'history'>('upcoming');
     const [selectedHistoryDate, setSelectedHistoryDate] = useState(new Date());
 
-    const audioRef = useRef<HTMLAudioElement | null>(null);
-    const audioContextRef = useRef<AudioContext | null>(null);
-    const [analyser, setAnalyser] = useState<AnalyserNode | null>(null);
-    const sourceRef = useRef<MediaElementAudioSourceNode | null>(null);
-
     const { listenersCount } = useListeners();
     const { currentTrack: syncedTrack } = usePlaybackSync();
-    const { preferences, isLoaded, setVolume: saveVolume } = useUserPreferences();
-    const volume = preferences.volume;
     const { history: dailyHistory, isLoading: historyLoading } = usePlaylistHistory(selectedHistoryDate);
 
     const [playlistData, setPlaylistData] = useState<PlaylistData>({
@@ -94,98 +102,6 @@ export default function RadioPlayer({ zen = false }: { zen?: boolean }): React.R
             document.removeEventListener('visibilitychange', handleVisibilityChange);
         };
     }, [isClient]);
-
-    const setupAudio = useCallback(() => {
-        if (!isClient || !isLoaded || audioRef.current) return;
-
-        const audio = new Audio();
-        audioRef.current = audio;
-        audio.crossOrigin = 'anonymous';
-        audio.volume = volume / 100; // Initial volume from preferences
-        audio.src = '/api/stream/audio-stream?proxy=true';
-        audio.load();
-
-        const handlePlaying = () => setPlaying(true);
-        const handlePause = () => setPlaying(false);
-        const handleError = (e: Event) => console.error('Audio error:', e);
-        const handleLoadStart = () => setIsLoading(true);
-        const handleCanPlay = () => setIsLoading(false);
-
-        audio.addEventListener('playing', handlePlaying);
-        audio.addEventListener('pause', handlePause);
-        audio.addEventListener('error', handleError);
-        audio.addEventListener('loadstart', handleLoadStart);
-        audio.addEventListener('canplay', handleCanPlay);
-
-        audio.play().catch(e => console.warn("Autoplay blocked", e));
-
-        return () => {
-            audio.pause();
-            audio.removeEventListener('playing', handlePlaying);
-            audio.removeEventListener('pause', handlePause);
-            audio.removeEventListener('error', handleError);
-            audio.removeEventListener('loadstart', handleLoadStart);
-            audio.removeEventListener('canplay', handleCanPlay);
-            sourceRef.current?.disconnect();
-            audioContextRef.current?.close();
-        };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [isClient, isLoaded]); // Don't include volume - it's updated separately
-
-    useEffect(() => {
-        const cleanup = setupAudio();
-        return cleanup;
-    }, [setupAudio]);
-
-
-    const initAudioContext = () => {
-        if (!audioRef.current || audioContextRef.current) return;
-
-        try {
-            const context = new (window.AudioContext || (window as any).webkitAudioContext)();
-            audioContextRef.current = context;
-            const analyserNode = context.createAnalyser();
-            analyserNode.fftSize = 256;
-            setAnalyser(analyserNode);
-
-            if (!sourceRef.current) {
-                sourceRef.current = context.createMediaElementSource(audioRef.current);
-            }
-            sourceRef.current.connect(analyserNode);
-            analyserNode.connect(context.destination);
-        } catch (error) {
-            console.error("Failed to initialize AudioContext:", error);
-        }
-    };
-
-
-    useEffect(() => {
-        if (audioRef.current) {
-            audioRef.current.volume = volume / 100;
-        }
-    }, [volume]);
-
-    const togglePlayPause = () => {
-        if (!audioRef.current) return;
-        if (playing) {
-            audioRef.current.pause();
-        } else {
-            // Reload stream to get latest buffer (it's a live radio, need to sync)
-            setIsLoading(true);
-            audioRef.current.src = '/api/stream/audio-stream?proxy=true&t=' + Date.now();
-            audioRef.current.load();
-            initAudioContext();
-            audioRef.current.play().catch(e => {
-                console.error("Play error:", e);
-                setIsLoading(false);
-            });
-        }
-    };
-
-    const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const newVolume = Number(e.target.value);
-        saveVolume(newVolume);
-    };
 
     const formatDuration = (seconds: number) => {
         const mins = Math.floor(seconds / 60);
