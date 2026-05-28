@@ -62,6 +62,6 @@
   ],
   "exclude": [
     "node_modules",
-    "apps/tvos"
+    "apps/tvos" // Excluído para evitar incompatibilidades de tipos do Expo tvOS
   ]
 }
