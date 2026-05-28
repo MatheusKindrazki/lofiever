@@ -29,8 +29,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export const viewport: Viewport = {
   themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#8459c0' },
-    { media: '(prefers-color-scheme: dark)', color: '#1a1a2e' },
+    { media: '(prefers-color-scheme: light)', color: '#9075c1' },
+    { media: '(prefers-color-scheme: dark)', color: '#0f1117' },
   ],
   width: 'device-width',
   initialScale: 1,
@@ -39,21 +39,24 @@ export const viewport: Viewport = {
 };
 
 const manrope = Manrope({
-    subsets: ['latin'],
-    variable: '--font-manrope',
-    display: 'swap',
+  subsets: ['latin', 'latin-ext'],
+  weight: ['400', '500', '600', '700'],
+  variable: '--font-manrope',
+  display: 'swap',
 });
 
 const fraunces = Fraunces({
-    subsets: ['latin'],
-    variable: '--font-fraunces',
-    display: 'swap',
+  subsets: ['latin', 'latin-ext'],
+  weight: ['400', '500', '600', '700'],
+  variable: '--font-fraunces',
+  display: 'swap',
 });
 
 const jetbrains = JetBrains_Mono({
-    subsets: ['latin'],
-    variable: '--font-jetbrains-mono',
-    display: 'swap',
+  subsets: ['latin', 'latin-ext'],
+  weight: ['400', '500'],
+  variable: '--font-jetbrains-mono',
+  display: 'swap',
 });
 
 export default async function LocaleLayout({
