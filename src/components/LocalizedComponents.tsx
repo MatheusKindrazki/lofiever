@@ -144,7 +144,7 @@ export function LocalizedComponents() {
     }, []);
 
     return (
-        <div className="w-full" ref={zenContainerRef}>
+        <div className="flex min-h-0 w-full flex-1 flex-col" ref={zenContainerRef}>
             {zenMode && (
                 <ZenMode
                     onExit={exitZenMode}
@@ -156,15 +156,15 @@ export function LocalizedComponents() {
             )}
 
             {!zenMode && (
-                <div className="mx-auto w-full max-w-6xl">
-                    <div className="grid grid-cols-1 gap-6 lg:grid-cols-12 lg:gap-x-8 lg:gap-y-0">
-                        <div className="relative lg:col-span-7 lg:col-start-1">
+                <div className="mx-auto flex min-h-0 w-full max-w-6xl flex-1 flex-col">
+                    <div className="grid min-h-0 flex-1 grid-cols-1 gap-6 lg:max-h-[calc(100vh-11rem)] lg:grid-cols-2 lg:grid-rows-1 lg:items-stretch lg:gap-x-8">
+                        <div className="relative flex min-h-0 flex-col">
                             <div
                                 aria-hidden="true"
                                 className="pointer-events-none absolute -inset-x-6 -inset-y-4 rounded-[2rem] bg-[radial-gradient(ellipse_at_center,color-mix(in_srgb,var(--mood-accent-2)_14%,transparent)_0%,transparent_72%)] opacity-80"
                             />
 
-                            <div className="relative flex items-start justify-between gap-4 pb-3">
+                            <div className="relative mb-3 flex shrink-0 items-center justify-between gap-4">
                                 <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-lofi-400">
                                     {t('nowPlaying')}
                                 </p>
@@ -180,16 +180,16 @@ export function LocalizedComponents() {
                                 </button>
                             </div>
 
-                            <div className="relative min-h-[480px] h-[min(72vh,680px)]">
+                            <div className="relative min-h-[380px] flex-1 sm:min-h-[420px] lg:min-h-0">
                                 <RadioPlayer key={`player-${locale}`} zen={false} />
                             </div>
                         </div>
 
-                        <div className="flex min-h-[420px] flex-col lg:col-span-5 lg:col-start-8 lg:pt-14 lg:pb-2">
-                            <p className="mb-3 font-mono text-[11px] uppercase tracking-[0.16em] text-lofi-400">
+                        <div className="flex min-h-0 flex-col">
+                            <p className="mb-3 shrink-0 font-mono text-[11px] uppercase tracking-[0.16em] text-lofi-400">
                                 {tChat('djName')}
                             </p>
-                            <div className="min-h-[420px] flex-1 h-[min(62vh,560px)] lg:h-[min(58vh,520px)]">
+                            <div className="min-h-[380px] flex-1 sm:min-h-[420px] lg:min-h-0">
                                 <ChatRoom key={`chat-${locale}`} />
                             </div>
                         </div>

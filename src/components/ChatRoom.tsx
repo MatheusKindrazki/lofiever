@@ -141,7 +141,7 @@ export default function ChatRoom() {
   }, [filteredMessages]);
 
   return (
-    <div className="relative flex flex-col h-full overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-[#141824] via-[#1a1f2d] to-[#141824] shadow-2xl shadow-black/40">
+    <div className="relative flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-[#141824] via-[#1a1f2d] to-[#141824] shadow-2xl shadow-black/40">
       {/* Ambient background */}
       <div className="pointer-events-none absolute inset-0 opacity-70">
         <div
@@ -156,17 +156,16 @@ export default function ChatRoom() {
       </div>
 
       {/* Header */}
-      <div className="relative z-10 flex items-center justify-between px-4 py-3 border-b border-white/5 bg-white/5 backdrop-blur-sm">
-        <div className="flex items-center gap-3">
-          <div className="relative">
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[var(--mood-accent)] to-[var(--mood-accent-2)] flex items-center justify-center shadow-lg shadow-black/20">
-              <span className="text-white text-lg animate-pulse">🎧</span>
+      <div className="relative z-10 flex shrink-0 items-center justify-between gap-2 border-b border-white/5 bg-white/5 px-3 py-2.5 backdrop-blur-sm">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <div className="relative shrink-0">
+            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-[var(--mood-accent)] to-[var(--mood-accent-2)] shadow-lg shadow-black/20">
+              <span className="text-base text-white">🎧</span>
             </div>
-            <span className="absolute bottom-0 right-0 w-3 h-3 bg-emerald-400 border-2 border-slate-950 rounded-full shadow-md"></span>
+            <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-slate-950 bg-emerald-400 shadow-md" />
           </div>
-          <div>
-            <h2 className="font-semibold text-white drop-shadow-sm">{t('djName')}</h2>
-            <p className="text-xs text-slate-200/70">{t('djStatus')}</p>
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold text-white">{t('djStatus')}</p>
           </div>
         </div>
         {currentTrack && (
@@ -180,7 +179,7 @@ export default function ChatRoom() {
       {/* Messages */}
       <div
         ref={chatContainerRef}
-        className="relative z-10 flex-1 overflow-y-auto p-4 space-y-4 scroll-smooth min-h-0"
+        className="relative z-10 min-h-0 flex-1 space-y-2 overflow-y-auto scroll-smooth p-3"
       >
         {filteredMessages.length === 0 && !isLoadingAI && (
           <div className="flex flex-col items-center justify-center h-full text-center py-8">
@@ -208,7 +207,7 @@ export default function ChatRoom() {
             )}
 
             {/* Messages */}
-            <div className="space-y-4">
+            <div className="space-y-2">
               {group.messages.map((msg) => (
                 <MessageBubble
                   key={msg.id}
@@ -279,8 +278,8 @@ export default function ChatRoom() {
         )}
 
         {/* Quick action pills - always visible */}
-        <div className="px-4 pt-3 pb-2">
-          <div className="flex flex-wrap gap-1.5">
+        <div className="px-3 pt-2 pb-1.5">
+          <div className="flex flex-wrap gap-1">
             <button
               type="button"
               onClick={() => handleQuickAction('study')}
@@ -345,14 +344,14 @@ export default function ChatRoom() {
         )}
 
         {/* Input */}
-        <div className="px-4 pb-4">
-          <form onSubmit={handleSubmit} className="flex flex-col gap-2">
+        <div className="px-3 pb-3">
+          <form onSubmit={handleSubmit} className="flex flex-col gap-1.5">
             <div className="flex gap-2">
               <input
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 disabled={isLoadingAI || hasPendingMessage || !isConnected}
-                className={`flex-1 px-4 py-2.5 border rounded-full bg-white/10 text-white text-sm focus:ring-2 focus:ring-lofi-400 focus:border-transparent outline-none transition-all placeholder-white/50 backdrop-blur-sm ${!isConnected ? 'border-amber-500/30' : 'border-white/15'}`}
+                className={`flex-1 rounded-full border bg-white/10 px-3 py-2 text-sm text-white outline-none transition-all placeholder-white/50 backdrop-blur-sm focus:border-transparent focus:ring-2 focus:ring-lofi-400 ${!isConnected ? 'border-amber-500/30' : 'border-white/15'}`}
                 placeholder={
                   !isConnected
                     ? (normalizedLocale === 'en' ? 'Reconnecting...' : 'Reconectando...')
@@ -366,7 +365,7 @@ export default function ChatRoom() {
               <button
                 type="submit"
                 disabled={isLoadingAI || hasPendingMessage || !input.trim() || !isConnected}
-                className={`px-4 py-2.5 text-white rounded-full transition-all duration-200 flex items-center gap-2 ${isPrivateMode
+                className={`flex shrink-0 items-center gap-2 rounded-full px-3 py-2 text-white transition-all duration-200 ${isPrivateMode
                   ? 'bg-gradient-to-r from-slate-700 to-slate-900 hover:from-slate-800 hover:to-black shadow-lg shadow-black/30'
                   : 'bg-gradient-to-r from-[var(--mood-accent)] to-[var(--mood-accent-2)] hover:brightness-110 shadow-lg shadow-black/25'
                   } disabled:from-gray-300 disabled:to-gray-400 disabled:opacity-50`}
@@ -450,20 +449,20 @@ function MessageBubble({
           : 'border border-white/5 shadow-[0_10px_20px_rgba(0,0,0,0.2)]';
 
   return (
-    <div className={`flex items-start gap-3 ${isCurrentUser ? 'flex-row-reverse' : ''} bubble-pop`}>
-      <div className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 ${isAI ? 'bg-gradient-to-br from-[var(--mood-accent)] to-[var(--mood-accent-2)] shadow-lg shadow-black/20' : 'bg-white/10 text-white border border-white/10'} ${isPending ? 'opacity-70' : ''}`}>
-        <span className="text-white text-sm">{isAI ? '🎧' : message.username.charAt(0).toUpperCase()}</span>
+    <div className={`flex items-start gap-2 ${isCurrentUser ? 'flex-row-reverse' : ''} bubble-pop`}>
+      <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${isAI ? 'bg-gradient-to-br from-[var(--mood-accent)] to-[var(--mood-accent-2)] shadow-md shadow-black/20' : 'border border-white/10 bg-white/10 text-white'} ${isPending ? 'opacity-70' : ''}`}>
+        <span className="text-xs text-white">{isAI ? '🎧' : message.username.charAt(0).toUpperCase()}</span>
       </div>
       <div
-        className={`relative max-w-[75%] rounded-2xl px-4 py-3 backdrop-blur-sm transition-all duration-200 ${isCurrentUser
+        className={`relative max-w-[88%] rounded-2xl px-3 py-2 backdrop-blur-sm transition-all duration-200 ${isCurrentUser
           ? 'bg-gradient-to-r from-[var(--mood-accent)] to-[var(--mood-accent-2)] text-white rounded-br-sm'
           : isAI
             ? 'bg-white/10 text-white rounded-tl-sm'
             : 'bg-white/5 text-white rounded-tl-sm'
           } ${bubbleHighlight} ${isPending ? 'opacity-80' : ''}`}
       >
-        <div className="flex items-center justify-between gap-3 mb-2">
-          <span className={`text-sm font-semibold ${isCurrentUser ? 'text-white' : 'text-white/90'}`}>
+        <div className="mb-1 flex items-center justify-between gap-2">
+          <span className={`text-xs font-semibold ${isCurrentUser ? 'text-white' : 'text-white/90'}`}>
             {isAI ? djName : message.username}
           </span>
           <div className="flex items-center gap-2">
@@ -482,7 +481,7 @@ function MessageBubble({
             )}
           </div>
         </div>
-        <p className={`text-sm leading-relaxed whitespace-pre-wrap transition-opacity ${isPending ? 'text-white/70' : (isCurrentUser ? 'text-white/95' : 'text-white/85')}`}>
+        <p className={`text-sm leading-snug whitespace-pre-wrap transition-opacity ${isPending ? 'text-white/70' : (isCurrentUser ? 'text-white/95' : 'text-white/85')}`}>
           {message.isPrivate && !isDirectToUser && <span className="text-xs opacity-70 mr-1">🔒</span>}
           {message.content}
         </p>

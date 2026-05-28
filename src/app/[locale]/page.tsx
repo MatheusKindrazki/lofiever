@@ -18,18 +18,17 @@ export default function Home() {
                         {t('appName')}
                     </h1>
                 </div>
-
                 <div className="flex shrink-0 items-center gap-2">
                     <MoodToggle />
                     <LanguageSwitcher />
                 </div>
             </header>
 
-            <div className="relative z-10 flex flex-1 flex-col px-4 pb-4 md:px-8 lg:px-10">
+            <div className="relative z-10 flex min-h-0 flex-1 flex-col px-4 pb-4 md:px-8 lg:px-10">
                 <LocalizedComponents />
             </div>
 
-            <footer className="relative z-10 mt-auto border-t border-lofi-800/40 px-4 py-6 md:px-8">
+            <footer className="relative z-10 mt-auto shrink-0 border-t border-lofi-800/40 px-4 py-6 md:px-8">
                 <div className="mx-auto flex max-w-5xl flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
                     <p className="text-sm text-lofi-300">
                         {t('footer.createdBy')}{' '}
