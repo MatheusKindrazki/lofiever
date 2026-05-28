@@ -339,7 +339,7 @@ const StandardPlayer = (props: any) => {
     const { t, currentSong, playing, isLoading, togglePlayPause, volume, handleVolumeChange, listenersCount, playlistData, activeTab, setActiveTab, historyLoading, dailyHistory, selectedHistoryDate, setSelectedHistoryDate, formatDuration } = props;
 
     return (
-        <div className="relative w-full rounded-2xl overflow-hidden h-full flex flex-col border border-white/10 bg-gradient-to-b from-[#141824] via-[#1a1f2d] to-[#141824] shadow-2xl shadow-black/40">
+        <div className="relative flex h-full min-h-0 w-full flex-col overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-[#141824] via-[#1a1f2d] to-[#141824] shadow-2xl shadow-black/40">
             {/* Album section */}
             <div className="relative flex-shrink-0">
                 <div className="absolute inset-0 w-full h-full">
