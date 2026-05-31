@@ -13,6 +13,22 @@ type QueueStatus =
 
 const SEARCH_LIMIT = 20;
 
+/**
+ * TrackSearch component - Provides search functionality for music tracks
+ *
+ * @example
+ * ```tsx
+ * <TrackSearch />
+ * ```
+ *
+ * @returns JSX element rendering the track search interface
+ *
+ * @accessibility
+ * - Search input has proper aria-label for screen readers
+ * - Buttons include disabled states for better UX
+ * - Form is properly labeled for keyboard navigation
+ * - Search results are displayed in an accessible list format
+ */
 export function TrackSearch() {
   const t = useTranslations('search');
   const [query, setQuery] = useState('');
@@ -40,7 +56,7 @@ export function TrackSearch() {
     } finally {
       setIsSearching(false);
     }
-  }, []);
+  }, [t]);
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -57,7 +73,7 @@ export function TrackSearch() {
       const message = err instanceof Error ? err.message : t('errors.addToQueueFailed');
       setQueueStatus((prev) => ({ ...prev, [track.id]: { kind: 'error', message } }));
     }
-  }, []);
+  }, [t]);
 
   return (
     <div className="flex flex-col gap-3">
@@ -115,7 +131,7 @@ export function TrackSearch() {
                 </p>
                 <p className="truncate text-xs text-gray-500 dark:text-gray-400">
                   {track.artist}
-                  <span className="ml-2 rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-gray-500 dark:bg-gray-700 dark:text-gray-300">
+                  <span className="ml-2 rounded-full bg-gray-100 px-1.5 py-0.5 text-xs uppercase tracking-wide text-gray-500 dark:bg-gray-700 dark:text-gray-300">
                     {track.sourceType}
                   </span>
                 </p>
