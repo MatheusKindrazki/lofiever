@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { addTrackToQueue, searchTracks } from '@/lib/api';
 import type { CatalogTrack } from '@/lib/api';
 
@@ -13,6 +14,7 @@ type QueueStatus =
 const SEARCH_LIMIT = 20;
 
 export function TrackSearch() {
+  const t = useTranslations('search');
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<CatalogTrack[]>([]);
   const [total, setTotal] = useState(0);
@@ -31,7 +33,7 @@ export function TrackSearch() {
       setHasSearched(true);
     } catch (err) {
       console.error('Failed to search tracks:', err);
-      setSearchError('Não consegui buscar faixas agora. Tente de novo em instantes.');
+      setSearchError(t('errors.searchFailed'));
       setResults([]);
       setTotal(0);
       setHasSearched(true);
@@ -52,7 +54,7 @@ export function TrackSearch() {
       await addTrackToQueue(track.id);
       setQueueStatus((prev) => ({ ...prev, [track.id]: { kind: 'success' } }));
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Falha ao adicionar à fila.';
+      const message = err instanceof Error ? err.message : t('errors.addToQueueFailed');
       setQueueStatus((prev) => ({ ...prev, [track.id]: { kind: 'error', message } }));
     }
   }, []);
@@ -61,10 +63,10 @@ export function TrackSearch() {
     <div className="flex flex-col gap-3">
       <div>
         <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">
-          Buscar faixas tocáveis
+          {t('title')}
         </h3>
         <p className="text-sm text-gray-500 dark:text-gray-400">
-          Procure no catálogo por título ou artista e adicione direto à fila.
+          {t('description')}
         </p>
       </div>
 
@@ -73,16 +75,16 @@ export function TrackSearch() {
           type="search"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          placeholder="Ex.: rainy night, lofi piano, chillhop..."
+          placeholder={t('placeholder')}
           className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 p-2 text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-lofi-500"
-          aria-label="Buscar faixas"
+          aria-label={t('title')}
         />
         <button
           type="submit"
           disabled={isSearching}
           className="shrink-0 px-4 py-2 rounded-md bg-lofi-500 text-white text-sm font-medium hover:bg-lofi-600 disabled:bg-lofi-300 disabled:cursor-not-allowed"
         >
-          {isSearching ? 'Buscando...' : 'Buscar'}
+          {isSearching ? t('button.searching') : t('button.search')}
         </button>
       </form>
 
@@ -91,8 +93,8 @@ export function TrackSearch() {
       {hasSearched && !isSearching && !searchError && (
         <p className="text-xs text-gray-500 dark:text-gray-400">
           {total === 0
-            ? 'Nenhuma faixa tocável encontrada para esse termo.'
-            : `${total} faixa(s) encontrada(s).`}
+            ? t('errors.empty')
+            : t('count', { count: total })}
         </p>
       )}
 
@@ -127,7 +129,7 @@ export function TrackSearch() {
                 disabled={isQueuing || isQueued}
                 className="shrink-0 px-3 py-1.5 rounded-md bg-lofi-500 text-white text-xs font-medium hover:bg-lofi-600 disabled:cursor-not-allowed disabled:bg-lofi-300"
               >
-                {isQueued ? 'Na fila' : isQueuing ? 'Adicionando...' : 'Adicionar à fila'}
+                {isQueued ? t('button.inQueue') : isQueuing ? t('button.adding') : t('button.addToQueue')}
               </button>
             </li>
           );

@@ -127,26 +127,19 @@ async function resolveServedTrack(
         "[Next Track] YouTube disabled; re-selecting a playable R2/S3/local track.",
       );
     }
-
-    // Re-seleção limitada para uma faixa tocável garantida.
-    const reselected = await reselectPlayableTrack(nextTrack.id);
-    if (reselected) {
-      return {
-        track: { ...reselected.track } as QueueTrack,
-        trackUrl: reselected.trackUrl,
-      };
-    }
   } else {
     console.warn(
       `[Next Track] Unknown sourceType: ${nextTrack.sourceType}; re-selecting a playable track.`,
     );
-    const reselected = await reselectPlayableTrack(nextTrack.id);
-    if (reselected) {
-      return {
-        track: { ...reselected.track } as QueueTrack,
-        trackUrl: reselected.trackUrl,
-      };
-    }
+  }
+
+  // Re-seleção limitada para uma faixa tocável garantida.
+  const reselected = await reselectPlayableTrack(nextTrack.id);
+  if (reselected) {
+    return {
+      track: { ...reselected.track } as QueueTrack,
+      trackUrl: reselected.trackUrl,
+    };
   }
 
   // Último recurso guardado: só chega aqui se a re-seleção não achou NENHUMA

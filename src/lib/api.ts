@@ -3,6 +3,40 @@
  * These functions handle the communication with the backend services
  */
 
+/**
+ * Standardized API error class that carries status code and message
+ */
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    public status: number
+  ) {
+    super(message);
+    this.name = 'ApiError';
+  }
+}
+
+/**
+ * Shared fetch error handling utility
+ * Validates response.ok, parses error JSON, and throws standardized ApiError
+ */
+async function fetchWithErrorHandling(response: Response): Promise<any> {
+  if (!response.ok) {
+    let message = `Error: ${response.status}`;
+    try {
+      const data = (await response.json()) as { error?: string };
+      if (data?.error) {
+        message = data.error;
+      }
+    } catch {
+      // Ignore JSON parse errors; fall back to status message.
+    }
+    throw new ApiError(message, response.status);
+  }
+
+  return response.json();
+}
+
 interface SongInfo {
   id: string;
   title: string;
@@ -169,11 +203,7 @@ export async function searchTracks(
     signal: opts.signal,
   });
 
-  if (!response.ok) {
-    throw new Error(`Error: ${response.status}`);
-  }
-
-  return (await response.json()) as TrackSearchResponse;
+  return fetchWithErrorHandling(response) as Promise<TrackSearchResponse>;
 }
 
 // Add a known catalog track to the play queue (POST /api/playlist/queue).
@@ -188,20 +218,7 @@ export async function addTrackToQueue(trackId: string): Promise<AddTrackToQueueR
     body: JSON.stringify({ trackId }),
   });
 
-  if (!response.ok) {
-    let message = `Error: ${response.status}`;
-    try {
-      const data = (await response.json()) as { error?: string };
-      if (data?.error) {
-        message = data.error;
-      }
-    } catch {
-      // Ignore JSON parse errors; fall back to status message.
-    }
-    throw new Error(message);
-  }
-
-  return (await response.json()) as AddTrackToQueueResponse;
+  return fetchWithErrorHandling(response) as Promise<AddTrackToQueueResponse>;
 }
 
 export { defaultCurationPrompt } from '@/lib/prompts';

@@ -12,6 +12,7 @@ export function LocalizedComponents() {
     const locale = useLocale();
     const t = useTranslations('player');
     const tChat = useTranslations('chat');
+    const tSearch = useTranslations('search');
     const [zenMode, setZenMode] = useState(false);
     const [playing, setPlaying] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
@@ -213,9 +214,8 @@ export function LocalizedComponents() {
                             </div>
 
                             <div className="flex shrink-0 flex-col">
-                                {/* TODO(i18n): no translation key exists for this heading yet; using a neutral inline label. Add e.g. `search.title` to messages/*.json. */}
                                 <p className="mb-3 shrink-0 font-mono text-[11px] uppercase tracking-[0.16em] text-lofi-400">
-                                    Buscar faixas
+                                    {tSearch('title')}
                                 </p>
                                 <div className="rounded-xl bg-white p-4 shadow-lg dark:bg-gray-800">
                                     <TrackSearch />

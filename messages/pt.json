@@ -85,6 +85,24 @@
             "myRequests": "Quantos pedidos eu ainda tenho?"
         }
     },
+    "search": {
+        "title": "Buscar faixas",
+        "description": "Procure no catálogo por título ou artista e adicione direto à fila.",
+        "placeholder": "Ex.: rainy night, lofi piano, chillhop...",
+        "button": {
+            "search": "Buscar",
+            "searching": "Buscando...",
+            "addToQueue": "Adicionar à fila",
+            "adding": "Adicionando...",
+            "inQueue": "Na fila"
+        },
+        "errors": {
+            "searchFailed": "Não consegui buscar faixas agora. Tente de novo em instantes.",
+            "addToQueueFailed": "Falha ao adicionar à fila.",
+            "empty": "Nenhuma faixa tocável encontrada para esse termo."
+        },
+        "count": "{count} faixa(s) encontrada(s)."
+    },
     "language": {
         "name": "Português",
         "code": "pt",

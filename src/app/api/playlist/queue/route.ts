@@ -193,10 +193,15 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     }
 
     // Identidade estável do usuário derivada da sessão NextAuth.
-    const username = user.name || user.email;
+    // Cria um rótulo público não sensível em vez de expor o email.
+    const buildPublicLabel = (email: string): string => {
+      const localPart = email.split('@')[0];
+      return `Usuário ${localPart.charAt(0).toUpperCase() + localPart.slice(1)}`;
+    };
+    const publicLabel = user.name || buildPublicLabel(user.email);
     const userId = user.email;
 
-    await PlaylistManagerService.queueTrack(track.id, username, false, userId);
+    await PlaylistManagerService.queueTrack(track.id, publicLabel, false, userId);
 
     return NextResponse.json(
       {
@@ -207,7 +212,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           mood: track.mood,
           duration: track.duration,
           sourceType: track.sourceType,
-          addedBy: username,
+          addedBy: publicLabel,
         },
       },
       { status: 201 }
