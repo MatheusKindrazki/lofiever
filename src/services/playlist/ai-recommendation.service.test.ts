@@ -28,6 +28,13 @@ jest.mock('ai', () => ({
   generateText: jest.fn(),
 }));
 
+// Config mutável para alternar YouTube habilitado/desabilitado nos testes.
+jest.mock('@/lib/config', () => ({
+  config: {
+    youtube: { enabled: true },
+  },
+}));
+
 // Mocks tipados
 const mockedPlaylistManagerService = PlaylistManagerService as jest.Mocked<typeof PlaylistManagerService>;
 const mockedPrisma = prisma as unknown as {
@@ -39,6 +46,9 @@ const mockedPrisma = prisma as unknown as {
   playbackHistory: {
     findMany: jest.Mock;
   };
+};
+const mockedConfig = jest.requireMock('@/lib/config').config as {
+  youtube: { enabled: boolean };
 };
 
 const sampleTrack: Track = {
@@ -56,9 +66,25 @@ const sampleTrack: Track = {
   lastPlayed: null,
 };
 
+const youtubeTrack: Track = {
+  id: 'yt1',
+  title: 'YT Beat',
+  artist: 'YT Artist',
+  sourceType: 'youtube',
+  sourceId: 'dQw4w9WgXcQ',
+  artworkKey: null,
+  duration: 180,
+  bpm: null,
+  mood: 'relaxed',
+  createdAt: new Date(),
+  updatedAt: new Date(),
+  lastPlayed: null,
+};
+
 describe('AIRecommendationService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockedConfig.youtube.enabled = true;
   });
 
   describe('processChatMessageAndAddTrack', () => {
@@ -136,6 +162,59 @@ describe('AIRecommendationService', () => {
       const result = await recommendNextTrack();
 
       expect(result).toEqual(sampleTrack);
+    });
+
+    it('should restrict sourceType to the playable whitelist when YouTube is disabled', async () => {
+      mockedConfig.youtube.enabled = false;
+      mockedPrisma.playbackHistory.findMany.mockResolvedValue([]);
+      mockedPrisma.track.count.mockResolvedValue(1);
+      mockedPrisma.track.findMany.mockResolvedValue([sampleTrack]);
+
+      await recommendNextTrack();
+
+      // Every count/findMany call must carry the playable source filter (no 'youtube').
+      const countCalls = mockedPrisma.track.count.mock.calls;
+      const findManyCalls = mockedPrisma.track.findMany.mock.calls;
+      const allCalls = [...countCalls, ...findManyCalls];
+      expect(allCalls.length).toBeGreaterThan(0);
+      for (const call of allCalls) {
+        const where = call[0]?.where;
+        expect(where?.sourceType).toEqual({ in: ['r2', 's3', 'local'] });
+      }
+    });
+
+    it('should include youtube in the whitelist only when YouTube is enabled', async () => {
+      mockedConfig.youtube.enabled = true;
+      mockedPrisma.playbackHistory.findMany.mockResolvedValue([]);
+      mockedPrisma.track.count.mockResolvedValue(1);
+      mockedPrisma.track.findMany.mockResolvedValue([sampleTrack]);
+
+      await recommendNextTrack();
+
+      const findManyWhere = mockedPrisma.track.findMany.mock.calls[0][0].where;
+      expect(findManyWhere.sourceType).toEqual({ in: ['r2', 's3', 'local', 'youtube'] });
+    });
+
+    it('should never return a youtube track when YouTube is disabled, even on the relaxed/fallback path', async () => {
+      mockedConfig.youtube.enabled = false;
+      mockedPrisma.playbackHistory.findMany.mockResolvedValue([]);
+      // Force the relaxed path (count 0) and then the emergency findFirst fallback.
+      mockedPrisma.track.count.mockResolvedValue(0);
+      mockedPrisma.track.findMany.mockResolvedValue([]);
+      // The emergency findFirst must be source-filtered; only a playable track is returned.
+      mockedPrisma.track.findFirst.mockImplementation(async (args?: { where?: { sourceType?: { in: string[] } } }) => {
+        const allowed = args?.where?.sourceType?.in ?? [];
+        return allowed.includes('youtube') ? youtubeTrack : sampleTrack;
+      });
+
+      const result = await recommendNextTrack('relaxed');
+
+      expect(result.sourceType).not.toBe('youtube');
+      expect(result).toEqual(sampleTrack);
+      // The emergency fallback findFirst must have been called WITH the playable filter.
+      expect(mockedPrisma.track.findFirst).toHaveBeenCalledWith({
+        where: { sourceType: { in: ['r2', 's3', 'local'] } },
+      });
     });
   });
 });

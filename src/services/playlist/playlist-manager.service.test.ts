@@ -55,6 +55,10 @@ jest.mock('@/lib/config', () => ({
   },
 }));
 
+const mockedConfig = jest.requireMock('@/lib/config').config as {
+  youtube: { enabled: boolean };
+};
+
 // Mocks tipados
 const mockedPrisma = prisma as unknown as {
   track: {
@@ -128,6 +132,7 @@ const trackYouTube: Track = {
 describe('PlaylistManagerService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockedConfig.youtube.enabled = true;
   });
 
   describe('getNextTrack', () => {
@@ -175,6 +180,40 @@ describe('PlaylistManagerService', () => {
 
       expect(mockedPrisma.track.findMany).toHaveBeenCalled();
       expect(fallbackTrack).toEqual(track1);
+    });
+
+    it('getFallbackTrack should restrict to the playable whitelist when YouTube is disabled', async () => {
+      mockedConfig.youtube.enabled = false;
+      mockedRedis.llen.mockResolvedValue(5);
+      mockedRedis.lpop.mockResolvedValue(null);
+      mockedRedis.lrange.mockResolvedValue([]);
+      mockedPrisma.trackRequest.findMany.mockResolvedValue([]);
+      mockedPrisma.track.findMany.mockResolvedValue([{ id: 'track1' }]);
+      mockedPrisma.track.findUnique.mockResolvedValue(track1);
+
+      await PlaylistManagerService.getNextTrack();
+
+      expect(mockedPrisma.track.findMany).toHaveBeenCalledWith({
+        where: { sourceType: { in: ['r2', 's3', 'local'] } },
+        select: { id: true },
+      });
+    });
+
+    it('getFallbackTrack should include youtube in the whitelist when YouTube is enabled', async () => {
+      mockedConfig.youtube.enabled = true;
+      mockedRedis.llen.mockResolvedValue(5);
+      mockedRedis.lpop.mockResolvedValue(null);
+      mockedRedis.lrange.mockResolvedValue([]);
+      mockedPrisma.trackRequest.findMany.mockResolvedValue([]);
+      mockedPrisma.track.findMany.mockResolvedValue([{ id: 'track1' }]);
+      mockedPrisma.track.findUnique.mockResolvedValue(track1);
+
+      await PlaylistManagerService.getNextTrack();
+
+      expect(mockedPrisma.track.findMany).toHaveBeenCalledWith({
+        where: { sourceType: { in: ['r2', 's3', 'local', 'youtube'] } },
+        select: { id: true },
+      });
     });
   });
 

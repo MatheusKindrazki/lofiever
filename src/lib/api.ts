@@ -33,6 +33,47 @@ export interface AIRecommendationResponse {
   recommendations: AIRecommendation[];
 }
 
+// A playable catalog track returned by the DB search endpoint (/api/tracks).
+// These are real, queueable tracks — never YouTube-only display cards.
+export interface CatalogTrack {
+  id: string;
+  title: string;
+  artist: string;
+  sourceType: string;
+  duration: number;
+  bpm: number | null;
+  mood: string | null;
+}
+
+export interface TrackSearchResponse {
+  tracks: CatalogTrack[];
+  meta: {
+    total: number;
+    limit: number;
+    offset: number;
+  };
+}
+
+export interface SearchTracksOptions {
+  limit?: number;
+  offset?: number;
+  signal?: AbortSignal;
+}
+
+export interface QueuedTrack {
+  id: string;
+  title: string;
+  artist: string;
+  mood: string | null;
+  duration: number;
+  sourceType: string;
+  addedBy: string;
+}
+
+export interface AddTrackToQueueResponse {
+  queued: QueuedTrack;
+}
+
 // Function to fetch current stream data
 export async function getStreamData(): Promise<StreamData> {
   try {
@@ -99,6 +140,68 @@ export async function getAIRecommendations(prompt: string): Promise<AIRecommenda
     console.error('Failed to get AI recommendations:', error);
     throw error;
   }
+}
+
+// Search the catalog for playable tracks by title/artist (DB-backed, no YouTube).
+// Backed by GET /api/tracks?search= which restricts results to playable sources.
+export async function searchTracks(
+  query: string,
+  opts: SearchTracksOptions = {}
+): Promise<TrackSearchResponse> {
+  const params = new URLSearchParams();
+  const trimmed = query.trim();
+  if (trimmed) {
+    params.set('search', trimmed);
+  }
+  if (opts.limit !== undefined) {
+    params.set('limit', String(opts.limit));
+  }
+  if (opts.offset !== undefined) {
+    params.set('offset', String(opts.offset));
+  }
+
+  const response = await fetch(`/api/tracks?${params.toString()}`, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    credentials: 'same-origin',
+    signal: opts.signal,
+  });
+
+  if (!response.ok) {
+    throw new Error(`Error: ${response.status}`);
+  }
+
+  return (await response.json()) as TrackSearchResponse;
+}
+
+// Add a known catalog track to the play queue (POST /api/playlist/queue).
+// Requires an authenticated session; the server validates the source is playable.
+export async function addTrackToQueue(trackId: string): Promise<AddTrackToQueueResponse> {
+  const response = await fetch('/api/playlist/queue', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    credentials: 'same-origin',
+    body: JSON.stringify({ trackId }),
+  });
+
+  if (!response.ok) {
+    let message = `Error: ${response.status}`;
+    try {
+      const data = (await response.json()) as { error?: string };
+      if (data?.error) {
+        message = data.error;
+      }
+    } catch {
+      // Ignore JSON parse errors; fall back to status message.
+    }
+    throw new Error(message);
+  }
+
+  return (await response.json()) as AddTrackToQueueResponse;
 }
 
 export { defaultCurationPrompt } from '@/lib/prompts';

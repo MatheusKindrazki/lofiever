@@ -1,7 +1,21 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { handleApiError } from '@/lib/api-utils';
+import { getSourceTypeFilter } from '@/services/playlist/source-policy';
 import type { Prisma } from '@prisma/client';
+
+// Campos seguros para enviar ao cliente. Nunca serializa `sourceId`
+// (URL/path/chave R2) nem `artworkKey` (chave R2 da capa) — chaves internas
+// de armazenamento não devem vazar para clientes (mesmo anônimos).
+const CATALOG_TRACK_SELECT = {
+  id: true,
+  title: true,
+  artist: true,
+  sourceType: true,
+  duration: true,
+  bpm: true,
+  mood: true,
+} satisfies Prisma.TrackSelect;
 
 // GET - Obter lista de faixas
 export async function GET(request: Request): Promise<NextResponse> {
@@ -10,23 +24,33 @@ export async function GET(request: Request): Promise<NextResponse> {
     const limit = Number(searchParams.get('limit') || '20');
     const offset = Number(searchParams.get('offset') || '0');
     const search = searchParams.get('search');
+    // Restringe a busca às fontes tocáveis (r2/s3/local; youtube só quando
+    // habilitado) para que a UI nunca ofereça uma faixa inalcançável.
+    const playableFilter = getSourceTypeFilter();
 
-    // Construir o filtro baseado no termo de busca
+    // Construir o filtro baseado no termo de busca, sempre combinado com o
+    // whitelist de fontes tocáveis.
     const filter: Prisma.TrackWhereInput = search
       ? {
-          OR: [
-            { title: { contains: search, mode: 'insensitive' as const } },
-            { artist: { contains: search, mode: 'insensitive' as const } },
+          AND: [
+            playableFilter,
+            {
+              OR: [
+                { title: { contains: search, mode: 'insensitive' as const } },
+                { artist: { contains: search, mode: 'insensitive' as const } },
+              ],
+            },
           ],
         }
-      : {};
-    
-    // Buscar faixas com paginação
+      : playableFilter;
+
+    // Buscar faixas com paginação (apenas campos seguros para o cliente)
     const tracks = await prisma.track.findMany({
       where: filter,
       take: Math.min(limit, 100), // Limitar a 100 registros
       skip: offset,
       orderBy: { lastPlayed: 'desc' },
+      select: CATALOG_TRACK_SELECT,
     });
     
     // Contar o total de registros
@@ -79,7 +103,7 @@ export async function POST(request: Request): Promise<NextResponse> {
       );
     }
     
-    // Criar nova faixa
+    // Criar nova faixa (resposta sem campos internos de armazenamento)
     const track = await prisma.track.create({
       data: {
         title: data.title,
@@ -90,8 +114,9 @@ export async function POST(request: Request): Promise<NextResponse> {
         bpm: data.bpm || null,
         mood: data.mood || null,
       },
+      select: CATALOG_TRACK_SELECT,
     });
-    
+
     return NextResponse.json(track, { status: 201 });
   } catch (error) {
     return handleApiError(error);

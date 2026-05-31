@@ -5,6 +5,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import RadioPlayer from './RadioPlayer';
 import ChatRoom from './ChatRoom';
 import ZenMode from './ZenMode';
+import { TrackSearch } from './TrackSearch';
 import { useUserPreferences } from '../hooks/useUserPreferences';
 
 export function LocalizedComponents() {
@@ -201,12 +202,24 @@ export function LocalizedComponents() {
                             </div>
                         </div>
 
-                        <div className="flex min-h-0 flex-col">
-                            <p className="mb-3 shrink-0 font-mono text-[11px] uppercase tracking-[0.16em] text-lofi-400">
-                                {tChat('djName')}
-                            </p>
-                            <div className="min-h-[380px] flex-1 sm:min-h-[420px] lg:min-h-0">
-                                <ChatRoom key={`chat-${locale}`} />
+                        <div className="flex min-h-0 flex-col gap-6">
+                            <div className="flex min-h-0 flex-1 flex-col">
+                                <p className="mb-3 shrink-0 font-mono text-[11px] uppercase tracking-[0.16em] text-lofi-400">
+                                    {tChat('djName')}
+                                </p>
+                                <div className="min-h-[380px] flex-1 sm:min-h-[420px] lg:min-h-0">
+                                    <ChatRoom key={`chat-${locale}`} />
+                                </div>
+                            </div>
+
+                            <div className="flex shrink-0 flex-col">
+                                {/* TODO(i18n): no translation key exists for this heading yet; using a neutral inline label. Add e.g. `search.title` to messages/*.json. */}
+                                <p className="mb-3 shrink-0 font-mono text-[11px] uppercase tracking-[0.16em] text-lofi-400">
+                                    Buscar faixas
+                                </p>
+                                <div className="rounded-xl bg-white p-4 shadow-lg dark:bg-gray-800">
+                                    <TrackSearch />
+                                </div>
                             </div>
                         </div>
                     </div>
