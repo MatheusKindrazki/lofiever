@@ -211,7 +211,7 @@ describe('POST /api/playlist/queue', () => {
     expect(data.code).toBe('QUEUE_ADD_FAILED');
   });
 
-  it('falls back to the email as username when the session has no name', async () => {
+  it('derives a public label (não o email) when the session has no name', async () => {
     mockedSession.mockResolvedValue({ user: { email: 'noname@example.com' } });
     mockedFindUnique.mockResolvedValue(r2Track);
     mockedQueueTrack.mockResolvedValue(undefined);
@@ -220,10 +220,13 @@ describe('POST /api/playlist/queue', () => {
     const data = await response.json();
 
     expect(response.status).toBe(201);
-    expect(data.queued.addedBy).toBe('noname@example.com');
+    // O email cru nunca é exposto publicamente; usa-se um rótulo derivado.
+    expect(data.queued.addedBy).toBe('Usuário Noname');
+    expect(data.queued.addedBy).not.toContain('@');
+    // O userId interno continua sendo o email (identidade estável).
     expect(mockedQueueTrack).toHaveBeenCalledWith(
       'r2-track-1',
-      'noname@example.com',
+      'Usuário Noname',
       false,
       'noname@example.com'
     );
