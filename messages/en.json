@@ -85,6 +85,24 @@
             "myRequests": "How many requests do I still have?"
         }
     },
+    "search": {
+        "title": "Search tracks",
+        "description": "Search the catalog by title or artist and add directly to the queue.",
+        "placeholder": "E.g.: rainy night, lofi piano, chillhop...",
+        "button": {
+            "search": "Search",
+            "searching": "Searching...",
+            "addToQueue": "Add to queue",
+            "adding": "Adding...",
+            "inQueue": "In queue"
+        },
+        "errors": {
+            "searchFailed": "Could not search tracks right now. Try again in a moment.",
+            "addToQueueFailed": "Failed to add to queue.",
+            "empty": "No playable tracks found for that term."
+        },
+        "count": "{count} track(s) found."
+    },
     "language": {
         "name": "English",
         "code": "en",

@@ -1,8 +1,9 @@
 import { prisma } from '@/lib/prisma';
 import { PlaylistManagerService } from './playlist-manager.service';
-import type { Track } from '@prisma/client';
+import type { Prisma, Track } from '@prisma/client';
 import { generateText } from 'ai';
 import { createOpenAI } from '@ai-sdk/openai';
+import { getAllowedSourceTypes } from './source-policy';
 
 const openai = createOpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -129,9 +130,14 @@ export async function recommendNextTrack(
     // Combine history with explicit excludes (queue)
     const allExcludedIds = [...new Set([...recentTrackIds, ...excludeIds])];
 
-    // 3. Construir filtro de exclusão
-    const whereClause: any = {
+    // 3. Construir filtro de exclusão.
+    // O filtro de sourceType é SEMPRE aplicado (whitelist tocável; youtube só
+    // quando habilitado) e nunca é removido nos caminhos relaxados abaixo, para
+    // que linhas 'youtube' jamais vazem de volta quando o YouTube está fora.
+    const allowedSourceTypes = getAllowedSourceTypes();
+    const whereClause: Prisma.TrackWhereInput = {
       id: { notIn: allExcludedIds },
+      sourceType: { in: allowedSourceTypes },
     };
 
     if (targetMood) {
@@ -163,9 +169,13 @@ export async function recommendNextTrack(
       }
 
       // Se ainda assim não tiver nada (banco vazio?), erro.
-      const totalCount = await prisma.track.count();
+      // Conta respeitando o whitelist de fontes para não reportar faixas
+      // 'youtube' inalcançáveis quando o YouTube está desabilitado.
+      const totalCount = await prisma.track.count({
+        where: { sourceType: { in: allowedSourceTypes } },
+      });
       if (totalCount === 0) {
-        throw new Error('Nenhuma faixa encontrada no banco de dados.');
+        throw new Error('Nenhuma faixa tocável encontrada no banco de dados.');
       }
     }
 
@@ -187,9 +197,12 @@ export async function recommendNextTrack(
     throw new Error('Falha ao selecionar faixa recomendada.');
   } catch (error) {
     console.error('❌ Erro na recomendação da IA:', error);
-    // Fallback de emergência: pegar qualquer uma
-    const fallback = await prisma.track.findFirst();
-    if (!fallback) throw new Error('CRÍTICO: Banco de dados vazio.');
+    // Fallback de emergência: pegar qualquer uma TOCÁVEL (respeita o whitelist
+    // de fontes para nunca devolver uma faixa 'youtube' inalcançável).
+    const fallback = await prisma.track.findFirst({
+      where: { sourceType: { in: getAllowedSourceTypes() } },
+    });
+    if (!fallback) throw new Error('CRÍTICO: Nenhuma faixa tocável no banco de dados.');
     return fallback;
   }
 }

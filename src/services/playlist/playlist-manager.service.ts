@@ -4,23 +4,27 @@ import { redis, redisHelpers, type ChatMessage } from '@/lib/redis';
 import { recommendNextTrack } from './ai-recommendation.service';
 import { YouTubeCacheService } from '@/services/youtube';
 import { config } from '@/lib/config';
+import { getAllowedSourceTypes } from './source-policy';
 
 /**
- * Retorna uma faixa aleatória do banco de dados como fallback.
+ * Retorna uma faixa aleatória TOCÁVEL do banco de dados como fallback.
  * Isso é usado se a playlist ativa estiver vazia ou se ocorrer um erro.
+ * Aplica o whitelist de fontes (r2/s3/local; youtube só quando habilitado)
+ * para nunca devolver uma faixa 'youtube' inalcançável.
  */
 async function getFallbackTrack(): Promise<Track> {
   // A maneira mais eficiente de obter um registro aleatório pode variar de acordo com o DB.
   // Para o PostgreSQL, podemos usar TABLESAMPLE, mas para simplicidade e compatibilidade,
-  // vamos buscar todos os IDs e escolher um aleatoriamente.
+  // vamos buscar todos os IDs (tocáveis) e escolher um aleatoriamente.
   const allTrackIds = await prisma.track.findMany({
+    where: { sourceType: { in: getAllowedSourceTypes() } },
     select: {
       id: true,
     },
   });
 
   if (allTrackIds.length === 0) {
-    throw new Error('Nenhuma faixa de fallback disponível no banco de dados.');
+    throw new Error('Nenhuma faixa de fallback tocável disponível no banco de dados.');
   }
 
   const randomIndex = Math.floor(Math.random() * allTrackIds.length);

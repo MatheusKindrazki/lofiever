@@ -1,8 +1,11 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
 import { prisma } from '@/lib/prisma';
 import { redisHelpers, redis } from '@/lib/redis';
 import { PlaylistManagerService } from '@/services/playlist/playlist-manager.service';
+import { isPlayableSourceType } from '@/services/playlist/source-policy';
+import { authOptions } from '@/lib/auth/options';
 import { validateRequest, RATE_LIMITS } from '@/lib/api-security';
 
 // Force Node.js runtime
@@ -117,5 +120,108 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   } catch (error) {
     console.error('Error fetching playlist queue:', error);
     return NextResponse.json({ error: 'Failed to fetch playlist data' }, { status: 500 });
+  }
+}
+
+interface AddToQueueBody {
+  trackId?: unknown;
+}
+
+// POST - Adiciona uma faixa do catálogo (já tocável) à fila de reprodução.
+// Recebe { trackId }, autentica via NextAuth, valida que a faixa existe e que
+// a fonte é tocável (sem depender do YouTube), então delega ao
+// PlaylistManagerService.queueTrack. Não usa nenhuma API externa.
+//
+// Nota de design: a validação usa `isPlayableSourceType` (r2/s3/local apenas) e
+// NÃO `getAllowedSourceTypes`. Isso é intencional: um pedido manual de faixa
+// YouTube é o caminho frágil (yt-dlp/bot-detection) que a rádio evita — portanto
+// enfileirar YouTube por este endpoint é sempre bloqueado, mesmo quando
+// config.youtube.enabled é true. O YouTube só entra via seleção automática.
+export async function POST(request: NextRequest): Promise<NextResponse> {
+  // Security Check (origin + rate limit)
+  const securityError = await validateRequest(request, {
+    rateLimit: RATE_LIMITS.api,
+  });
+  if (securityError) return securityError;
+
+  // Authentication (NextAuth session required)
+  const session = await getServerSession(authOptions);
+  const user = session?.user;
+  if (!user?.email) {
+    return NextResponse.json(
+      { error: 'Authentication required', code: 'UNAUTHORIZED' },
+      { status: 401 }
+    );
+  }
+
+  try {
+    let body: AddToQueueBody;
+    try {
+      body = (await request.json()) as AddToQueueBody;
+    } catch {
+      return NextResponse.json(
+        { error: 'Invalid JSON body', code: 'INVALID_BODY' },
+        { status: 400 }
+      );
+    }
+
+    const trackId = body.trackId;
+    if (typeof trackId !== 'string' || trackId.trim().length === 0) {
+      return NextResponse.json(
+        { error: "Field 'trackId' is required", code: 'INVALID_TRACK_ID' },
+        { status: 400 }
+      );
+    }
+
+    const track = await prisma.track.findUnique({ where: { id: trackId } });
+    if (!track) {
+      return NextResponse.json(
+        { error: 'Track not found', code: 'TRACK_NOT_FOUND' },
+        { status: 404 }
+      );
+    }
+
+    if (!isPlayableSourceType(track.sourceType)) {
+      return NextResponse.json(
+        {
+          error: 'Track source is not playable without YouTube',
+          code: 'UNPLAYABLE_SOURCE',
+          sourceType: track.sourceType,
+        },
+        { status: 422 }
+      );
+    }
+
+    // Identidade estável do usuário derivada da sessão NextAuth.
+    // Cria um rótulo público não sensível em vez de expor o email.
+    const buildPublicLabel = (email: string): string => {
+      const localPart = email.split('@')[0];
+      return `Usuário ${localPart.charAt(0).toUpperCase() + localPart.slice(1)}`;
+    };
+    const publicLabel = user.name || buildPublicLabel(user.email);
+    const userId = user.email;
+
+    await PlaylistManagerService.queueTrack(track.id, publicLabel, false, userId);
+
+    return NextResponse.json(
+      {
+        queued: {
+          id: track.id,
+          title: track.title,
+          artist: track.artist,
+          mood: track.mood,
+          duration: track.duration,
+          sourceType: track.sourceType,
+          addedBy: publicLabel,
+        },
+      },
+      { status: 201 }
+    );
+  } catch (error) {
+    console.error('Error adding track to queue:', error);
+    return NextResponse.json(
+      { error: 'Failed to add track to queue', code: 'QUEUE_ADD_FAILED' },
+      { status: 500 }
+    );
   }
 }
