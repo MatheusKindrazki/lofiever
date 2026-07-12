@@ -1,9 +1,18 @@
 import type { Metadata, Viewport } from 'next';
-import { Fraunces, Manrope, JetBrains_Mono } from 'next/font/google';
+import {
+  Bricolage_Grotesque,
+  Fraunces,
+  Hanken_Grotesk,
+  Instrument_Serif,
+  JetBrains_Mono,
+  Manrope,
+  Space_Mono,
+} from 'next/font/google';
 import { getMessages, setRequestLocale } from 'next-intl/server';
 import { routing } from '@/i18n/routing';
 import { notFound } from 'next/navigation';
 import '../../styles/globals.css';
+import '../../styles/broadcast.css';
 import AppProviders from '@/lib/providers/AppProviders';
 import IntlProviderWrapper from '@/app/[locale]/components/IntlProviderWrapper';
 import type { SupportedLocale } from '@/lib/seo';
@@ -59,6 +68,32 @@ const jetbrains = JetBrains_Mono({
   display: 'swap',
 });
 
+const bricolage = Bricolage_Grotesque({
+  subsets: ['latin', 'latin-ext'],
+  variable: '--font-bricolage',
+  display: 'swap',
+});
+
+const hanken = Hanken_Grotesk({
+  subsets: ['latin', 'latin-ext'],
+  variable: '--font-hanken',
+  display: 'swap',
+});
+
+const spaceMono = Space_Mono({
+  subsets: ['latin', 'latin-ext'],
+  weight: ['400', '700'],
+  variable: '--font-space-mono',
+  display: 'swap',
+});
+
+const instrumentSerif = Instrument_Serif({
+  subsets: ['latin'],
+  weight: '400',
+  variable: '--font-instrument-serif',
+  display: 'swap',
+});
+
 export default async function LocaleLayout({
   children,
   params,
@@ -69,7 +104,7 @@ export default async function LocaleLayout({
   const { locale } = await params;
 
   // Ensure that the incoming `locale` is valid
-  if (!routing.locales.includes(locale as any)) {
+  if (!routing.locales.includes(locale as (typeof routing.locales)[number])) {
     notFound();
   }
 
@@ -92,7 +127,7 @@ export default async function LocaleLayout({
         />
       </head>
       <body
-        className={`${manrope.variable} ${fraunces.variable} ${jetbrains.variable} antialiased dark`}
+        className={`${manrope.variable} ${fraunces.variable} ${jetbrains.variable} ${bricolage.variable} ${hanken.variable} ${spaceMono.variable} ${instrumentSerif.variable} antialiased dark`}
         suppressHydrationWarning
       >
         <GoogleAnalytics />
