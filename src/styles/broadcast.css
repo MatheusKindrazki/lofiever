@@ -219,12 +219,12 @@ body:has(.broadcast-app)::before {
 /* A single orchestrated entrance makes the new edition feel printed into place. */
 .broadcast-app .masthead,
 .broadcast-app .cover-block,
-.broadcast-app .broadcast > div,
+.broadcast-app .broadcast > .panel,
 .broadcast-app .colophon {
   animation: bc-print-in 640ms var(--ease-out, cubic-bezier(0.22, 1, 0.36, 1)) both;
 }
 .broadcast-app .cover-block { animation-delay: 80ms; }
-.broadcast-app .broadcast > div { animation-delay: 150ms; }
+.broadcast-app .broadcast > .panel { animation-delay: 150ms; }
 .broadcast-app .colophon { animation-delay: 220ms; }
 @keyframes bc-print-in {
   from { opacity: 0; transform: translateY(18px); filter: blur(4px); }
@@ -258,12 +258,20 @@ body:has(.broadcast-app)::before {
 .broadcast-app .broadcast {
   flex: 1;
   display: grid;
-  grid-template-columns: 1.55fr 1fr;
+  grid-template-columns: minmax(0, 1.55fr) minmax(360px, 1fr);
   gap: var(--gap);
-  align-items: start;
+  align-items: stretch;
+}
+.broadcast-app .broadcast > .cover-block,
+.broadcast-app .broadcast > .panel:not(.tx-body) {
+  height: 100%;
+}
+.broadcast-app .broadcast > .tx-body {
+  grid-column: 1 / -1;
 }
 @media (max-width: 940px) {
-  .broadcast-app .broadcast { grid-template-columns: 1fr; }
+  .broadcast-app .broadcast { grid-template-columns: minmax(0, 1fr); }
+  .broadcast-app .broadcast > .tx-body { grid-column: 1; }
 }
 
 /* generic panel card */
@@ -271,6 +279,7 @@ body:has(.broadcast-app)::before {
   border: 2px solid var(--ink);
   background: var(--paper-2);
   position: relative;
+  box-shadow: var(--card-shadow);
 }
 .broadcast-app .panel-head {
   display: flex;
@@ -296,7 +305,7 @@ body:has(.broadcast-app)::before {
   overflow: hidden;
   box-shadow: var(--card-shadow);
 }
-.broadcast-app .np-grid { display: grid; grid-template-columns: minmax(210px, 42%) 1fr; align-items: stretch; }
+.broadcast-app .np-grid { display: grid; grid-template-columns: minmax(210px, 42%) 1fr; align-items: stretch; height: 100%; }
 
 .broadcast-app .cover-art { position: relative; min-height: 300px; border-right: 2px solid var(--ink); overflow: hidden; }
 .broadcast-app .cover-art .art-canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
@@ -487,9 +496,9 @@ body:has(.broadcast-app)::before {
 /* ============================================================
    TRANSMISSIONS (chat + Lofine)
    ============================================================ */
-.broadcast-app .tx-body { display: flex; flex-direction: column; height: 100%; }
-.broadcast-app .tx-feed { padding: 12px 14px; display: flex; flex-direction: column; gap: 14px; max-height: 340px; overflow-y: auto; }
-.broadcast-app .tx-msg { display: flex; flex-direction: column; gap: 3px; }
+.broadcast-app .tx-body { display: flex; flex-direction: column; min-height: 0; }
+.broadcast-app .tx-feed { padding: 16px 18px; display: flex; flex-direction: column; gap: 14px; max-height: 280px; overflow-y: auto; }
+.broadcast-app .tx-msg { display: flex; flex-direction: column; gap: 3px; width: min(100%, 82ch); }
 .broadcast-app .tx-byline { display: flex; align-items: baseline; gap: 8px; }
 .broadcast-app .tx-byline .who { font-weight: 800; font-size: 13px; display: inline-flex; align-items: center; gap: 6px; }
 .broadcast-app .tx-byline .stamp { font-family: var(--font-mono); font-size: 9px; color: var(--ink-faint); letter-spacing: 0.1em; margin-left: auto; }
@@ -675,7 +684,7 @@ body:has(.broadcast-app)::before {
   .broadcast-app .prog-spinner { animation: none; }
   .broadcast-app .masthead,
   .broadcast-app .cover-block,
-  .broadcast-app .broadcast > div,
+  .broadcast-app .broadcast > .panel,
   .broadcast-app .colophon { animation: none; }
   .broadcast-app .zen { animation: none; }
 }

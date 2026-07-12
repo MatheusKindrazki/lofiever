@@ -262,11 +262,8 @@ export function BroadcastApp() {
             onVolume={onVolume}
             analyser={analyser}
           />
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
-            <Program current={currentTrack} />
-            <Transmissions accent={edition.accent} />
-          </div>
+          <Program current={currentTrack} />
+          <Transmissions accent={edition.accent} />
         </div>
 
         <footer className="colophon">
