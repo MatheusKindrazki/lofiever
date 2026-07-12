@@ -136,7 +136,9 @@ export async function checkRateLimit(
     try {
         const clientIP = getClientIP(request);
         const pathname: string = request.nextUrl.pathname;
-        const key = `rate_limit:${clientIP}:${pathname}`;
+        // Reads can be polled by the radio UI. Keep them from exhausting the
+        // mutation budget for explicit user actions on the same route.
+        const key = `rate_limit:${clientIP}:${request.method}:${pathname}`;
 
         const now = Date.now();
         const windowStart = now - (config.window * 1000);
@@ -249,4 +251,3 @@ export async function validateRequest(
 
     return null;
 }
-

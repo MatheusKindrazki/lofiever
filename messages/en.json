@@ -102,6 +102,7 @@
             "searchFailed": "Could not search tracks right now. Try again in a moment.",
             "addToQueueFailed": "Failed to add to queue.",
             "authenticationRequired": "Your guest session expired. Reload the page and try again.",
+            "rateLimited": "Too many attempts right now. Wait a few seconds and try again.",
             "empty": "No playable tracks found for that term."
         },
         "count": "{count, plural, one {# track found} other {# tracks found}}."

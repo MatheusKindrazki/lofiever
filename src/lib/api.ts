@@ -108,17 +108,60 @@ export interface AddTrackToQueueResponse {
   queued: QueuedTrack;
 }
 
-const getPersistedGuestToken = (): string | null => {
+interface PersistedGuestSession {
+  userId: string;
+  username: string;
+  token: string;
+  isGuest: boolean;
+}
+
+interface GuestSessionResponse {
+  token: string;
+  user: {
+    id: string;
+    name: string;
+    isGuest: boolean;
+  };
+}
+
+const getPersistedGuestSession = (): PersistedGuestSession | null => {
   if (typeof window === 'undefined') return null;
 
   try {
     const stored = window.localStorage.getItem('lofiever:session');
     if (!stored) return null;
-    const parsed = JSON.parse(stored) as { token?: unknown };
-    return typeof parsed.token === 'string' && parsed.token ? parsed.token : null;
+    const parsed = JSON.parse(stored) as Partial<PersistedGuestSession>;
+    if (
+      typeof parsed.userId !== 'string'
+      || typeof parsed.username !== 'string'
+      || typeof parsed.token !== 'string'
+      || !parsed.token
+      || parsed.isGuest !== true
+    ) {
+      return null;
+    }
+    return parsed as PersistedGuestSession;
   } catch {
     return null;
   }
+};
+
+const renewGuestSession = async (session: PersistedGuestSession): Promise<string> => {
+  const response = await fetch('/api/auth/guest', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'same-origin',
+    body: JSON.stringify({ username: session.username }),
+  });
+  const renewed = await fetchWithErrorHandling(response) as GuestSessionResponse;
+  const nextSession: PersistedGuestSession = {
+    userId: renewed.user.id,
+    username: renewed.user.name,
+    token: renewed.token,
+    isGuest: renewed.user.isGuest,
+  };
+  window.localStorage.setItem('lofiever:session', JSON.stringify(nextSession));
+  return nextSession.token;
 };
 
 // Function to fetch current stream data
@@ -222,20 +265,23 @@ export async function searchTracks(
 // Add a known catalog track to the play queue (POST /api/playlist/queue).
 // Requires an authenticated session; the server validates the source is playable.
 export async function addTrackToQueue(trackId: string): Promise<AddTrackToQueueResponse> {
-  const guestToken = getPersistedGuestToken();
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
+  const guestSession = getPersistedGuestSession();
+  const requestQueue = (guestToken: string | null): Promise<Response> => {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (guestToken) headers['X-Guest-Token'] = guestToken;
+    return fetch('/api/playlist/queue', {
+      method: 'POST',
+      headers,
+      credentials: 'same-origin',
+      body: JSON.stringify({ trackId }),
+    });
   };
-  if (guestToken) {
-    headers['X-Guest-Token'] = guestToken;
-  }
 
-  const response = await fetch('/api/playlist/queue', {
-    method: 'POST',
-    headers,
-    credentials: 'same-origin',
-    body: JSON.stringify({ trackId }),
-  });
+  let response = await requestQueue(guestSession?.token ?? null);
+  if (response.status === 401 && guestSession) {
+    const renewedToken = await renewGuestSession(guestSession);
+    response = await requestQueue(renewedToken);
+  }
 
   return fetchWithErrorHandling(response) as Promise<AddTrackToQueueResponse>;
 }

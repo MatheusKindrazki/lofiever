@@ -190,6 +190,8 @@ function CatalogRequest() {
     } catch (error) {
       const message = error instanceof ApiError && error.status === 401
         ? t('errors.authenticationRequired')
+        : error instanceof ApiError && error.status === 429
+          ? t('errors.rateLimited')
         : error instanceof Error
           ? error.message
           : t('errors.addToQueueFailed');

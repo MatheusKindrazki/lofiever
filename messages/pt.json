@@ -102,6 +102,7 @@
             "searchFailed": "Não consegui buscar faixas agora. Tente de novo em instantes.",
             "addToQueueFailed": "Falha ao adicionar à fila.",
             "authenticationRequired": "Sua sessão de convidado expirou. Recarregue a página e tente novamente.",
+            "rateLimited": "Muitas tentativas agora. Aguarde alguns segundos e tente novamente.",
             "empty": "Nenhuma faixa tocável encontrada para esse termo."
         },
         "count": "{count, plural, one {# faixa encontrada} other {# faixas encontradas}}."
