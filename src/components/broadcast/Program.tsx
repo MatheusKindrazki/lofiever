@@ -4,8 +4,9 @@ import { useCallback, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { usePlaylistQueue } from '@/hooks/usePlaylistQueue';
 import { usePlaylistHistory } from '@/hooks/usePlaylistHistory';
-import { addTrackToQueue, searchTracks } from '@/lib/api';
+import { addTrackToQueue, ApiError } from '@/lib/api';
 import type { CatalogTrack } from '@/lib/api';
+import { searchCatalogWithFallback } from '@/lib/catalog-search';
 import type { BroadcastTrack } from './NowPlaying';
 import { fmt } from './NowPlaying';
 import { Ic } from './icons';
@@ -157,15 +158,18 @@ function CatalogRequest() {
   const [isSearching, setIsSearching] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
+  const [fallbackQuery, setFallbackQuery] = useState<string | null>(null);
   const [queueStatus, setQueueStatus] = useState<Record<string, QueueStatus>>({});
 
   const runSearch = useCallback(async (term: string) => {
     setIsSearching(true);
     setSearchError(null);
+    setFallbackQuery(null);
     try {
-      const response = await searchTracks(term, { limit: 20, offset: 0 });
+      const response = await searchCatalogWithFallback(term);
       setResults(response.tracks);
-      setTotal(response.meta.total);
+      setTotal(response.exactTotal);
+      setFallbackQuery(response.isFallback ? term : null);
       setHasSearched(true);
     } catch (error) {
       console.error('Failed to search tracks:', error);
@@ -184,7 +188,11 @@ function CatalogRequest() {
       await addTrackToQueue(track.id);
       setQueueStatus((previous) => ({ ...previous, [track.id]: { kind: 'success' } }));
     } catch (error) {
-      const message = error instanceof Error ? error.message : t('errors.addToQueueFailed');
+      const message = error instanceof ApiError && error.status === 401
+        ? t('errors.authenticationRequired')
+        : error instanceof Error
+          ? error.message
+          : t('errors.addToQueueFailed');
       setQueueStatus((previous) => ({ ...previous, [track.id]: { kind: 'error', message } }));
     }
   }, [t]);
@@ -211,10 +219,14 @@ function CatalogRequest() {
         </button>
       </form>
 
-      {searchError && <p className="catalog-feedback error">{searchError}</p>}
+      {searchError && <p className="catalog-feedback error" role="alert">{searchError}</p>}
       {hasSearched && !isSearching && !searchError && (
-        <p className="catalog-feedback">
-          {total === 0 ? t('errors.empty') : t('count', { count: total })}
+        <p className={`catalog-feedback ${fallbackQuery ? 'fallback' : ''}`} aria-live="polite">
+          {fallbackQuery
+            ? t('fallback', { query: fallbackQuery })
+            : total === 0
+              ? t('errors.empty')
+              : t('count', { count: total })}
         </p>
       )}
 
@@ -226,7 +238,7 @@ function CatalogRequest() {
               <div className="catalog-meta">
                 <span className="title">{track.title}</span>
                 <span className="artist">
-                  {track.artist} · {track.sourceType}
+                  {track.artist} · {track.mood || t('catalogLabel')}
                 </span>
                 {status.kind === 'error' && <span className="error">{status.message}</span>}
               </div>

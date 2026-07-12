@@ -108,6 +108,19 @@ export interface AddTrackToQueueResponse {
   queued: QueuedTrack;
 }
 
+const getPersistedGuestToken = (): string | null => {
+  if (typeof window === 'undefined') return null;
+
+  try {
+    const stored = window.localStorage.getItem('lofiever:session');
+    if (!stored) return null;
+    const parsed = JSON.parse(stored) as { token?: unknown };
+    return typeof parsed.token === 'string' && parsed.token ? parsed.token : null;
+  } catch {
+    return null;
+  }
+};
+
 // Function to fetch current stream data
 export async function getStreamData(): Promise<StreamData> {
   try {
@@ -209,11 +222,17 @@ export async function searchTracks(
 // Add a known catalog track to the play queue (POST /api/playlist/queue).
 // Requires an authenticated session; the server validates the source is playable.
 export async function addTrackToQueue(trackId: string): Promise<AddTrackToQueueResponse> {
+  const guestToken = getPersistedGuestToken();
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+  if (guestToken) {
+    headers['X-Guest-Token'] = guestToken;
+  }
+
   const response = await fetch('/api/playlist/queue', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
+    headers,
     credentials: 'same-origin',
     body: JSON.stringify({ trackId }),
   });

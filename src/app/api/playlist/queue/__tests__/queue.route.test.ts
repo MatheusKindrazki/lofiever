@@ -2,6 +2,7 @@
 import { getServerSession } from 'next-auth';
 import { prisma } from '@/lib/prisma';
 import { PlaylistManagerService } from '@/services/playlist/playlist-manager.service';
+import { getSessionOrGuestToken } from '@/lib/auth/tokens';
 
 // Mock NextResponse to a lightweight container we can introspect.
 jest.mock('next/server', () => {
@@ -30,6 +31,10 @@ jest.mock('next-auth', () => ({
 }));
 
 jest.mock('@/lib/auth/options', () => ({ authOptions: {} }));
+
+jest.mock('@/lib/auth/tokens', () => ({
+  getSessionOrGuestToken: jest.fn(),
+}));
 
 // Security passes by default; individual concerns (auth/validation) are tested
 // at the route level.
@@ -65,12 +70,13 @@ jest.mock('@/lib/config', () => ({
 import { POST } from '../route';
 
 const mockedSession = getServerSession as unknown as jest.Mock;
+const mockedGuestToken = getSessionOrGuestToken as unknown as jest.Mock;
 const mockedFindUnique = prisma.track.findUnique as unknown as jest.Mock;
 const mockedQueueTrack = PlaylistManagerService.queueTrack as unknown as jest.Mock;
 
-const buildRequest = (body: unknown): any => ({
+const buildRequest = (body: unknown, headers: Array<[string, string]> = []): any => ({
   json: jest.fn().mockResolvedValue(body),
-  headers: new Map(),
+  headers: new Map(headers),
 });
 
 const authedSession = { user: { name: 'Matheus', email: 'matheus@example.com' } };
@@ -100,6 +106,7 @@ const youtubeTrack = {
 describe('POST /api/playlist/queue', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockedGuestToken.mockResolvedValue(null);
   });
 
   it('queues a playable track for an authenticated user (201)', async () => {
@@ -117,6 +124,38 @@ describe('POST /api/playlist/queue', () => {
       'Matheus',
       false,
       'matheus@example.com'
+    );
+  });
+
+  it('queues a playable track for a verified guest token (201)', async () => {
+    mockedSession.mockResolvedValue(null);
+    mockedGuestToken.mockResolvedValue({
+      sub: 'guest-nightowl',
+      name: 'Guest nightowl',
+      isGuest: true,
+    });
+    mockedFindUnique.mockResolvedValue(r2Track);
+    mockedQueueTrack.mockResolvedValue(undefined);
+
+    const response = await POST(
+      buildRequest(
+        { trackId: 'r2-track-1' },
+        [['X-Guest-Token', 'signed-guest-token']],
+      ),
+    );
+    const data = await response.json();
+
+    expect(response.status).toBe(201);
+    expect(data.queued).toMatchObject({
+      id: 'r2-track-1',
+      addedBy: 'Guest nightowl',
+    });
+    expect(mockedGuestToken).toHaveBeenCalled();
+    expect(mockedQueueTrack).toHaveBeenCalledWith(
+      'r2-track-1',
+      'Guest nightowl',
+      false,
+      'guest-nightowl',
     );
   });
 

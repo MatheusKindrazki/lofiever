@@ -38,6 +38,7 @@ export async function GET(request: Request): Promise<NextResponse> {
               OR: [
                 { title: { contains: search, mode: 'insensitive' as const } },
                 { artist: { contains: search, mode: 'insensitive' as const } },
+                { mood: { contains: search, mode: 'insensitive' as const } },
               ],
             },
           ],
@@ -121,4 +122,4 @@ export async function POST(request: Request): Promise<NextResponse> {
   } catch (error) {
     return handleApiError(error);
   }
-} 
+}

@@ -87,8 +87,10 @@
     },
     "search": {
         "title": "Search tracks",
-        "description": "Search the catalog by title or artist and add directly to the queue.",
-        "placeholder": "E.g.: rainy night, lofi piano, chillhop...",
+        "description": "Search by track, artist, or genre and add directly to the queue.",
+        "placeholder": "E.g.: Artificial.Music, Lo-Fi, jazz...",
+        "fallback": "No exact match for “{query}”. Showing available tracks from the catalog.",
+        "catalogLabel": "Lofiever catalog",
         "button": {
             "search": "Search",
             "searching": "Searching...",
@@ -99,9 +101,10 @@
         "errors": {
             "searchFailed": "Could not search tracks right now. Try again in a moment.",
             "addToQueueFailed": "Failed to add to queue.",
+            "authenticationRequired": "Your guest session expired. Reload the page and try again.",
             "empty": "No playable tracks found for that term."
         },
-        "count": "{count} track(s) found."
+        "count": "{count, plural, one {# track found} other {# tracks found}}."
     },
     "language": {
         "name": "English",

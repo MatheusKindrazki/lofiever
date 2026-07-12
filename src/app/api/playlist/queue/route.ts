@@ -6,6 +6,7 @@ import { redisHelpers, redis } from '@/lib/redis';
 import { PlaylistManagerService } from '@/services/playlist/playlist-manager.service';
 import { isPlayableSourceType } from '@/services/playlist/source-policy';
 import { authOptions } from '@/lib/auth/options';
+import { getSessionOrGuestToken } from '@/lib/auth/tokens';
 import { validateRequest, RATE_LIMITS } from '@/lib/api-security';
 
 // Force Node.js runtime
@@ -144,10 +145,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   });
   if (securityError) return securityError;
 
-  // Authentication (NextAuth session required)
+  // Authentication: accept either a regular NextAuth session or the signed
+  // guest JWT already used by the public Socket.IO experience.
   const session = await getServerSession(authOptions);
   const user = session?.user;
-  if (!user?.email) {
+  const guestToken = user?.email ? null : await getSessionOrGuestToken(request);
+  if (!user?.email && !guestToken?.sub) {
     return NextResponse.json(
       { error: 'Authentication required', code: 'UNAUTHORIZED' },
       { status: 401 }
@@ -192,14 +195,16 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       );
     }
 
-    // Identidade estável do usuário derivada da sessão NextAuth.
+    // Identidade estável derivada da sessão NextAuth ou do JWT convidado.
     // Cria um rótulo público não sensível em vez de expor o email.
     const buildPublicLabel = (email: string): string => {
       const localPart = email.split('@')[0];
       return `Usuário ${localPart.charAt(0).toUpperCase() + localPart.slice(1)}`;
     };
-    const publicLabel = user.name || buildPublicLabel(user.email);
-    const userId = user.email;
+    const publicLabel = user?.email
+      ? user.name || buildPublicLabel(user.email)
+      : guestToken?.name?.trim() || 'Convidado';
+    const userId = user?.email || guestToken!.sub!;
 
     await PlaylistManagerService.queueTrack(track.id, publicLabel, false, userId);
 

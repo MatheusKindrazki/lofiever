@@ -87,8 +87,10 @@
     },
     "search": {
         "title": "Buscar faixas",
-        "description": "Procure no catálogo por título ou artista e adicione direto à fila.",
-        "placeholder": "Ex.: rainy night, lofi piano, chillhop...",
+        "description": "Busque por faixa, artista ou gênero e adicione direto à fila.",
+        "placeholder": "Ex.: Artificial.Music, Lo-Fi, jazz...",
+        "fallback": "Nenhuma correspondência exata para “{query}”. Mostrando faixas disponíveis no catálogo.",
+        "catalogLabel": "Catálogo Lofiever",
         "button": {
             "search": "Buscar",
             "searching": "Buscando...",
@@ -99,9 +101,10 @@
         "errors": {
             "searchFailed": "Não consegui buscar faixas agora. Tente de novo em instantes.",
             "addToQueueFailed": "Falha ao adicionar à fila.",
+            "authenticationRequired": "Sua sessão de convidado expirou. Recarregue a página e tente novamente.",
             "empty": "Nenhuma faixa tocável encontrada para esse termo."
         },
-        "count": "{count} faixa(s) encontrada(s)."
+        "count": "{count, plural, one {# faixa encontrada} other {# faixas encontradas}}."
     },
     "language": {
         "name": "Português",
