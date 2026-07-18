@@ -13,18 +13,23 @@ const nanoid = customAlphabet('1234567890abcdefghijklmnopqrstuvwxyz', 10);
 
 // Singleton socket instance
 let socket: Socket<ServerToClientEvents, ClientToServerEvents> | null = null;
-let guestSessionRenewal: Promise<void> | null = null;
+interface GuestSocketSession {
+  userId: string;
+  username: string;
+  token: string;
+}
+
+let guestSessionLogin: Promise<GuestSocketSession> | null = null;
 const guestSessionRenewalHandlers = new Set<() => Promise<void>>();
 
-function renewGuestSessionOnce(renew: () => Promise<unknown>): Promise<void> {
-  if (!guestSessionRenewal) {
-    guestSessionRenewal = renew()
-      .then(() => undefined)
+function loginAsGuestOnce(login: () => Promise<GuestSocketSession>): Promise<GuestSocketSession> {
+  if (!guestSessionLogin) {
+    guestSessionLogin = login()
       .finally(() => {
-        guestSessionRenewal = null;
+        guestSessionLogin = null;
       });
   }
-  return guestSessionRenewal;
+  return guestSessionLogin;
 }
 
 /**
@@ -120,9 +125,11 @@ export function useSocket() {
   useEffect(() => {
     if (session?.isGuest !== true) return;
 
-    const handler = () => renewGuestSessionOnce(
-      () => loginAsGuest(session.username || currentUsername || undefined),
-    );
+    const handler = async () => {
+      await loginAsGuestOnce(
+        () => loginAsGuest(session.username || currentUsername || undefined),
+      );
+    };
     guestSessionRenewalHandlers.add(handler);
 
     return () => {
@@ -204,7 +211,9 @@ export function useSocket() {
               try {
                 // Check if we have a username stored separately or just generate one
                 const storedUsername = localStorage.getItem('username'); // Legacy check?
-                const newSession = await loginAsGuest(storedUsername || undefined);
+                const newSession = await loginAsGuestOnce(
+                  () => loginAsGuest(storedUsername || undefined),
+                );
                 token = newSession.token;
                 userId = newSession.userId;
                 username = newSession.username;
