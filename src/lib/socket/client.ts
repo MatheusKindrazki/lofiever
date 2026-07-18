@@ -13,6 +13,19 @@ const nanoid = customAlphabet('1234567890abcdefghijklmnopqrstuvwxyz', 10);
 
 // Singleton socket instance
 let socket: Socket<ServerToClientEvents, ClientToServerEvents> | null = null;
+let guestSessionRenewal: Promise<void> | null = null;
+const guestSessionRenewalHandlers = new Set<() => Promise<void>>();
+
+function renewGuestSessionOnce(renew: () => Promise<unknown>): Promise<void> {
+  if (!guestSessionRenewal) {
+    guestSessionRenewal = renew()
+      .then(() => undefined)
+      .finally(() => {
+        guestSessionRenewal = null;
+      });
+  }
+  return guestSessionRenewal;
+}
 
 /**
  * Exponential backoff configuration for reconnection
@@ -47,6 +60,12 @@ export function initializeSocket(auth: { token: string; userId?: string; usernam
 
     socket.on('connect_error', (err) => {
       console.error('[Socket] Connection error:', err.message);
+      const renewalHandler = Array.from(guestSessionRenewalHandlers).pop();
+      if (err.message === 'Authentication error' && renewalHandler) {
+        void renewalHandler().catch((renewalError: unknown) => {
+          console.error('[Socket] Failed to renew guest session:', renewalError);
+        });
+      }
     });
 
     // Reconnection events for better UX feedback
@@ -97,6 +116,19 @@ export function useSocket() {
       setCurrentUsername(session.username);
     }
   }, [session?.username]);
+
+  useEffect(() => {
+    if (session?.isGuest !== true) return;
+
+    const handler = () => renewGuestSessionOnce(
+      () => loginAsGuest(session.username || currentUsername || undefined),
+    );
+    guestSessionRenewalHandlers.add(handler);
+
+    return () => {
+      guestSessionRenewalHandlers.delete(handler);
+    };
+  }, [currentUsername, loginAsGuest, session?.isGuest, session?.username]);
 
   useEffect(() => {
     // Initialize socket on client side
@@ -198,19 +230,24 @@ export function useSocket() {
             });
             setSocketInstance(socket);
 
-            socket.on(SOCKET_EVENTS.CONNECT, onConnect);
-            socket.on(SOCKET_EVENTS.DISCONNECT, onDisconnect);
+            const activeSocket = socket;
+            activeSocket.on(SOCKET_EVENTS.CONNECT, onConnect);
+            activeSocket.on(SOCKET_EVENTS.DISCONNECT, onDisconnect);
 
-            if (socket.connected) {
+            if (activeSocket.connected) {
               onConnect();
             } else {
-              socket.connect();
+              activeSocket.connect();
             }
+
           }
           initializingRef.current = false;
         };
 
-        init();
+        void init().catch((error: unknown) => {
+          initializingRef.current = false;
+          console.error('Failed to initialize socket:', error);
+        });
       } catch (error) {
         console.error('Failed to initialize socket:', error);
       }
