@@ -15,6 +15,7 @@ import {
 } from '@/services/youtube';
 import { PlaylistManagerService } from '@/services/playlist/playlist-manager.service';
 import { config } from '@/lib/config';
+import { MusicGenerationService } from '@/services/music-generation/service';
 
 export const maxDuration = 30;
 
@@ -38,6 +39,7 @@ Você é "Lofine", DJ virtual da rádio lo-fi Lofiever.
 ## Comportamento
 - Comentário casual/elogio: responda de forma leve e curta (sem oferecer serviço toda hora).
 - Pedido explícito de música: use ferramentas para adicionar faixa.
+- Pedido explícito para criar uma música nova/original: use request_original_track, nunca request_track.
 - Pedido por mood (estudo, foco, relaxar etc.): use request_tracks_by_mood.
 - Mudança de nome: use update_username.
 - Sempre responda após usar ferramenta.
@@ -50,6 +52,7 @@ Você é "Lofine", DJ virtual da rádio lo-fi Lofiever.
 
 ## Regras
 - Nunca invente música inexistente.
+- Faixas originais são sempre lo-fi instrumentais. Não use nomes de artistas, músicas existentes ou pedidos de imitação na descrição enviada à ferramenta.
 - Preserve o contexto (público vs privado) e fale de forma inclusiva no público.
 `;
 
@@ -155,6 +158,18 @@ export async function POST(req: Request) {
     const username = data.username || `user_${userId.substring(0, 5)}`;
     const isPrivate = data.isPrivate || false;
     const locale: 'pt' | 'en' = data.locale === 'en' ? 'en' : 'pt';
+    const internalSecret = process.env.API_SECRET_KEY;
+    const trustedInternalRequest = !internalSecret
+      || req.headers.get('x-lofiever-internal-key') === internalSecret;
+    const authenticatedUserId = trustedInternalRequest && typeof data.authenticatedUserId === 'string'
+      ? data.authenticatedUserId
+      : undefined;
+    const ipAddress = trustedInternalRequest && typeof data.ipAddress === 'string'
+      ? data.ipAddress
+      : undefined;
+    const clientMessageId = trustedInternalRequest && typeof data.clientMessageId === 'string'
+      ? data.clientMessageId
+      : undefined;
 
     const t = {
       youtubeDisabled: locale === 'en'
@@ -382,6 +397,34 @@ export async function POST(req: Request) {
         }
       },
       tools: {
+        request_original_track: tool({
+          description: 'Cria uma faixa lo-fi instrumental original para o Lofiever. Use somente quando o ouvinte pedir explicitamente uma música nova, original ou feita para ele.',
+          inputSchema: z.object({
+            description: z.string().min(10).max(600).describe('Descrição por instrumentos, clima, textura e ritmo, sem nomes de artistas ou músicas existentes'),
+            title: z.string().min(3).max(80).describe('Título original curto para a nova faixa'),
+            mood: z.string().min(3).max(30).describe('Mood curto, como calm, focused, rainy, night ou warm'),
+            bpm: z.number().int().min(55).max(95).optional().describe('BPM lo-fi entre 55 e 95'),
+          }),
+          execute: async ({ description, title, mood, bpm }) => {
+            const generation = await MusicGenerationService.requestGeneration({
+              source: 'USER',
+              prompt: description,
+              title,
+              mood,
+              bpm,
+              locale,
+              userId: authenticatedUserId,
+              username,
+              ipAddress,
+              idempotencyKey: clientMessageId,
+            });
+
+            return generation.accepted
+              ? `✅ ${generation.message}`
+              : `❌ ${generation.message}`;
+          },
+        }),
+
         request_track: tool({
           description: 'Solicita uma música específica. Primeiro tenta catálogo local; se não achar, cai para YouTube automaticamente.',
           inputSchema: z.object({

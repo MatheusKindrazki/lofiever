@@ -226,10 +226,14 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       artist: nextTrack.artist,
       sourceType: nextTrack.sourceType,
       sourceId: nextTrack.sourceId,
+      origin: nextTrack.origin,
       duration: nextTrack.duration,
       bpm: nextTrack.bpm || undefined,
       mood: nextTrack.mood || undefined,
       artworkUrl,
+      addedBy: nextTrack.addedBy,
+      addedByUserId: nextTrack.addedByUserId,
+      requestId: nextTrack.requestId,
     };
 
     await redis.set(

@@ -3,6 +3,7 @@ import { ModerationService } from '@/services/moderation/moderation.service';
 import { PlaylistManagerService } from '@/services/playlist/playlist-manager.service';
 import { YouTubeService } from '@/services/youtube';
 import { prisma } from '@/lib/prisma';
+import { MusicGenerationService } from '@/services/music-generation/service';
 import { TextDecoder, TextEncoder } from 'util';
 
 const streamTextMock = jest.fn();
@@ -116,6 +117,12 @@ jest.mock('@/lib/api-utils', () => ({
   },
 }));
 
+jest.mock('@/services/music-generation/service', () => ({
+  MusicGenerationService: {
+    requestGeneration: jest.fn(),
+  },
+}));
+
 jest.mock('@/lib/config', () => ({
   config: {
     youtube: {
@@ -209,5 +216,54 @@ describe('POST /api/curation/process-message - YouTube fallback', () => {
 
     expect(text).toContain('autenticação/cookies');
     expect(PlaylistManagerService.queueTrack).not.toHaveBeenCalled();
+  });
+
+  it('routes an explicit original request to the generation service', async () => {
+    (MusicGenerationService.requestGeneration as jest.Mock).mockResolvedValue({
+      accepted: true,
+      generationId: 'generation-1',
+      status: 'queued',
+      title: 'Chuva na Biblioteca',
+      message: 'Vou produzir “Chuva na Biblioteca”.',
+    });
+    streamTextMock.mockImplementation((options: any) => {
+      const textStream = (async function* generate() {
+        const output = await options.tools.request_original_track.execute({
+          description: 'Rhodes quente, chuva leve e bateria macia para estudar',
+          title: 'Chuva na Biblioteca',
+          mood: 'focused',
+          bpm: 70,
+        });
+        yield output;
+      })();
+      return { textStream, toolResults: Promise.resolve([]) };
+    });
+
+    const request = {
+      headers: { get: () => null },
+      json: async () => ({
+        messages: [{ role: 'user', content: 'Crie uma faixa original para estudar' }],
+        data: {
+          userId: 'guest-1',
+          authenticatedUserId: 'listener@example.com',
+          username: 'Matheus',
+          isPrivate: false,
+          locale: 'pt',
+          ipAddress: '203.0.113.10',
+          clientMessageId: 'message-1',
+        },
+      }),
+    } as unknown as Request;
+
+    const response = await POST(request);
+    const text = await response.text();
+
+    expect(text).toContain('Vou produzir');
+    expect(MusicGenerationService.requestGeneration).toHaveBeenCalledWith(expect.objectContaining({
+      source: 'USER',
+      userId: 'listener@example.com',
+      idempotencyKey: 'message-1',
+      title: 'Chuva na Biblioteca',
+    }));
   });
 });

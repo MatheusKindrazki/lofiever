@@ -14,6 +14,9 @@ import { ContentModerationService } from '@/services/moderation/content-moderati
 import type { Track } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { createAdapter } from '@socket.io/redis-adapter';
+import { getToken } from 'next-auth/jwt';
+import { verifyToken } from '@/lib/auth/tokens';
+import type { MusicGenerationUpdate } from '@/services/music-generation/types';
 import {
   ChatMessagePayloadSchema,
   TrackIdSchema,
@@ -32,7 +35,14 @@ const IDEMPOTENCY_TTL = 300; // 5 minutes TTL for idempotency keys
 const AI_REPLY_MIN_LISTENERS = config.chat.aiReplyMinListeners;
 
 type AIMessagesPayload = Array<{ role: 'user' | 'assistant'; content: string }>;
+type GetTokenRequest = Parameters<typeof getToken>[0] extends { req: infer T } ? T : never;
 const normalizeLocale = (locale?: string | null): 'pt' | 'en' => (locale === 'en' ? 'en' : 'pt');
+
+function internalRequestHeaders(): Record<string, string> {
+  return process.env.API_SECRET_KEY
+    ? { 'x-lofiever-internal-key': process.env.API_SECRET_KEY }
+    : {};
+}
 
 /**
  * Check if user is rate limited using Redis for multi-instance consistency
@@ -160,11 +170,24 @@ function setupMiddleware(io: SocketIOServer<ClientToServerEvents, ServerToClient
       const authValidation = safeValidate(SocketAuthSchema, socket.handshake.auth);
       const auth = authValidation.success ? authValidation.data : {};
 
-      const userId = auth.userId || nanoid();
+      const [guestToken, sessionToken] = await Promise.all([
+        auth.token ? verifyToken(auth.token) : Promise.resolve(null),
+        config.auth.secret
+          ? getToken({ req: socket.request as unknown as GetTokenRequest, secret: config.auth.secret })
+          : Promise.resolve(null),
+      ]);
+
+      if (auth.token && !guestToken && !sessionToken) {
+        next(new Error('Authentication error'));
+        return;
+      }
+
+      const userId = guestToken?.sub || nanoid();
+      const authenticatedUserId = sessionToken?.email?.trim().toLowerCase();
 
       // Try to get persisted username with database fallback
       const persistedName = await redisHelpers.getUserNameWithFallback(userId, prisma);
-      const handshakeUsername = auth.username;
+      const handshakeUsername = guestToken?.name || auth.username;
 
       // Priority: Redis/DB cached name > handshake name > generated name
       const username = persistedName || handshakeUsername || `user_${userId.substring(0, 5)}`;
@@ -178,6 +201,7 @@ function setupMiddleware(io: SocketIOServer<ClientToServerEvents, ServerToClient
 
       // Store user info in socket data
       socket.data.userId = userId;
+      socket.data.authenticatedUserId = authenticatedUserId;
       socket.data.username = username;
       socket.data.locale = activeLocale;
 
@@ -340,10 +364,19 @@ function setupEventHandlers(io: SocketIOServer<ClientToServerEvents, ServerToCli
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            ...internalRequestHeaders(),
           },
           body: JSON.stringify({
             messages: conversationMessages,
-            data: { userId, username, isPrivate, locale },
+            data: {
+              userId,
+              username,
+              isPrivate,
+              locale,
+              authenticatedUserId: socket.data.authenticatedUserId,
+              ipAddress: socket.handshake.address,
+              clientMessageId: validatedMessage.clientMessageId,
+            },
           }),
         });
 
@@ -517,6 +550,14 @@ function setupRedisSubscriber(io: SocketIOServer<ClientToServerEvents, ServerToC
     console.log('Subscribed to lofi-ever:user-update channel');
   });
 
+  redisSubscriber.subscribe('lofi-ever:music-generation-update', (err) => {
+    if (err) {
+      console.error('Failed to subscribe to music generation updates:', err);
+      return;
+    }
+    console.log('Subscribed to lofi-ever:music-generation-update channel');
+  });
+
   redisSubscriber.on('message', async (channel, message) => {
     if (channel === 'lofi-ever:new-track') {
       try {
@@ -615,6 +656,51 @@ function setupRedisSubscriber(io: SocketIOServer<ClientToServerEvents, ServerToC
         }
       } catch (error) {
         console.error('Error processing user update:', error);
+      }
+    } else if (channel === 'lofi-ever:music-generation-update') {
+      try {
+        const update = JSON.parse(message) as MusicGenerationUpdate;
+        if (update.status !== 'published' && update.status !== 'failed') return;
+
+        const messageId = nanoid();
+        if (update.status === 'published') {
+          const chatMessage: RedisChatMessage = {
+            id: messageId,
+            userId: 'ai',
+            username: 'Lofine',
+            content: update.message,
+            timestamp: Date.now(),
+            type: 'system',
+            meta: update.track
+              ? { title: update.track.title, artist: update.track.artist }
+              : undefined,
+          };
+          await redisHelpers.addChatMessage(chatMessage);
+          io.emit(SOCKET_EVENTS.CHAT_MESSAGE, chatMessage);
+          return;
+        }
+
+        const sockets = await io.fetchSockets();
+        const userSocket = sockets.find((candidate) => (
+          candidate.data.authenticatedUserId === update.userId
+          || candidate.data.userId === update.userId
+        ));
+        if (!userSocket) return;
+
+        const chatMessage: RedisChatMessage = {
+          id: messageId,
+          userId: 'ai',
+          username: 'Lofine',
+          content: update.message,
+          timestamp: Date.now(),
+          type: 'system',
+          isPrivate: true,
+          targetUserId: userSocket.data.userId,
+        };
+        await redisHelpers.addChatMessage(chatMessage);
+        userSocket.emit(SOCKET_EVENTS.CHAT_MESSAGE, chatMessage);
+      } catch (error) {
+        console.error('Error processing music generation update:', error);
       }
     }
   });
@@ -853,7 +939,7 @@ async function triggerAIGreeting(
 
     const aiResponse = await fetch(`${config.app.internalUrl}/api/curation/process-message`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...internalRequestHeaders() },
       body: JSON.stringify({
         messages: conversationMessages,
         data: { userId, username, isPrivate: true, locale }, // Force private greeting

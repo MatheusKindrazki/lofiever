@@ -60,6 +60,32 @@ function triggerYouTubePreFetch(track: Track): void {
   });
 }
 
+function isGeneratedUserQueueItem(value: string | undefined): boolean {
+  if (!value) return false;
+  try {
+    const item = JSON.parse(value) as { origin?: string; generatedRequest?: boolean };
+    return item.origin === 'generated_user' || item.generatedRequest === true;
+  } catch {
+    return false;
+  }
+}
+
+function keepsGeneratedRequestRunWithinLimit(
+  combinedItems: string[],
+  insertionIndex: number,
+): boolean {
+  let adjacentGenerated = 0;
+  for (let index = insertionIndex - 1; index >= 0; index -= 1) {
+    if (!isGeneratedUserQueueItem(combinedItems[index])) break;
+    adjacentGenerated += 1;
+  }
+  for (let index = insertionIndex; index < combinedItems.length; index += 1) {
+    if (!isGeneratedUserQueueItem(combinedItems[index])) break;
+    adjacentGenerated += 1;
+  }
+  return adjacentGenerated < 2;
+}
+
 export const PlaylistManagerService = {
   /**
    * Garante que a fila de reprodução (Redis) tenha faixas suficientes.
@@ -127,13 +153,14 @@ export const PlaylistManagerService = {
     // 3. Se precisar de faixas, usar a IA (RPUSH - fim da fila)
     // Get current queue tracks to avoid duplicates
     const currentQueueJson = await redis.lrange(QUEUE_KEY, 0, -1);
-    const currentQueueIds = currentQueueJson.map(item => {
+    const currentQueueItems = currentQueueJson.map(item => {
       try {
-        return JSON.parse(item).id;
+        return JSON.parse(item) as { id?: string; origin?: string };
       } catch {
         return null;
       }
-    }).filter(id => id !== null);
+    }).filter((item): item is { id: string; origin?: string } => Boolean(item?.id));
+    const currentQueueIds = currentQueueItems.map((item) => item.id);
 
     // Get recent chat messages for context
     const chatMessages = await redisHelpers.getChatMessages(20);
@@ -148,12 +175,21 @@ export const PlaylistManagerService = {
     }
 
     const generatedIds: string[] = [];
+    const scheduledOrigins = currentQueueItems.map((item) => item.origin || 'catalog');
 
     for (let i = 0; i < BATCH_SIZE; i++) {
       try {
         // Pass both current queue and newly generated IDs to avoid immediate repeats
         // Pass the pre-determined batchMood
-        const recommendedTrack = await recommendNextTrack(batchMood, [...currentQueueIds, ...generatedIds], []); // Empty chatContext because we already determined mood
+        const allowGenerated = !scheduledOrigins
+          .slice(-4)
+          .some((origin) => origin === 'generated_user' || origin === 'generated_editorial');
+        const recommendedTrack = await recommendNextTrack(
+          batchMood,
+          [...currentQueueIds, ...generatedIds],
+          [],
+          { allowGenerated },
+        ); // Empty chatContext because we already determined mood
 
         const queueItem = {
           ...recommendedTrack,
@@ -162,6 +198,7 @@ export const PlaylistManagerService = {
         await redis.rpush(QUEUE_KEY, JSON.stringify(queueItem));
         triggerYouTubePreFetch(recommendedTrack);
         generatedIds.push(recommendedTrack.id);
+        scheduledOrigins.push(recommendedTrack.origin);
       } catch (err) {
         console.error('Erro ao gerar recomendação para a fila:', err);
       }
@@ -226,6 +263,105 @@ export const PlaylistManagerService = {
 
     triggerYouTubePreFetch(track);
     await redis.publish('lofi-ever:queue-update', 'updated');
+  },
+
+  /**
+   * Agenda um pedido direto dentro da janela prioritária sem ultrapassar o
+   * áudio que o Liquidsoap já armazenou. A inserção usa Lua para permanecer
+   * atômica mesmo com múltiplas instâncias do servidor.
+   */
+  async queueTrackWithinNext(
+    trackId: string,
+    addedBy: string,
+    userId: string,
+    minPosition: number = 3,
+    maxPosition: number = 5,
+    idempotencyKey?: string,
+  ): Promise<{ targetPosition: number; effectivePosition: number }> {
+    const QUEUE_KEY = 'lofiever:playlist:upcoming';
+    const BUFFER_KEY = 'lofiever:liquidsoap:buffer';
+    const track = await prisma.track.findUnique({ where: { id: trackId } });
+    if (!track) throw new Error('Track not found');
+
+    const lower = Math.max(1, Math.floor(minPosition));
+    const upper = Math.max(lower, Math.floor(maxPosition));
+    const [bufferSize, bufferItems, queueItems] = await Promise.all([
+      redis.llen(BUFFER_KEY),
+      redis.lrange(BUFFER_KEY, 0, -1),
+      redis.lrange(QUEUE_KEY, 0, -1),
+    ]);
+    const combinedItems = [...bufferItems, ...queueItems];
+    const candidateQueueIndexes = [...new Set(
+      Array.from(
+        { length: upper - lower + 1 },
+        (_, offset) => Math.max(0, lower + offset - bufferSize - 1),
+      ),
+    )];
+    const safeQueueIndexes = track.origin === 'generated_user'
+      ? candidateQueueIndexes.filter((index) => (
+        keepsGeneratedRequestRunWithinLimit(combinedItems, bufferSize + index)
+      ))
+      : candidateQueueIndexes;
+    const availableIndexes = safeQueueIndexes.length > 0
+      ? safeQueueIndexes
+      : Array.from({ length: queueItems.length + 1 }, (_, index) => index)
+        .filter((index) => keepsGeneratedRequestRunWithinLimit(combinedItems, bufferSize + index));
+    const queueIndex = availableIndexes.length > 0
+      ? availableIndexes[Math.floor(Math.random() * availableIndexes.length)]
+      : queueItems.length;
+    const targetPosition = bufferSize + queueIndex + 1;
+    const queueItem = JSON.stringify({
+      ...track,
+      addedBy,
+      addedByUserId: userId,
+      generatedRequest: track.origin === 'generated_user',
+    });
+    const guardKey = idempotencyKey
+      ? `lofiever:playlist:priority:${idempotencyKey}`
+      : `lofiever:playlist:priority:unguarded:${track.id}:${Date.now()}`;
+
+    const insertionScript = `
+      local queue = KEYS[1]
+      local guard = KEYS[2]
+      local value = ARGV[1]
+      local requestedIndex = tonumber(ARGV[2])
+      if redis.call('EXISTS', guard) == 1 then
+        return -1
+      end
+      local length = redis.call('LLEN', queue)
+      local insertedIndex = requestedIndex
+      if requestedIndex <= 0 then
+        redis.call('LPUSH', queue, value)
+        insertedIndex = 0
+      elseif requestedIndex >= length then
+        redis.call('RPUSH', queue, value)
+        insertedIndex = length
+      else
+        local pivot = redis.call('LINDEX', queue, requestedIndex)
+        redis.call('LINSERT', queue, 'BEFORE', pivot, value)
+      end
+      redis.call('SET', guard, '1', 'EX', 604800)
+      return insertedIndex
+    `;
+
+    const insertedIndex = Number(await redis.eval(
+      insertionScript,
+      2,
+      QUEUE_KEY,
+      guardKey,
+      queueItem,
+      String(queueIndex),
+    ));
+
+    if (insertedIndex >= 0) {
+      triggerYouTubePreFetch(track);
+      await redis.publish('lofi-ever:queue-update', 'updated');
+    }
+
+    return {
+      targetPosition,
+      effectivePosition: insertedIndex >= 0 ? bufferSize + insertedIndex + 1 : -1,
+    };
   },
 
   // Mantendo compatibilidade com código antigo se necessário, mas redirecionando

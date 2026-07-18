@@ -71,6 +71,7 @@
             "toast": "🔒 Chat switched to private mode automatically."
         },
         "quickActions": {
+            "original": "✦ Original",
             "study": "🎓 Study",
             "energy": "⚡ Energy",
             "relax": "🌙 Relax",
@@ -83,6 +84,13 @@
             "relax": "I want calm and relaxing music",
             "queue": "Show me the upcoming songs in the queue",
             "myRequests": "How many requests do I still have?"
+        },
+        "originalMusic": {
+            "hint": "Describe an instrumental lo-fi track created for Lofiever",
+            "adultNotice": "Music generation uses a service restricted to adults 18+. Tracks are AI-generated and automatically validated.",
+            "confirmAdult": "I confirm I am 18+",
+            "confirming": "Confirming…",
+            "cancel": "Not now"
         }
     },
     "search": {

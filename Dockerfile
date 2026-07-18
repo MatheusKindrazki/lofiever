@@ -88,5 +88,5 @@ EXPOSE 3000
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
-# Start the custom server
-CMD ["node", "dist/server.js"]
+# Apply pending schema changes before starting the custom server.
+CMD ["sh", "-c", "npx prisma migrate deploy && node dist/server.js"]

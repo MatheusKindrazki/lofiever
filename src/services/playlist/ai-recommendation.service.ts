@@ -99,12 +99,14 @@ export async function determineMoodFromChat(chatMessages: string[]): Promise<str
  * @param mood O 'mood' desejado (opcional).
  * @param excludeIds IDs para excluir (ex: fila atual).
  * @param chatContext Mensagens recentes do chat para análise de mood.
+ * @param options Restrições editoriais da posição atual da fila.
  * @returns Uma faixa recomendada.
  */
 export async function recommendNextTrack(
   mood?: string,
   excludeIds: string[] = [],
-  chatContext: string[] = []
+  chatContext: string[] = [],
+  options: { allowGenerated?: boolean } = {},
 ): Promise<Track> {
   try {
     // 1. Determinar mood baseado no chat se não for especificado
@@ -138,6 +140,7 @@ export async function recommendNextTrack(
     const whereClause: Prisma.TrackWhereInput = {
       id: { notIn: allExcludedIds },
       sourceType: { in: allowedSourceTypes },
+      ...(options.allowGenerated === false ? { origin: 'catalog' } : {}),
     };
 
     if (targetMood) {
@@ -172,7 +175,10 @@ export async function recommendNextTrack(
       // Conta respeitando o whitelist de fontes para não reportar faixas
       // 'youtube' inalcançáveis quando o YouTube está desabilitado.
       const totalCount = await prisma.track.count({
-        where: { sourceType: { in: allowedSourceTypes } },
+        where: {
+          sourceType: { in: allowedSourceTypes },
+          ...(options.allowGenerated === false ? { origin: 'catalog' } : {}),
+        },
       });
       if (totalCount === 0) {
         throw new Error('Nenhuma faixa tocável encontrada no banco de dados.');

@@ -2,12 +2,20 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
-import { useSession } from 'next-auth/react';
+import { signIn, useSession } from 'next-auth/react';
 import type { PendingChatMessage } from '@/lib/socket/client';
 import { useChat as useSocketChat, useSocket } from '@/lib/socket/client';
 import { LofineMark } from './icons';
 
 const DJ_NAME = 'Lofine';
+
+interface OriginalMusicAccess {
+  enabled: boolean;
+  authenticated: boolean;
+  ageConfirmed: boolean;
+  remainingToday: number;
+  globalRemainingToday: number;
+}
 
 /* ============================================================
    TRANSMISSIONS — chat as "letters to the station", with Lofine
@@ -17,7 +25,7 @@ export function Transmissions({ accent, showMascot = true }: { accent: string; s
   const t = useTranslations('chat');
   const locale = useLocale();
   const normalizedLocale: 'pt' | 'en' = locale === 'en' ? 'en' : 'pt';
-  const { data: session } = useSession();
+  const { data: session, status: sessionStatus } = useSession();
 
   const {
     messages,
@@ -34,7 +42,22 @@ export function Transmissions({ accent, showMascot = true }: { accent: string; s
   const username = socketUsername || session?.user?.name || `user_${userId.substring(0, 6)}`;
 
   const [val, setVal] = useState('');
+  const [originalAccess, setOriginalAccess] = useState<OriginalMusicAccess | null>(null);
+  const [showAdultConfirmation, setShowAdultConfirmation] = useState(false);
+  const [confirmingAdult, setConfirmingAdult] = useState(false);
   const feedRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (sessionStatus === 'loading') return;
+    fetch('/api/music/access')
+      .then(async (response) => {
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        return response.json() as Promise<OriginalMusicAccess>;
+      })
+      .then(setOriginalAccess)
+      .catch((error) => console.error('[OriginalMusic] Failed to load access:', error));
+  }, [sessionStatus, session?.user?.email]);
 
   useEffect(() => {
     if (feedRef.current) feedRef.current.scrollTop = feedRef.current.scrollHeight;
@@ -64,6 +87,44 @@ export function Transmissions({ accent, showMascot = true }: { accent: string; s
     e.preventDefault();
     send(val);
     setVal('');
+  };
+
+  const prepareOriginalRequest = () => {
+    setVal('/original ');
+    requestAnimationFrame(() => inputRef.current?.focus());
+  };
+
+  const openOriginalStudio = async () => {
+    if (!originalAccess?.enabled) return;
+    if (!originalAccess.authenticated) {
+      await signIn('github');
+      return;
+    }
+    if (!originalAccess.ageConfirmed) {
+      setShowAdultConfirmation(true);
+      return;
+    }
+    prepareOriginalRequest();
+  };
+
+  const confirmAdult = async () => {
+    setConfirmingAdult(true);
+    try {
+      const response = await fetch('/api/music/access', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ confirmed: true }),
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const access = await response.json() as OriginalMusicAccess;
+      setOriginalAccess(access);
+      setShowAdultConfirmation(false);
+      prepareOriginalRequest();
+    } catch (error) {
+      console.error('[OriginalMusic] Failed to confirm age:', error);
+    } finally {
+      setConfirmingAdult(false);
+    }
   };
 
   const stamp = (ts: number) =>
@@ -143,7 +204,35 @@ export function Transmissions({ accent, showMascot = true }: { accent: string; s
         </div>
       )}
 
+      {showAdultConfirmation && (
+        <div className="tx-status">
+          <span>{t('originalMusic.adultNotice')}</span>
+          <button
+            type="button"
+            className="tx-pill"
+            disabled={confirmingAdult}
+            onClick={confirmAdult}
+          >
+            {confirmingAdult ? t('originalMusic.confirming') : t('originalMusic.confirmAdult')}
+          </button>
+          <button type="button" className="tx-pill" onClick={() => setShowAdultConfirmation(false)}>
+            {t('originalMusic.cancel')}
+          </button>
+        </div>
+      )}
+
       <div className="tx-quick">
+        {originalAccess?.enabled && (
+          <button
+            type="button"
+            className="tx-pill"
+            disabled={sessionStatus === 'loading'}
+            onClick={openOriginalStudio}
+            title={t('originalMusic.hint')}
+          >
+            {t('quickActions.original')}
+          </button>
+        )}
         {(['study', 'energy', 'relax', 'queue'] as const).map((key) => (
           <button
             key={key}
@@ -163,6 +252,7 @@ export function Transmissions({ accent, showMascot = true }: { accent: string; s
 
       <form className="tx-compose" onSubmit={submit}>
         <input
+          ref={inputRef}
           value={val}
           onChange={(e) => setVal(e.target.value)}
           placeholder={placeholder}

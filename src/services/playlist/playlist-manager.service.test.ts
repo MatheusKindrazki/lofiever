@@ -28,6 +28,7 @@ jest.mock('@/lib/redis', () => ({
     lpop: jest.fn(),
     llen: jest.fn(),
     lrange: jest.fn(),
+    eval: jest.fn(),
     publish: jest.fn(),
   },
   redisHelpers: {
@@ -80,6 +81,7 @@ const mockedRedis = redis as unknown as {
   lpop: jest.Mock;
   llen: jest.Mock;
   lrange: jest.Mock;
+  eval: jest.Mock;
   publish: jest.Mock;
 };
 
@@ -88,6 +90,7 @@ const track1: Track = {
   id: 'track1',
   title: 'A',
   artist: 'X',
+  origin: 'catalog',
   sourceType: 'local',
   sourceId: 'a.mp3',
   artworkKey: null,
@@ -103,6 +106,7 @@ const track2: Track = {
   id: 'track2',
   title: 'B',
   artist: 'Y',
+  origin: 'catalog',
   sourceType: 'local',
   sourceId: 'b.mp3',
   artworkKey: null,
@@ -118,6 +122,7 @@ const trackYouTube: Track = {
   id: 'track-youtube',
   title: 'YT Track',
   artist: 'YT Artist',
+  origin: 'catalog',
   sourceType: 'youtube',
   sourceId: 'dQw4w9WgXcQ',
   artworkKey: null,
@@ -272,6 +277,71 @@ describe('PlaylistManagerService', () => {
 
       expect(YouTubeCacheService.has).toHaveBeenCalledWith('dQw4w9WgXcQ');
       expect(YouTubeCacheService.ensureCached).toHaveBeenCalledWith('dQw4w9WgXcQ');
+    });
+  });
+
+  describe('queueTrackWithinNext', () => {
+    it('places a direct request in the third upcoming position after the buffered audio', async () => {
+      jest.spyOn(Math, 'random').mockReturnValue(0);
+      mockedPrisma.track.findUnique.mockResolvedValue({ ...track1, origin: 'generated_user' });
+      mockedRedis.llen.mockResolvedValue(2);
+      mockedRedis.lrange.mockResolvedValue([]);
+      mockedRedis.eval.mockResolvedValue(0);
+
+      const result = await PlaylistManagerService.queueTrackWithinNext(
+        'track1',
+        'Listener',
+        'listener-1',
+        3,
+        5,
+        'generation-1',
+      );
+
+      expect(result).toEqual({ targetPosition: 3, effectivePosition: 3 });
+      expect(mockedRedis.eval).toHaveBeenCalledWith(
+        expect.stringContaining("redis.call('LINSERT'"),
+        2,
+        'lofiever:playlist:upcoming',
+        'lofiever:playlist:priority:generation-1',
+        expect.stringContaining('generatedRequest'),
+        '0',
+      );
+      jest.restoreAllMocks();
+    });
+
+    it('does not create a run of three listener-generated tracks', async () => {
+      jest.spyOn(Math, 'random').mockReturnValue(0);
+      mockedPrisma.track.findUnique.mockResolvedValue({ ...track1, origin: 'generated_user' });
+      mockedRedis.llen.mockResolvedValue(2);
+      mockedRedis.lrange
+        .mockResolvedValueOnce([
+          JSON.stringify({ id: 'generated-a', origin: 'generated_user' }),
+          JSON.stringify({ id: 'generated-b', origin: 'generated_user' }),
+        ])
+        .mockResolvedValueOnce([
+          JSON.stringify({ id: 'catalog-a', origin: 'catalog' }),
+        ]);
+      mockedRedis.eval.mockResolvedValue(1);
+
+      const result = await PlaylistManagerService.queueTrackWithinNext(
+        'track1',
+        'Listener',
+        'listener-1',
+        3,
+        5,
+        'generation-2',
+      );
+
+      expect(result.effectivePosition).toBe(4);
+      expect(mockedRedis.eval).toHaveBeenCalledWith(
+        expect.any(String),
+        2,
+        'lofiever:playlist:upcoming',
+        'lofiever:playlist:priority:generation-2',
+        expect.any(String),
+        '1',
+      );
+      jest.restoreAllMocks();
     });
   });
 });

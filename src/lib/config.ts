@@ -25,6 +25,16 @@ function pickFirstValidUrl(
 const PUBLIC_APP_URL = pickFirstValidUrl(process.env.NEXT_PUBLIC_APP_URL, 'http://localhost:3000');
 const INTERNAL_APP_URL = pickFirstValidUrl(process.env.APP_INTERNAL_URL, PUBLIC_APP_URL);
 
+function positiveInteger(value: string | undefined, fallback: number): number {
+  const parsed = Number.parseInt(value || '', 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function positiveNumber(value: string | undefined, fallback: number): number {
+  const parsed = Number.parseFloat(value || '');
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
 export const config = {
   app: {
     name: 'Lofiever',
@@ -86,6 +96,24 @@ export const config = {
       const parsed = parseInt(process.env.AI_REPLY_MIN_LISTENERS || '1', 10);
       return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
     })(),
+  },
+  musicGeneration: {
+    enabled: process.env.AI_MUSIC_ENABLED === 'true',
+    provider: process.env.AI_MUSIC_PROVIDER || 'google-lyria',
+    userDailyLimit: positiveInteger(process.env.AI_MUSIC_USER_DAILY_LIMIT, 1),
+    globalDailyLimit: positiveInteger(process.env.AI_MUSIC_GLOBAL_DAILY_LIMIT, 20),
+    editorialDailyTarget: positiveInteger(process.env.AI_MUSIC_EDITORIAL_DAILY_TARGET, 2),
+    editorialCatalogTarget: positiveInteger(process.env.AI_MUSIC_EDITORIAL_CATALOG_TARGET, 300),
+    editorialWeeklyTarget: positiveInteger(process.env.AI_MUSIC_EDITORIAL_WEEKLY_TARGET, 3),
+    monthlyBudgetUsd: positiveNumber(process.env.AI_MUSIC_MONTHLY_BUDGET_USD, 100),
+    maxAttempts: positiveInteger(process.env.AI_MUSIC_MAX_ATTEMPTS, 2),
+    targetDurationSeconds: positiveInteger(process.env.AI_MUSIC_TARGET_DURATION_SECONDS, 180),
+    requireVocalCheck: process.env.AI_MUSIC_REQUIRE_VOCAL_CHECK !== 'false',
+    ipHashSecret: process.env.AI_MUSIC_IP_HASH_SECRET || process.env.AUTH_SECRET || '',
+    google: {
+      projectId: process.env.GOOGLE_CLOUD_PROJECT || '',
+      model: process.env.GOOGLE_LYRIA_MODEL || 'lyria-3-pro-preview',
+    },
   },
 } as const;
 

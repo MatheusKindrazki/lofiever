@@ -2,6 +2,8 @@ import { createServer } from 'node:http';
 import { parse } from 'node:url';
 import next from 'next';
 import { createSocketServer } from '../src/lib/socket/server';
+import { startEditorialMusicScheduler } from '../src/services/music-generation/editorial';
+import { startMusicGenerationWorker } from '../src/services/music-generation/worker';
 
 const dev = process.env.NODE_ENV !== 'production';
 const hostname = process.env.HOSTNAME || '0.0.0.0';
@@ -22,6 +24,8 @@ app.prepare().then(() => {
 
   // Initialize Socket.IO and attach to server
   createSocketServer(server);
+  startMusicGenerationWorker();
+  startEditorialMusicScheduler();
 
   // Start listening
   server.listen(port, () => {
@@ -30,4 +34,4 @@ app.prepare().then(() => {
 }).catch((err) => {
   console.error('Error starting server:', err);
   process.exit(1);
-}); 
+});

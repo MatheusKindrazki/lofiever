@@ -71,6 +71,7 @@
             "toast": "🔒 O chat mudou para privado automaticamente."
         },
         "quickActions": {
+            "original": "✦ Original",
             "study": "🎓 Estudar",
             "energy": "⚡ Energia",
             "relax": "🌙 Relaxar",
@@ -83,6 +84,13 @@
             "relax": "Quero músicas calmas e relaxantes",
             "queue": "Me mostra as próximas músicas da fila",
             "myRequests": "Quantos pedidos eu ainda tenho?"
+        },
+        "originalMusic": {
+            "hint": "Descreva uma faixa lo-fi instrumental criada para o Lofiever",
+            "adultNotice": "A geração musical usa um serviço restrito a maiores de 18 anos. As faixas são criadas com IA e passam por validação automática.",
+            "confirmAdult": "Confirmo que tenho 18+",
+            "confirming": "Confirmando…",
+            "cancel": "Agora não"
         }
     },
     "search": {

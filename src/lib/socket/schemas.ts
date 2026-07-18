@@ -46,6 +46,7 @@ export const LocaleSchema = z.enum(['pt', 'en']);
 
 // Socket auth schema
 export const SocketAuthSchema = z.object({
+  token: z.string().max(4096).optional(),
   userId: z.string().optional(),
   username: z.string().optional(),
   locale: z.enum(['pt', 'en']).optional(),
