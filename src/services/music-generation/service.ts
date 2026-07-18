@@ -96,7 +96,7 @@ export const MusicGenerationService = {
       return {
         accepted: false,
         code: 'AUTH_REQUIRED',
-        message: 'Para criar uma faixa original, entre com sua conta e volte a fazer o pedido.',
+        message: 'Não consegui identificar sua sessão de ouvinte. Recarregue a rádio e tente novamente.',
       };
     }
 
@@ -139,9 +139,12 @@ export const MusicGenerationService = {
           const dailyCount = await tx.musicGeneration.count({
             where: {
               source: 'USER',
-              userId: request.userId,
               status: { in: ACTIVE_OR_CONSUMED_STATUSES },
               createdAt: { gte: utcDayStart() },
+              OR: [
+                { userId: request.userId },
+                ...(ipHash ? [{ ipHash }] : []),
+              ],
             },
           });
           if (dailyCount >= config.musicGeneration.userDailyLimit) {

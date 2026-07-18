@@ -8,6 +8,7 @@ interface UserSession {
 }
 
 const SESSION_KEY = 'lofiever:session';
+const SESSION_EVENT = 'lofiever:session-change';
 
 export function useUserSession() {
     const [session, setSessionState] = useState<UserSession | null>(null);
@@ -16,6 +17,11 @@ export function useUserSession() {
     // Load session from localStorage on mount
     useEffect(() => {
         if (typeof window === 'undefined') return;
+
+        const handleSessionChange = (event: Event) => {
+            setSessionState((event as CustomEvent<UserSession | null>).detail);
+        };
+        window.addEventListener(SESSION_EVENT, handleSessionChange);
 
         try {
             const stored = localStorage.getItem(SESSION_KEY);
@@ -28,6 +34,8 @@ export function useUserSession() {
         } finally {
             setIsLoading(false);
         }
+
+        return () => window.removeEventListener(SESSION_EVENT, handleSessionChange);
     }, []);
 
     // Save session to localStorage
@@ -35,6 +43,7 @@ export function useUserSession() {
         setSessionState(newSession);
         try {
             localStorage.setItem(SESSION_KEY, JSON.stringify(newSession));
+            window.dispatchEvent(new CustomEvent<UserSession>(SESSION_EVENT, { detail: newSession }));
         } catch (error) {
             console.error('Failed to save user session:', error);
         }
@@ -45,6 +54,7 @@ export function useUserSession() {
         setSessionState(null);
         try {
             localStorage.removeItem(SESSION_KEY);
+            window.dispatchEvent(new CustomEvent<UserSession | null>(SESSION_EVENT, { detail: null }));
         } catch (error) {
             console.error('Failed to clear user session:', error);
         }

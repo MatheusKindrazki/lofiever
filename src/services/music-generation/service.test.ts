@@ -76,7 +76,7 @@ describe('MusicGenerationService.requestGeneration', () => {
     mockedEnqueue.mockResolvedValue();
   });
 
-  it('requires an authenticated account for a listener request', async () => {
+  it('requires a verified listener identity for a listener request', async () => {
     const result = await MusicGenerationService.requestGeneration({
       source: 'USER',
       prompt: 'Rhodes quente com chuva leve e bateria macia para estudar',
@@ -143,6 +143,14 @@ describe('MusicGenerationService.requestGeneration', () => {
         title: 'Chuva na Biblioteca',
       }),
     }));
+    expect(mockedPrisma.musicGeneration.count).toHaveBeenNthCalledWith(1, {
+      where: expect.objectContaining({
+        OR: [
+          { userId: 'listener@example.com' },
+          { ipHash: expect.any(String) },
+        ],
+      }),
+    });
     expect(mockedEnqueue).toHaveBeenCalledWith('generation-1');
   });
 });

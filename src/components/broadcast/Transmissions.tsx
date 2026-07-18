@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
-import { signIn, useSession } from 'next-auth/react';
 import type { PendingChatMessage } from '@/lib/socket/client';
 import { useChat as useSocketChat, useSocket } from '@/lib/socket/client';
 import { LofineMark } from './icons';
@@ -25,7 +24,6 @@ export function Transmissions({ accent, showMascot = true }: { accent: string; s
   const t = useTranslations('chat');
   const locale = useLocale();
   const normalizedLocale: 'pt' | 'en' = locale === 'en' ? 'en' : 'pt';
-  const { data: session, status: sessionStatus } = useSession();
 
   const {
     messages,
@@ -36,10 +34,16 @@ export function Transmissions({ accent, showMascot = true }: { accent: string; s
     retryMessage,
     removeFailedMessage,
   } = useSocketChat();
-  const { sendChatMessage, userId: socketUserId, username: socketUsername, isConnected } = useSocket();
+  const {
+    sendChatMessage,
+    userId: socketUserId,
+    username: socketUsername,
+    token: listenerToken,
+    isConnected,
+  } = useSocket();
 
-  const userId = socketUserId || (session?.user as { id?: string } | undefined)?.id || 'anonymous-user';
-  const username = socketUsername || session?.user?.name || `user_${userId.substring(0, 6)}`;
+  const userId = socketUserId || 'anonymous-user';
+  const username = socketUsername || `user_${userId.substring(0, 6)}`;
 
   const [val, setVal] = useState('');
   const [originalAccess, setOriginalAccess] = useState<OriginalMusicAccess | null>(null);
@@ -49,15 +53,21 @@ export function Transmissions({ accent, showMascot = true }: { accent: string; s
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (sessionStatus === 'loading') return;
-    fetch('/api/music/access')
+    if (!listenerToken) {
+      setOriginalAccess(null);
+      return;
+    }
+
+    fetch('/api/music/access', {
+      headers: { 'X-Guest-Token': listenerToken },
+    })
       .then(async (response) => {
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         return response.json() as Promise<OriginalMusicAccess>;
       })
       .then(setOriginalAccess)
       .catch((error) => console.error('[OriginalMusic] Failed to load access:', error));
-  }, [sessionStatus, session?.user?.email]);
+  }, [listenerToken]);
 
   useEffect(() => {
     if (feedRef.current) feedRef.current.scrollTop = feedRef.current.scrollHeight;
@@ -94,12 +104,8 @@ export function Transmissions({ accent, showMascot = true }: { accent: string; s
     requestAnimationFrame(() => inputRef.current?.focus());
   };
 
-  const openOriginalStudio = async () => {
-    if (!originalAccess?.enabled) return;
-    if (!originalAccess.authenticated) {
-      await signIn('github');
-      return;
-    }
+  const openOriginalStudio = () => {
+    if (!listenerToken || !originalAccess?.enabled) return;
     if (!originalAccess.ageConfirmed) {
       setShowAdultConfirmation(true);
       return;
@@ -112,7 +118,10 @@ export function Transmissions({ accent, showMascot = true }: { accent: string; s
     try {
       const response = await fetch('/api/music/access', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Guest-Token': listenerToken || '',
+        },
         body: JSON.stringify({ confirmed: true }),
       });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -226,7 +235,7 @@ export function Transmissions({ accent, showMascot = true }: { accent: string; s
           <button
             type="button"
             className="tx-pill"
-            disabled={sessionStatus === 'loading'}
+            disabled={!listenerToken || !isConnected}
             onClick={openOriginalStudio}
             title={t('originalMusic.hint')}
           >

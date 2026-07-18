@@ -423,7 +423,7 @@ var MusicGenerationService = {
       return {
         accepted: false,
         code: "AUTH_REQUIRED",
-        message: "Para criar uma faixa original, entre com sua conta e volte a fazer o pedido."
+        message: "N\xE3o consegui identificar sua sess\xE3o de ouvinte. Recarregue a r\xE1dio e tente novamente."
       };
     }
     let normalized;
@@ -461,9 +461,12 @@ var MusicGenerationService = {
           const dailyCount = await tx.musicGeneration.count({
             where: {
               source: "USER",
-              userId: request.userId,
               status: { in: ACTIVE_OR_CONSUMED_STATUSES },
-              createdAt: { gte: utcDayStart() }
+              createdAt: { gte: utcDayStart() },
+              OR: [
+                { userId: request.userId },
+                ...ipHash ? [{ ipHash }] : []
+              ]
             }
           });
           if (dailyCount >= config.musicGeneration.userDailyLimit) {

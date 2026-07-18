@@ -266,4 +266,53 @@ describe('POST /api/curation/process-message - YouTube fallback', () => {
       title: 'Chuva na Biblioteca',
     }));
   });
+
+  it('uses a verified guest identity for an original request without OAuth', async () => {
+    (MusicGenerationService.requestGeneration as jest.Mock).mockResolvedValue({
+      accepted: true,
+      generationId: 'generation-guest',
+      status: 'queued',
+      title: 'Noite de Papel',
+      message: 'Vou produzir “Noite de Papel”.',
+    });
+    streamTextMock.mockImplementation((options: any) => {
+      const textStream = (async function* generate() {
+        const output = await options.tools.request_original_track.execute({
+          description: 'Piano macio, fita analógica e bateria leve para ler à noite',
+          title: 'Noite de Papel',
+          mood: 'night',
+          bpm: 68,
+        });
+        yield output;
+      })();
+      return { textStream, toolResults: Promise.resolve([]) };
+    });
+
+    const request = {
+      headers: { get: () => null },
+      json: async () => ({
+        messages: [{ role: 'user', content: 'Crie uma faixa original para ler à noite' }],
+        data: {
+          userId: 'guest-listener',
+          username: 'Visitante',
+          isPrivate: false,
+          locale: 'pt',
+          ipAddress: '203.0.113.20',
+          clientMessageId: 'message-guest',
+        },
+      }),
+    } as unknown as Request;
+
+    const response = await POST(request);
+    const text = await response.text();
+
+    expect(text).toContain('Vou produzir');
+    expect(MusicGenerationService.requestGeneration).toHaveBeenCalledWith(expect.objectContaining({
+      source: 'USER',
+      userId: 'guest-listener',
+      username: 'Visitante',
+      ipAddress: '203.0.113.20',
+      idempotencyKey: 'message-guest',
+    }));
+  });
 });

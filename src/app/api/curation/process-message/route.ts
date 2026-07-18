@@ -164,6 +164,11 @@ export async function POST(req: Request) {
     const authenticatedUserId = trustedInternalRequest && typeof data.authenticatedUserId === 'string'
       ? data.authenticatedUserId
       : undefined;
+    const listenerUserId = authenticatedUserId || (
+      trustedInternalRequest && typeof data.userId === 'string'
+        ? data.userId
+        : undefined
+    );
     const ipAddress = trustedInternalRequest && typeof data.ipAddress === 'string'
       ? data.ipAddress
       : undefined;
@@ -413,7 +418,7 @@ export async function POST(req: Request) {
               mood,
               bpm,
               locale,
-              userId: authenticatedUserId,
+              userId: listenerUserId,
               username,
               ipAddress,
               idempotencyKey: clientMessageId,

@@ -9,7 +9,7 @@ Uma música já publicada e tocável pela rádio, independentemente de ter sido 
 _Evitar_: Música existente
 
 **Pedido de faixa original**:
-A intenção explícita de um ouvinte autenticado para que o Lofiever crie uma nova faixa instrumental a partir de uma descrição.
+A intenção explícita de um ouvinte identificado por uma sessão verificada para que o Lofiever crie uma nova faixa instrumental a partir de uma descrição. A sessão pode ser de visitante ou de uma conta conectada.
 _Evitar_: Prompt, encomenda
 
 **Geração musical**:

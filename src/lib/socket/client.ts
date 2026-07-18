@@ -305,6 +305,7 @@ export function useSocket() {
     isConnected,
     userId: session?.userId || '', // Return the userId from session
     username: currentUsername || session?.username || '', // Return current username
+    token: session?.token || '',
     requestSync,
     sendChatMessage,
     voteForTrack,

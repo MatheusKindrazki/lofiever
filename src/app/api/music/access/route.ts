@@ -1,28 +1,28 @@
-import { getServerSession } from 'next-auth';
-import type { Session } from 'next-auth';
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
-import { authOptions } from '@/lib/auth/options';
 import { RATE_LIMITS, validateRequest } from '@/lib/api-security';
+import { getSessionOrGuestToken } from '@/lib/auth/tokens';
+import type { TokenPayload } from '@/lib/auth/tokens';
 import { MusicGenerationService } from '@/services/music-generation/service';
 
 export const runtime = 'nodejs';
 
-function sessionIdentity(session: Session | null): {
+function tokenIdentity(token: TokenPayload | null): {
   userId?: string;
   username?: string;
 } {
-  const email = session?.user?.email?.trim().toLowerCase();
-  if (!email) return {};
+  const email = token?.email?.trim().toLowerCase();
+  const userId = email || token?.sub?.trim();
+  if (!userId) return {};
   return {
-    userId: email,
-    username: session?.user?.name?.trim() || email.split('@')[0],
+    userId,
+    username: token?.name?.trim() || (email ? email.split('@')[0] : `user_${userId.slice(-6)}`),
   };
 }
 
-export async function GET(): Promise<NextResponse> {
-  const session = await getServerSession(authOptions);
-  const { userId } = sessionIdentity(session);
+export async function GET(request: NextRequest): Promise<NextResponse> {
+  const token = await getSessionOrGuestToken(request);
+  const { userId } = tokenIdentity(token);
   const access = await MusicGenerationService.getAccess(userId);
   return NextResponse.json(access);
 }
@@ -33,8 +33,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   });
   if (securityError) return securityError;
 
-  const session = await getServerSession(authOptions);
-  const { userId, username } = sessionIdentity(session);
+  const token = await getSessionOrGuestToken(request);
+  const { userId, username } = tokenIdentity(token);
   if (!userId || !username) {
     return NextResponse.json(
       { error: 'Authentication required', code: 'AUTH_REQUIRED' },
