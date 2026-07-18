@@ -1,12 +1,12 @@
 import type { Metadata, Viewport } from 'next';
 import {
-  Bricolage_Grotesque,
+  Afacad,
+  Anybody,
+  Azeret_Mono,
+  Besley,
   Fraunces,
-  Hanken_Grotesk,
-  Instrument_Serif,
   JetBrains_Mono,
   Manrope,
-  Space_Mono,
 } from 'next/font/google';
 import { getMessages, setRequestLocale } from 'next-intl/server';
 import { routing } from '@/i18n/routing';
@@ -68,29 +68,33 @@ const jetbrains = JetBrains_Mono({
   display: 'swap',
 });
 
-const bricolage = Bricolage_Grotesque({
+const anybody = Anybody({
   subsets: ['latin', 'latin-ext'],
-  variable: '--font-bricolage',
+  weight: 'variable',
+  axes: ['wdth'],
+  variable: '--font-anybody',
   display: 'swap',
 });
 
-const hanken = Hanken_Grotesk({
+const afacad = Afacad({
   subsets: ['latin', 'latin-ext'],
-  variable: '--font-hanken',
+  weight: 'variable',
+  variable: '--font-afacad',
   display: 'swap',
 });
 
-const spaceMono = Space_Mono({
+const azeretMono = Azeret_Mono({
   subsets: ['latin', 'latin-ext'],
-  weight: ['400', '700'],
-  variable: '--font-space-mono',
+  weight: 'variable',
+  variable: '--font-azeret-mono',
   display: 'swap',
 });
 
-const instrumentSerif = Instrument_Serif({
-  subsets: ['latin'],
+const besley = Besley({
+  subsets: ['latin', 'latin-ext'],
   weight: '400',
-  variable: '--font-instrument-serif',
+  style: 'italic',
+  variable: '--font-besley',
   display: 'swap',
 });
 
@@ -119,15 +123,9 @@ export default async function LocaleLayout({
     <html lang={locale === 'pt' ? 'pt-BR' : 'en-US'} key={locale}>
       <head>
         <JsonLd locale={locale as SupportedLocale} />
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link
-          rel="preconnect"
-          href="https://fonts.gstatic.com"
-          crossOrigin="anonymous"
-        />
       </head>
       <body
-        className={`${manrope.variable} ${fraunces.variable} ${jetbrains.variable} ${bricolage.variable} ${hanken.variable} ${spaceMono.variable} ${instrumentSerif.variable} antialiased dark`}
+        className={`${manrope.variable} ${fraunces.variable} ${jetbrains.variable} ${anybody.variable} ${afacad.variable} ${azeretMono.variable} ${besley.variable} antialiased dark`}
         suppressHydrationWarning
       >
         <GoogleAnalytics />

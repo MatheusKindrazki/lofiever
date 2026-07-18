@@ -94,7 +94,7 @@ export function RisoCover({
           const r = v * maxR;
           if (r < 0.4) continue;
           ctx.globalAlpha = night ? 0.16 : 0.14;
-          ctx.fillStyle = night ? '#fff' : '#000';
+          ctx.fillStyle = night ? '#f2e7ce' : '#1c1813';
           ctx.beginPath();
           ctx.arc(x, y, Math.min(r, step * 0.72), 0, 6.283);
           ctx.fill();

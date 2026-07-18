@@ -121,12 +121,15 @@ export function NowPlaying({
             <defs>
               <path id="bc-ringpath" d="M60,60 m-44,0 a44,44 0 1,1 88,0 a44,44 0 1,1 -88,0" />
             </defs>
-            <text fontFamily="var(--font-mono)" fontSize="9.2" letterSpacing="3.1" fill="#fff" fillOpacity="0.9">
+            <text fontFamily="var(--font-mono)" fontSize="9.2" letterSpacing="3.1" fill="var(--accent-ink)" fillOpacity="0.9">
               <textPath href="#bc-ringpath">· {tBroadcast('nowPlaying.ring')} </textPath>
             </text>
           </svg>
           {isLoading ? (
-            <span className="prog-spinner" style={{ borderTopColor: '#fff', borderColor: 'rgba(255,255,255,0.4)' }} />
+            <span
+              className="prog-spinner"
+              style={{ borderTopColor: 'var(--accent-ink)', borderColor: 'rgba(242,231,206,0.42)' }}
+            />
           ) : playing ? (
             <Ic.pause />
           ) : (

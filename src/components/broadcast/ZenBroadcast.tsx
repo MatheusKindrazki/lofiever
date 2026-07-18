@@ -77,7 +77,7 @@ export function ZenBroadcast({
             {isLoading ? (
               <span
                 className="prog-spinner"
-                style={{ borderTopColor: '#fff', borderColor: 'rgba(255,255,255,0.4)' }}
+                style={{ borderTopColor: 'var(--accent-ink)', borderColor: 'rgba(242,231,206,0.42)' }}
               />
             ) : playing ? (
               <Ic.pause />

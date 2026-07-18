@@ -343,7 +343,7 @@ function Message({
       </div>
       <div className="tx-text">{message.content}</div>
       {message.meta?.title && (
-        <div className="tx-text" style={{ opacity: 0.7, fontSize: 11 }}>
+        <div className="tx-track-meta">
           ♪ {message.meta.title}
           {message.meta.artist ? ` — ${message.meta.artist}` : ''}
         </div>
