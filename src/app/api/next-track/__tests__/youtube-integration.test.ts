@@ -4,6 +4,7 @@ import { recommendNextTrack } from '@/services/playlist/ai-recommendation.servic
 import { YouTubeCacheService } from '@/services/youtube';
 import { R2Lib } from '@/lib/r2';
 import { config } from '@/lib/config';
+import { prisma } from '@/lib/prisma';
 
 // Mock NextResponse before importing the route
 jest.mock('next/server', () => {
@@ -172,5 +173,6 @@ describe('GET /api/next-track (YouTube)', () => {
     expect(mockedRecommendNextTrack).not.toHaveBeenCalled();
     expect(YouTubeCacheService.ensureCached).not.toHaveBeenCalled();
     expect(text).toBe('https://r2.example/signed/r2-lofi.mp3');
+    expect(prisma.playbackHistory.create).not.toHaveBeenCalled();
   });
 });

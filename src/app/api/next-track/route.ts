@@ -3,7 +3,6 @@ import { NextResponse } from "next/server";
 import { PlaylistManagerService } from "@/services/playlist/playlist-manager.service";
 import { recommendNextTrack } from "@/services/playlist/ai-recommendation.service";
 import { redis } from "@/lib/redis";
-import { prisma } from "@/lib/prisma";
 import { R2Lib } from "@/lib/r2";
 import type { Track } from "@prisma/client";
 import { YouTubeCacheService } from '@/services/youtube';
@@ -176,30 +175,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       selectedTrack,
     );
 
-    // 3. Registrar no histórico de playback (Prisma) — usa a faixa servida.
-    try {
-      // Obter versão da playlist (opcional, mantendo compatibilidade)
-      const versionStr = await redis.get("lofiever:playlist:version");
-      const version = versionStr ? parseInt(versionStr, 10) : 1;
-
-      await prisma.playbackHistory.create({
-        data: {
-          trackId: nextTrack.id,
-          startedAt: new Date(),
-          version: version,
-        },
-      });
-      console.log(
-        "[Next Track] Recorded playback history for:",
-        nextTrack.title,
-      );
-    } catch (historyError) {
-      console.error("[Next Track] Failed to record history:", historyError);
-    }
-
-    // NOTE: We do NOT update currentTrack here anymore!
-    // The track will be updated when Liquidsoap calls /api/track-started
-    // This prevents pre-buffering desync issues
+    // Prefetching is not playback. currentTrack, playback clock and history are
+    // advanced only by /api/track-started when Liquidsoap starts this audio.
 
     console.log(
       `[Next Track] Serving: "${nextTrack.title}" by ${nextTrack.artist} (ID: ${nextTrack.id})`,

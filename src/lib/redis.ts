@@ -54,6 +54,7 @@ export interface Track {
   artworkUrl?: string;
   genre?: string;
   addedBy?: string;
+  addedByUserId?: string;
   requestId?: string;
 }
 

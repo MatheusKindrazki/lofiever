@@ -61,46 +61,60 @@ def on_track_start(m)
   log("Liquidsoap: Processing URI: #{uri}")
   
   track_id = ref("")
+  generation_id = ref("")
   
   if uri != "" then
-    # Try to extract UUID from URI
-    # URI format: .../music/UUID-Title.mp3
-    # We split by "music/" and take the first 36 chars of the second part
-    parts = string.split(separator="music/", uri)
-    
-    log("Liquidsoap: Split parts count: #{list.length(parts)}")
-    
-    if list.length(parts) > 1 then
-      # The part after music/
-      suffix = list.nth(parts, 1)
-      log("Liquidsoap: Suffix found: #{suffix}")
-      
-      # UUID is 36 chars
-      if string.length(suffix) >= 36 then
-        id = string.sub(suffix, start=0, length=36)
-        track_id := id
-        log("Liquidsoap: Extracted Track ID: #{track_id()}")
+    # Generated originals use .../music/generated/GENERATION_UUID/streaming.mp3.
+    generated_parts = string.split(separator="music/generated/", uri)
+
+    if list.length(generated_parts) > 1 then
+      generated_suffix = list.nth(generated_parts, 1)
+      if string.length(generated_suffix) >= 36 then
+        id = string.sub(generated_suffix, start=0, length=36)
+        generation_id := id
+        log("Liquidsoap: Extracted Generation ID: #{generation_id()}")
       else
-        log("Liquidsoap: Suffix too short for UUID: #{suffix}")
+        log("Liquidsoap: Generated suffix too short for UUID: #{generated_suffix}")
       end
     else
-      log("Liquidsoap: 'music/' not found in URI: #{uri}")
+      # Catalog URI format: .../music/TRACK_UUID-Title.mp3
+      parts = string.split(separator="music/", uri)
+      log("Liquidsoap: Split parts count: #{list.length(parts)}")
+
+      if list.length(parts) > 1 then
+        suffix = list.nth(parts, 1)
+        log("Liquidsoap: Suffix found: #{suffix}")
+
+        if string.length(suffix) >= 36 then
+          id = string.sub(suffix, start=0, length=36)
+          track_id := id
+          log("Liquidsoap: Extracted Track ID: #{track_id()}")
+        else
+          log("Liquidsoap: Suffix too short for UUID: #{suffix}")
+        end
+      else
+        log("Liquidsoap: 'music/' not found in URI: #{uri}")
+      end
     end
   else
     log("Liquidsoap: No initial_uri in metadata")
   end
 
-  log("Liquidsoap: Track started - Notifying backend with ID: #{track_id()}")
-  
   # Call the backend to update currentTrack
   try
-    # Construct JSON manually to avoid interpolation issues
-    json_payload = '{"trackId": "' ^ track_id() ^ '"}'
-    log("Liquidsoap: Sending payload: #{json_payload}")
+    json_payload = ref("")
+    if generation_id() != "" then
+      log("Liquidsoap: Track started - Notifying backend with generation ID: #{generation_id()}")
+      json_payload := '{"generationId": "' ^ generation_id() ^ '"}'
+    else
+      log("Liquidsoap: Track started - Notifying backend with track ID: #{track_id()}")
+      json_payload := '{"trackId": "' ^ track_id() ^ '"}'
+    end
+    log("Liquidsoap: Sending payload: #{json_payload()}")
     
     response = http.post(
       headers=[("Content-Type", "application/json")],
-      data=json_payload,
+      data=json_payload(),
       "#{api_base}/api/track-started"
     )
     log("Liquidsoap: Backend notified. Response: #{response}")
