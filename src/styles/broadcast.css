@@ -201,6 +201,7 @@ body:has(.broadcast-app)::before {
 }
 .broadcast-app .dl-item:last-child { border-right: none; }
 .broadcast-app .dl-item.strong { color: var(--ink); font-weight: 700; }
+.broadcast-app .dl-item.wide { flex-grow: 1.6; }
 .broadcast-app .dl-blip { width: 7px; height: 7px; border-radius: 50%; background: var(--ink-faint); flex-shrink: 0; }
 .broadcast-app .dl-blip.live { background: var(--accent); animation: bc-blink 1.3s steps(1) infinite; }
 @keyframes bc-blink { 50% { opacity: 0.2; } }
@@ -365,6 +366,7 @@ body:has(.broadcast-app)::before {
   letter-spacing: -0.035em;
   margin: 14px 0 0;
   text-wrap: balance;
+  overflow-wrap: anywhere;
 }
 .broadcast-app .np-artist { font-size: clamp(16px, 1.7vw, 21px); color: var(--ink-soft); margin-top: 12px; font-weight: 500; }
 .broadcast-app .np-artist em { font-family: var(--font-serif); font-style: italic; font-weight: 400; font-size: 1.2em; color: var(--ink); }
@@ -659,9 +661,9 @@ body:has(.broadcast-app)::before {
   .broadcast-app .np-grid { grid-template-columns: 1fr; }
   .broadcast-app .cover-art { border-right: none; border-bottom: 2px solid var(--ink); }
   .broadcast-app .np-side { padding-left: clamp(18px, 5vw, 34px); }
-  .broadcast-app .play-stamp { top: auto; bottom: 0; left: auto; right: 26px; transform: translateY(50%) rotate(-7deg); }
-  .broadcast-app .play-stamp:hover { transform: translateY(50%) rotate(-2deg) scale(1.05); }
-  .broadcast-app .play-stamp:active { transform: translateY(50%) rotate(-7deg) scale(0.95); }
+  .broadcast-app .play-stamp { top: 300px; bottom: auto; left: auto; right: 26px; transform: translateY(-50%) rotate(-7deg); }
+  .broadcast-app .play-stamp:hover { transform: translateY(-50%) rotate(-2deg) scale(1.05); }
+  .broadcast-app .play-stamp:active { transform: translateY(-50%) rotate(-7deg) scale(0.95); }
 }
 
 @media (max-width: 560px) {

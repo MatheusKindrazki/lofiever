@@ -11,14 +11,15 @@ export interface BroadcastTrack {
   title: string;
   artist: string;
   duration: number;
+  bpm?: number;
   mood?: string;
   genre?: string;
+  origin?: 'catalog' | 'generated_user' | 'generated_editorial';
   artworkUrl?: string;
 }
 
 interface NowPlayingProps {
   track: BroadcastTrack;
-  issueNo: number;
   playing: boolean;
   isLoading: boolean;
   onToggle: () => void;
@@ -43,7 +44,6 @@ const fmt = (s: number) => {
    ============================================================ */
 export function NowPlaying({
   track,
-  issueNo,
   playing,
   isLoading,
   onToggle,
@@ -58,6 +58,7 @@ export function NowPlaying({
   analyser,
 }: NowPlayingProps) {
   const t = useTranslations('player');
+  const tBroadcast = useTranslations('broadcast');
   const volRef = useRef<HTMLDivElement>(null);
   const dragging = useRef(false);
 
@@ -86,8 +87,9 @@ export function NowPlaying({
 
   const dur = track.duration || 0;
   const pct = dur ? Math.min(100, (elapsed / dur) * 100) : 0;
-  const tags = [track.mood, track.genre].filter(Boolean) as string[];
-  const num = ((issueNo % 999) + 1);
+  const tags = [track.mood, track.genre, track.bpm ? `${track.bpm} BPM` : null].filter(Boolean) as string[];
+  const isConnecting = track.id === 'tuning';
+  const isOriginal = track.origin === 'generated_user' || track.origin === 'generated_editorial';
 
   return (
     <section className="cover-block">
@@ -100,8 +102,11 @@ export function NowPlaying({
             paper={paper3}
             ink={ink}
             night={night}
-            num={num}
-            label={`#${num}`}
+            label={isConnecting
+              ? tBroadcast('cover.stream')
+              : isOriginal
+                ? tBroadcast('cover.original')
+                : tBroadcast('cover.catalog')}
             artworkUrl={track.artworkUrl}
             alt={`${track.title} — ${track.artist}`}
           />
@@ -117,7 +122,7 @@ export function NowPlaying({
               <path id="bc-ringpath" d="M60,60 m-44,0 a44,44 0 1,1 88,0 a44,44 0 1,1 -88,0" />
             </defs>
             <text fontFamily="var(--font-mono)" fontSize="9.2" letterSpacing="3.1" fill="#fff" fillOpacity="0.9">
-              <textPath href="#bc-ringpath">· LIVE BROADCAST · ALL LISTENERS IN SYNC </textPath>
+              <textPath href="#bc-ringpath">· {tBroadcast('nowPlaying.ring')} </textPath>
             </text>
           </svg>
           {isLoading ? (
@@ -133,11 +138,17 @@ export function NowPlaying({
           <div className="np-marker">
             <span>{t('nowPlaying')}</span>
             <span className="np-marker-rule" />
-            <span>Side A · No. {String(num).padStart(3, '0')}</span>
+            <span>
+              {isConnecting
+                ? tBroadcast('nowPlaying.connectingLabel')
+                : isOriginal
+                ? tBroadcast('nowPlaying.original')
+                : tBroadcast('nowPlaying.catalog')}
+            </span>
           </div>
           <h2 className="np-title">{track.title}</h2>
           <p className="np-artist">
-            by <em>{track.artist}</em>
+            {tBroadcast('nowPlaying.by')} <em>{track.artist}</em>
           </p>
           {tags.length > 0 && (
             <div className="np-tags">
@@ -152,7 +163,7 @@ export function NowPlaying({
           <div className="np-transport">
             <div className="timecodes">
               <span>{fmt(elapsed)}</span>
-              <span className="tc-mid">a-side · {fmt(dur)}</span>
+              <span className="tc-mid">{tBroadcast('nowPlaying.duration')} · {fmt(dur)}</span>
               <span className="rem">−{fmt(Math.max(0, dur - elapsed))}</span>
             </div>
             <div className="progress-bar">

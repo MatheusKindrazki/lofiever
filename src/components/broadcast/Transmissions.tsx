@@ -22,6 +22,7 @@ interface OriginalMusicAccess {
    ============================================================ */
 export function Transmissions({ accent, showMascot = true }: { accent: string; showMascot?: boolean }) {
   const t = useTranslations('chat');
+  const tBroadcast = useTranslations('broadcast');
   const locale = useLocale();
   const normalizedLocale: 'pt' | 'en' = locale === 'en' ? 'en' : 'pt';
 
@@ -155,8 +156,8 @@ export function Transmissions({ accent, showMascot = true }: { accent: string; s
   return (
     <section className="panel tx-body">
       <div className="panel-head">
-        <span className="ttl">Transmissions</span>
-        <span className="meta">letters to the station</span>
+        <span className="ttl">{tBroadcast('transmissions.title')}</span>
+        <span className="meta">{tBroadcast('transmissions.meta')}</span>
       </div>
 
       <div className="tx-feed" ref={feedRef}>
@@ -188,7 +189,7 @@ export function Transmissions({ accent, showMascot = true }: { accent: string; s
               <span className="who">
                 {showMascot && <LofineMark size={18} color={accent} />}
                 {DJ_NAME}
-                <span className="badge">AI Host</span>
+                <span className="badge">{tBroadcast('transmissions.aiHost')}</span>
               </span>
             </div>
             <div className="tx-typing">
@@ -256,7 +257,8 @@ export function Transmissions({ accent, showMascot = true }: { accent: string; s
       </div>
 
       <div className="tx-hint">
-        Type <b>/request</b> a vibe and Lofine threads it into the program.
+        {tBroadcast('transmissions.hintBefore')} <b>/original</b>{' '}
+        {tBroadcast('transmissions.hintAfter')}
       </div>
 
       <form className="tx-compose" onSubmit={submit}>
@@ -270,7 +272,7 @@ export function Transmissions({ accent, showMascot = true }: { accent: string; s
           aria-label={placeholder}
         />
         <button className="tx-send" type="submit" disabled={!val.trim() || !canSend}>
-          SEND
+          {t('input.send')}
         </button>
       </form>
     </section>
@@ -300,6 +302,7 @@ function Message({
   retryLabel: string;
   removeLabel: string;
 }) {
+  const tBroadcast = useTranslations('broadcast');
   const isDJ = message.userId === 'dj' || message.userId === 'ai' || message.type === 'ai' || message.username === DJ_NAME;
   const isSystem = message.type === 'system' && !isDJ;
 
@@ -325,11 +328,11 @@ function Message({
             <>
               {showMascot && <LofineMark size={18} color={accent} />}
               {djName}
-              <span className="badge">AI Host</span>
+              <span className="badge">{tBroadcast('transmissions.aiHost')}</span>
             </>
           ) : (
             <>
-              {isMine ? 'you' : message.username}
+              {isMine ? tBroadcast('transmissions.you') : message.username}
               {message.isPrivate && ' 🔒'}
             </>
           )}

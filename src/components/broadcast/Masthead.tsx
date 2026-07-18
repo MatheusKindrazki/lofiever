@@ -15,7 +15,6 @@ interface MastheadProps {
   onToggleNight: () => void;
   onZen: () => void;
   dateStr: string;
-  issue: number;
 }
 
 /* ============================================================
@@ -29,10 +28,10 @@ export function Masthead({
   onToggleNight,
   onZen,
   dateStr,
-  issue,
 }: MastheadProps) {
   const t = useTranslations('player');
   const tCommon = useTranslations('common');
+  const tBroadcast = useTranslations('broadcast');
   const locale = useLocale();
   const [dialOpen, setDialOpen] = useState(false);
   const isEnglish = locale === 'en';
@@ -50,7 +49,7 @@ export function Masthead({
           <div className="pop-wrap">
             <button
               className="chip icon-only"
-              aria-label={isEnglish ? 'Choose colour edition' : 'Escolher edição de cores'}
+              aria-label={tBroadcast('palette.aria')}
               aria-expanded={dialOpen}
               onClick={() => setDialOpen((o) => !o)}
             >
@@ -59,6 +58,8 @@ export function Masthead({
             {dialOpen && (
               <Dial
                 current={edition}
+                title={tBroadcast('palette.label')}
+                labelFor={(id) => tBroadcast(`palette.options.${id}`)}
                 onPick={(e) => {
                   onEdition(e);
                   setDialOpen(false);
@@ -93,10 +94,10 @@ export function Masthead({
           <span className={`dl-blip ${playing ? 'live' : ''}`} />
           {playing ? t('live') : t('paused')}
         </span>
-        <span className="dl-item">88.3 FM</span>
-        <span className="dl-item">Vol. I · No. {String(issue).padStart(3, '0')}</span>
-        <span className="dl-item">{edition.name}</span>
-        <span className="dl-item strong">{isEnglish ? 'ONE SHARED FREQUENCY' : 'UMA FREQUÊNCIA COMPARTILHADA'}</span>
+        <span className="dl-item">{tBroadcast('status.stream')}</span>
+        <span className="dl-item">{tBroadcast('status.instrumental')}</span>
+        <span className="dl-item">{tBroadcast('status.catalog')}</span>
+        <span className="dl-item strong wide">{tBroadcast('status.shared')}</span>
         <span className="dl-item">{dateStr}</span>
       </div>
     </header>
@@ -126,10 +127,14 @@ function LanguageChip() {
 
 function Dial({
   current,
+  title,
+  labelFor,
   onPick,
   onClose,
 }: {
   current: Edition;
+  title: string;
+  labelFor: (id: string) => string;
   onPick: (e: Edition) => void;
   onClose: () => void;
 }) {
@@ -144,7 +149,7 @@ function Dial({
 
   return (
     <div className="dial-pop" ref={ref}>
-      <div className="ph">Tune the dial</div>
+      <div className="ph">{title}</div>
       <div className="dial-grid">
         {EDITIONS.map((e) => (
           <button
@@ -156,7 +161,7 @@ function Dial({
               className="dial-sw"
               style={{ background: `linear-gradient(135deg, ${e.accent} 50%, ${e.accent2} 50%)` }}
             />
-            <span className="nm">{e.name}</span>
+            <span className="nm">{labelFor(e.id)}</span>
           </button>
         ))}
       </div>

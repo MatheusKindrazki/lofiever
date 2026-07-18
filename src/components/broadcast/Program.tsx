@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useState } from 'react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { usePlaylistQueue } from '@/hooks/usePlaylistQueue';
 import { usePlaylistHistory } from '@/hooks/usePlaylistHistory';
 import { addTrackToQueue, ApiError } from '@/lib/api';
@@ -17,11 +17,13 @@ interface ProgramProps {
 }
 
 /* ============================================================
-   THE PROGRAM — live setlist + Back Issues (archive)
+   PROGRAM — live setlist + localized history
    ============================================================ */
 export function Program({ current }: ProgramProps) {
   const t = useTranslations('player');
   const localeLabel = useTranslations('search');
+  const tBroadcast = useTranslations('broadcast');
+  const locale = useLocale();
   const [tab, setTab] = useState<'program' | 'archive' | 'catalog'>('program');
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
 
@@ -35,10 +37,10 @@ export function Program({ current }: ProgramProps) {
     const today = new Date();
     const yesterday = new Date(today);
     yesterday.setDate(today.getDate() - 1);
-    if (selectedDate.toDateString() === today.toDateString()) return t('tabs.history').toUpperCase() + ' · TODAY';
-    if (selectedDate.toDateString() === yesterday.toDateString()) return 'YESTERDAY';
+    if (selectedDate.toDateString() === today.toDateString()) return tBroadcast('program.today');
+    if (selectedDate.toDateString() === yesterday.toDateString()) return tBroadcast('program.yesterday');
     return selectedDate
-      .toLocaleDateString('en-US', { day: '2-digit', month: 'short' })
+      .toLocaleDateString(locale === 'en' ? 'en-US' : 'pt-BR', { day: '2-digit', month: 'short' })
       .toUpperCase();
   })();
 
@@ -57,13 +59,13 @@ export function Program({ current }: ProgramProps) {
           className={`prog-tab ${tab === 'program' ? 'active' : ''}`}
           onClick={() => setTab('program')}
         >
-          The Program
+          {tBroadcast('program.upNext')}
         </button>
         <button
           className={`prog-tab ${tab === 'archive' ? 'active' : ''}`}
           onClick={() => setTab('archive')}
         >
-          Back Issues
+          {tBroadcast('program.history')}
         </button>
         <button
           className={`prog-tab ${tab === 'catalog' ? 'active' : ''}`}
@@ -80,7 +82,7 @@ export function Program({ current }: ProgramProps) {
           <div className="prog-list">
             {current && (
               <div className="prog-row now">
-                <span className="prog-idx">NOW</span>
+                <span className="prog-idx">{tBroadcast('program.now')}</span>
                 <div className="prog-meta">
                   <div className="t">{current.title}</div>
                   <div className="a">{current.artist}</div>
@@ -103,16 +105,16 @@ export function Program({ current }: ProgramProps) {
               <div className="prog-empty">{t('emptyQueue')}</div>
             ) : null}
           </div>
-          <div className="no-skip">↻ live broadcast — no skipping. everyone hears the same second.</div>
+          <div className="no-skip">↻ {tBroadcast('program.shared')}</div>
         </>
       ) : (
         <>
           <div className="date-nav">
-            <button onClick={() => changeDate(-1)} aria-label="Older">
+            <button onClick={() => changeDate(-1)} aria-label={tBroadcast('program.older')}>
               <Ic.left />
             </button>
             <span className="d">{dayLabel}</span>
-            <button onClick={() => changeDate(1)} disabled={isToday} aria-label="Newer">
+            <button onClick={() => changeDate(1)} disabled={isToday} aria-label={tBroadcast('program.newer')}>
               <Ic.right />
             </button>
           </div>

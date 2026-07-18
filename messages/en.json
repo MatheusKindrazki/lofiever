@@ -47,6 +47,61 @@
             }
         }
     },
+    "broadcast": {
+        "status": {
+            "stream": "24/7 stream",
+            "instrumental": "Instrumental lo-fi",
+            "catalog": "Catalog + originals",
+            "shared": "Everyone listening together"
+        },
+        "palette": {
+            "aria": "Choose visual palette",
+            "label": "Visual palette",
+            "options": {
+                "sunset": "Orange",
+                "rain": "Blue",
+                "forest": "Green",
+                "dusk": "Magenta"
+            }
+        },
+        "cover": {
+            "catalog": "Catalog",
+            "original": "Original",
+            "stream": "Stream"
+        },
+        "nowPlaying": {
+            "catalog": "Lofiever catalog",
+            "original": "Original · Lofine DJ",
+            "connecting": "Preparing audio…",
+            "connectingLabel": "Syncing broadcast",
+            "by": "by",
+            "duration": "duration",
+            "ring": "LIVE BROADCAST · EVERYONE LISTENS TOGETHER"
+        },
+        "program": {
+            "upNext": "Up next",
+            "history": "History",
+            "now": "Now",
+            "today": "Today",
+            "yesterday": "Yesterday",
+            "older": "Previous day",
+            "newer": "Next day",
+            "shared": "shared program — everyone hears the same track at the same moment."
+        },
+        "transmissions": {
+            "title": "Live chat",
+            "meta": "talk with Lofine and listeners",
+            "aiHost": "AI DJ",
+            "you": "you",
+            "hintBefore": "Request a track or describe the vibe; Lofine fits it into the program. Use",
+            "hintAfter": "to create a song."
+        },
+        "footer": {
+            "stamp": "Lofiever · 24/7 stream",
+            "description": "Continuous curation by Lofine DJ · catalog + original music",
+            "source": "source code"
+        }
+    },
     "chat": {
         "djName": "Lofine DJ",
         "djStatus": "Online • Ready to help",

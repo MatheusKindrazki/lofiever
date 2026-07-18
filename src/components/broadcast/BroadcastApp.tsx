@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useLocale } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { usePlaybackSync } from '@/lib/socket/client';
 import { useUserPreferences } from '@/hooks/useUserPreferences';
 import { useEdition } from './editions';
@@ -12,14 +12,6 @@ import { Program } from './Program';
 import { Transmissions } from './Transmissions';
 import { ZenBroadcast } from './ZenBroadcast';
 
-/** Placeholder shown before the first track sync arrives. */
-const PLACEHOLDER: BroadcastTrack = {
-  id: 'tuning',
-  title: 'Tuning in…',
-  artist: 'Lofiever',
-  duration: 0,
-};
-
 /* ============================================================
    BROADCAST APP — orchestrator. Owns the shared audio element +
    AudioContext analyser (same model as the previous player),
@@ -27,6 +19,7 @@ const PLACEHOLDER: BroadcastTrack = {
    ============================================================ */
 export function BroadcastApp() {
   const locale = useLocale();
+  const tBroadcast = useTranslations('broadcast');
   const { edition, setEdition, night, toggleNight } = useEdition();
 
   // ---- audio (owned here, shared with the seismograph) ----
@@ -50,21 +43,18 @@ export function BroadcastApp() {
         title: currentTrack.title,
         artist: currentTrack.artist,
         duration: currentTrack.duration,
+        bpm: currentTrack.bpm,
         mood: currentTrack.mood,
         genre: currentTrack.genre,
+        origin: currentTrack.origin,
         artworkUrl: currentTrack.artworkUrl,
       }
-    : PLACEHOLDER;
-
-  // monotonically-increasing issue number per distinct track
-  const [issueNo, setIssueNo] = useState(41);
-  const lastTrackId = useRef<string | null>(null);
-  useEffect(() => {
-    if (currentTrackId && currentTrackId !== lastTrackId.current) {
-      lastTrackId.current = currentTrackId;
-      setIssueNo((n) => n + 1);
-    }
-  }, [currentTrackId]);
+    : {
+        id: 'tuning',
+        title: tBroadcast('nowPlaying.connecting'),
+        artist: 'Lofiever',
+        duration: 0,
+      };
 
   // ---- elapsed: seed from synced position, tick locally while playing ----
   const [elapsed, setElapsed] = useState(0);
@@ -242,13 +232,11 @@ export function BroadcastApp() {
           onToggleNight={toggleNight}
           onZen={enterZen}
           dateStr={dateStr}
-          issue={issueNo}
         />
 
         <div className="broadcast">
           <NowPlaying
             track={track}
-            issueNo={issueNo}
             playing={onAir}
             isLoading={isLoading}
             onToggle={togglePlayPause}
@@ -269,16 +257,16 @@ export function BroadcastApp() {
         <footer className="colophon">
           <div className="colo-mark">
             <span className="barcode" aria-hidden="true" />
-            <span className="colo-no">ISSUE {dateStr.replace(/\s/g, '')} · 88.3FM</span>
+            <span className="colo-no">{tBroadcast('footer.stamp')}</span>
           </div>
           <div className="c-left">
-            Printed in <b>{edition.name}</b> · every reader hears the same second ·{' '}
+            {tBroadcast('footer.description')} ·{' '}
             <a
               href="https://github.com/MatheusKindrazki/lofiever"
               target="_blank"
               rel="noopener noreferrer"
             >
-              source
+              {tBroadcast('footer.source')}
             </a>
           </div>
         </footer>
@@ -287,7 +275,6 @@ export function BroadcastApp() {
       {zen && (
         <ZenBroadcast
           track={track}
-          issueNo={issueNo}
           playing={onAir}
           isLoading={isLoading}
           onToggle={togglePlayPause}

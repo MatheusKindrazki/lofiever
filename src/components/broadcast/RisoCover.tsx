@@ -7,7 +7,7 @@ import { useRef, useEffect, useState } from 'react';
 
    Real risograph technique: graded halftone sky, a disc with
    colour misregistration (the "third tone"), a sweeping ink
-   horizon, a ghost serial number, and paper grain.
+   horizon, a ghost monogram, and paper grain.
 
    When a real `artworkUrl` exists we render the photo and lay
    a halftone + grain treatment over it so it still reads as a
@@ -42,9 +42,7 @@ export interface RisoCoverProps {
   paper: string;
   ink: string;
   night: boolean;
-  /** ghost serial number drawn in the corner */
-  num?: number | null;
-  /** SIDE A label */
+  /** factual catalog/original label */
   label?: string | null;
   /** real artwork; when present it is rendered with a print treatment */
   artworkUrl?: string | null;
@@ -58,7 +56,6 @@ export function RisoCover({
   paper,
   ink,
   night,
-  num = null,
   label = null,
   artworkUrl = null,
   alt = '',
@@ -185,15 +182,13 @@ export function RisoCover({
     }
     ctx.restore();
 
-    // ghost serial number, hand-set in the corner
-    if (num != null) {
-      ctx.globalCompositeOperation = blend;
-      ctx.globalAlpha = night ? 0.22 : 0.16;
-      ctx.fillStyle = accent;
-      ctx.font = `900 ${Math.round(W * 0.5)}px Archivo, sans-serif`;
-      ctx.textBaseline = 'alphabetic';
-      ctx.fillText(String(num).padStart(2, '0'), W * 0.04, H * 0.98);
-    }
+    // oversized brand monogram — graphic texture, not simulated metadata
+    ctx.globalCompositeOperation = blend;
+    ctx.globalAlpha = night ? 0.22 : 0.16;
+    ctx.fillStyle = accent;
+    ctx.font = `900 ${Math.round(W * 0.42)}px Archivo, sans-serif`;
+    ctx.textBaseline = 'alphabetic';
+    ctx.fillText('LF', W * 0.04, H * 0.98);
 
     // paper grain
     ctx.globalCompositeOperation = 'source-over';
@@ -205,7 +200,7 @@ export function RisoCover({
       ctx.fillStyle = grainCol + a + ')';
       ctx.fillRect(rnd() * W, rnd() * H, 1, 1);
     }
-  }, [seed, accent, accent2, paper, ink, night, num, usePhoto]);
+  }, [seed, accent, accent2, paper, ink, night, usePhoto]);
 
   return (
     <>
@@ -221,7 +216,7 @@ export function RisoCover({
       <canvas ref={ref} className="art-canvas" aria-hidden="true" />
       {label && (
         <div className="art-label mono">
-          <span>SIDE A</span>
+          <span>LOFIEVER</span>
           <span>{label}</span>
         </div>
       )}

@@ -9,7 +9,6 @@ import { fmt } from './NowPlaying';
 
 interface ZenBroadcastProps {
   track: BroadcastTrack;
-  issueNo: number;
   playing: boolean;
   isLoading: boolean;
   onToggle: () => void;
@@ -28,7 +27,6 @@ interface ZenBroadcastProps {
    ============================================================ */
 export function ZenBroadcast({
   track,
-  issueNo,
   playing,
   isLoading,
   onToggle,
@@ -42,7 +40,8 @@ export function ZenBroadcast({
   analyser,
 }: ZenBroadcastProps) {
   const t = useTranslations('player');
-  const num = (issueNo % 999) + 1;
+  const tBroadcast = useTranslations('broadcast');
+  const isOriginal = track.origin === 'generated_user' || track.origin === 'generated_editorial';
 
   return (
     <div className="zen halftone">
@@ -59,7 +58,7 @@ export function ZenBroadcast({
             paper={paper3}
             ink={ink}
             night={night}
-            num={num}
+            label={isOriginal ? tBroadcast('cover.original') : tBroadcast('cover.catalog')}
             artworkUrl={track.artworkUrl}
             alt={`${track.title} — ${track.artist}`}
           />
@@ -90,7 +89,7 @@ export function ZenBroadcast({
             <span>
               <b>{fmt(elapsed)}</b> / {fmt(track.duration)}
             </span>
-            <span>88.3 FM</span>
+            <span>{tBroadcast('status.stream')}</span>
             <span>
               <b>{playing ? t('live') : t('paused')}</b>
             </span>

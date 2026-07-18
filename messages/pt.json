@@ -1,7 +1,7 @@
 {
     "common": {
         "appName": "Lofiever",
-        "appTagline": "24/7 Lofi streaming com DJ virtual",
+        "appTagline": "Lo-fi 24/7 com DJ virtual",
         "appDescription": "Radio lofi online 24 horas. Musica perfeita para estudar, trabalhar e relaxar. Peca musicas para o DJ virtual!",
         "footer": {
             "createdBy": "Criado por",
@@ -45,6 +45,61 @@
                 "spaceKey": "Espaço",
                 "pressEnterOrEsc": "Pressione <enter>Enter</enter> para enviar ou <esc>Esc</esc> para cancelar"
             }
+        }
+    },
+    "broadcast": {
+        "status": {
+            "stream": "Stream 24/7",
+            "instrumental": "Lo-fi instrumental",
+            "catalog": "Catálogo + autorais",
+            "shared": "Todos ouvindo juntos"
+        },
+        "palette": {
+            "aria": "Escolher paleta visual",
+            "label": "Paleta visual",
+            "options": {
+                "sunset": "Laranja",
+                "rain": "Azul",
+                "forest": "Verde",
+                "dusk": "Magenta"
+            }
+        },
+        "cover": {
+            "catalog": "Catálogo",
+            "original": "Autoral",
+            "stream": "Stream"
+        },
+        "nowPlaying": {
+            "catalog": "Catálogo Lofiever",
+            "original": "Autoral · Lofine DJ",
+            "connecting": "Preparando o áudio…",
+            "connectingLabel": "Sincronizando transmissão",
+            "by": "por",
+            "duration": "duração",
+            "ring": "TRANSMISSÃO AO VIVO · TODOS OUVEM JUNTOS"
+        },
+        "program": {
+            "upNext": "A seguir",
+            "history": "Histórico",
+            "now": "Agora",
+            "today": "Hoje",
+            "yesterday": "Ontem",
+            "older": "Dia anterior",
+            "newer": "Dia seguinte",
+            "shared": "programação compartilhada — todos ouvem a mesma faixa, no mesmo momento."
+        },
+        "transmissions": {
+            "title": "Chat ao vivo",
+            "meta": "fale com a Lofine e com ouvintes",
+            "aiHost": "DJ IA",
+            "you": "você",
+            "hintBefore": "Peça uma faixa ou descreva a vibe; a Lofine encaixa na programação. Use",
+            "hintAfter": "para criar uma música."
+        },
+        "footer": {
+            "stamp": "Lofiever · Stream 24/7",
+            "description": "Curadoria contínua com Lofine DJ · catálogo + músicas autorais",
+            "source": "código-fonte"
         }
     },
     "chat": {

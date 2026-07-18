@@ -13,8 +13,6 @@ import { useCallback, useEffect, useState } from 'react';
    ============================================================ */
 export interface Edition {
   id: string;
-  /** display name, e.g. "SUNSET" */
-  name: string;
   accent: string;
   accent2: string;
   /** which legacy mood profile to mirror for the global moodchange bridge */
@@ -22,10 +20,10 @@ export interface Edition {
 }
 
 export const EDITIONS: Edition[] = [
-  { id: 'sunset', name: 'SUNSET', accent: '#E8430F', accent2: '#F4B41A', mood: 'relax' },
-  { id: 'rain', name: 'RAIN', accent: '#2B5BD7', accent2: '#56B6C2', mood: 'focus' },
-  { id: 'forest', name: 'FOREST', accent: '#2F8A4E', accent2: '#B7C24A', mood: 'relax' },
-  { id: 'dusk', name: 'DUSK', accent: '#C0497E', accent2: '#7A5BD0', mood: 'sleep' },
+  { id: 'sunset', accent: '#E8430F', accent2: '#F4B41A', mood: 'relax' },
+  { id: 'rain', accent: '#2B5BD7', accent2: '#56B6C2', mood: 'focus' },
+  { id: 'forest', accent: '#2F8A4E', accent2: '#B7C24A', mood: 'relax' },
+  { id: 'dusk', accent: '#C0497E', accent2: '#7A5BD0', mood: 'sleep' },
 ];
 
 export function editionById(id: string | null | undefined): Edition {
