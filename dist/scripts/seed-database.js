@@ -33,12 +33,37 @@ var import_client_s3 = require("@aws-sdk/client-s3");
 var import_s3_request_presigner = require("@aws-sdk/s3-request-presigner");
 
 // src/lib/config.ts
+function pickFirstValidUrl(input, fallback) {
+  const values = [input || "", fallback].flatMap((value) => value.split(/[,\s]+/)).map((value) => value.trim()).filter(Boolean);
+  for (const value of values) {
+    const candidate = value.startsWith("http://") || value.startsWith("https://") ? value : `https://${value}`;
+    try {
+      return new URL(candidate).toString().replace(/\/$/, "");
+    } catch {
+    }
+  }
+  return fallback;
+}
+var PUBLIC_APP_URL = pickFirstValidUrl(process.env.NEXT_PUBLIC_APP_URL, "http://localhost:3000");
+var INTERNAL_APP_URL = pickFirstValidUrl(process.env.APP_INTERNAL_URL, PUBLIC_APP_URL);
+function positiveInteger(value, fallback) {
+  const parsed = Number.parseInt(value || "", 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+function positiveNumber(value, fallback) {
+  const parsed = Number.parseFloat(value || "");
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
 var config = {
   app: {
     name: "Lofiever",
     description: "24/7 Lofi Streaming with AI Curation",
-    url: process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
+    url: PUBLIC_APP_URL,
+    internalUrl: INTERNAL_APP_URL,
     env: process.env.NODE_ENV || "development"
+  },
+  admin: {
+    allowedEmails: (process.env.ADMIN_EMAILS || "").split(",").map((e) => e.trim()).filter(Boolean)
   },
   redis: {
     url: process.env.REDIS_URL || "redis://localhost:6379",
@@ -80,6 +105,38 @@ var config = {
     bucket: process.env.R2_BUCKET_NAME || "",
     publicUrl: process.env.R2_PUBLIC_URL || ""
     // Ex: https://pub-<bucket_id>.r2.dev
+  },
+  youtube: {
+    cookiesPath: process.env.YOUTUBE_COOKIES_PATH || "",
+    cacheDir: process.env.YOUTUBE_CACHE_DIR || "/data/youtube-cache",
+    cacheTtlDays: parseInt(process.env.YOUTUBE_CACHE_TTL_DAYS || "7", 10),
+    audioFormat: process.env.YOUTUBE_AUDIO_FORMAT || "opus",
+    audioQuality: process.env.YOUTUBE_AUDIO_QUALITY || "0",
+    enabled: process.env.YOUTUBE_ENABLED === "true"
+  },
+  chat: {
+    aiReplyMinListeners: (() => {
+      const parsed = parseInt(process.env.AI_REPLY_MIN_LISTENERS || "1", 10);
+      return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
+    })()
+  },
+  musicGeneration: {
+    enabled: process.env.AI_MUSIC_ENABLED === "true",
+    provider: process.env.AI_MUSIC_PROVIDER || "google-lyria",
+    userDailyLimit: positiveInteger(process.env.AI_MUSIC_USER_DAILY_LIMIT, 1),
+    globalDailyLimit: positiveInteger(process.env.AI_MUSIC_GLOBAL_DAILY_LIMIT, 20),
+    editorialDailyTarget: positiveInteger(process.env.AI_MUSIC_EDITORIAL_DAILY_TARGET, 2),
+    editorialCatalogTarget: positiveInteger(process.env.AI_MUSIC_EDITORIAL_CATALOG_TARGET, 300),
+    editorialWeeklyTarget: positiveInteger(process.env.AI_MUSIC_EDITORIAL_WEEKLY_TARGET, 3),
+    monthlyBudgetUsd: positiveNumber(process.env.AI_MUSIC_MONTHLY_BUDGET_USD, 100),
+    maxAttempts: positiveInteger(process.env.AI_MUSIC_MAX_ATTEMPTS, 2),
+    targetDurationSeconds: positiveInteger(process.env.AI_MUSIC_TARGET_DURATION_SECONDS, 180),
+    requireVocalCheck: process.env.AI_MUSIC_REQUIRE_VOCAL_CHECK !== "false",
+    ipHashSecret: process.env.AI_MUSIC_IP_HASH_SECRET || process.env.AUTH_SECRET || "",
+    google: {
+      projectId: process.env.GOOGLE_CLOUD_PROJECT || "",
+      model: process.env.GOOGLE_LYRIA_MODEL || "lyria-3-pro-preview"
+    }
   }
 };
 
