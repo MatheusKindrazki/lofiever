@@ -25,11 +25,12 @@ From `apps/tvos`:
 npm ci
 npm run release:archive
 npm run release:export
+npm run release:upload
 ```
 
 The archive script rejects localhost, runs every verification gate, embeds `https://app.lofiever.dev`, synchronizes the layered app icon, and creates a timestamped archive under `build/`.
 
-If automatic distribution signing is available, `release:export` creates the App Store package under `build/app-store-export/`. Otherwise open the archive in Xcode Organizer, select Distribute App, choose App Store Connect, and allow Xcode to manage signing.
+If automatic distribution signing is available, `release:export` creates the App Store package under `build/app-store-export/`, and `release:upload` sends the latest archive directly to App Store Connect. Otherwise open the archive in Xcode Organizer, select Distribute App, choose App Store Connect, and allow Xcode to manage signing.
 
 ## Upload and review
 

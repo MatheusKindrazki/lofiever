@@ -82,12 +82,32 @@ async function exportArchive() {
   console.log(`App Store export ready: ${exportPath}`);
 }
 
+async function uploadArchive() {
+  const archivePath = (await readFile(latestArchiveFile, 'utf8')).trim();
+  const uploadPath = path.join(buildRoot, 'app-store-upload');
+
+  run('xcodebuild', [
+    '-exportArchive',
+    '-archivePath',
+    archivePath,
+    '-exportPath',
+    uploadPath,
+    '-exportOptionsPlist',
+    'release/ExportOptions-Upload.plist',
+    '-allowProvisioningUpdates',
+  ]);
+
+  console.log('App Store Connect upload completed.');
+}
+
 const action = process.argv[2];
 
 if (action === 'archive') {
   await archive();
 } else if (action === 'export') {
   await exportArchive();
+} else if (action === 'upload') {
+  await uploadArchive();
 } else {
-  throw new Error('Usage: node scripts/release-tvos.mjs <archive|export>');
+  throw new Error('Usage: node scripts/release-tvos.mjs <archive|export|upload>');
 }

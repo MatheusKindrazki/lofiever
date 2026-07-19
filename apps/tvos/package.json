@@ -21,7 +21,8 @@
     "verify": "npm run lint && npm run typecheck && npm test && npm run doctor && npm run release:bundle",
     "release:bundle": "EXPO_TV=1 EXPO_PUBLIC_LOFIEVER_API_URL=https://app.lofiever.dev expo export --platform ios --output-dir .expo/release-export",
     "release:archive": "node scripts/release-tvos.mjs archive",
-    "release:export": "node scripts/release-tvos.mjs export"
+    "release:export": "node scripts/release-tvos.mjs export",
+    "release:upload": "node scripts/release-tvos.mjs upload"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.2",
