@@ -1,0 +1,8 @@
+O Lofiever TV não exige cadastro, não usa publicidade, não vende dados pessoais e não rastreia a atividade do usuário entre aplicativos ou sites.
+
+Para entregar a transmissão, o aplicativo se conecta à infraestrutura do Lofiever e aos provedores de conteúdo. Endereço IP, tipo de dispositivo, versão do sistema, horários e registros técnicos da solicitação podem ser processados temporariamente para entrega do áudio, segurança, prevenção de abuso e diagnóstico de falhas.
+
+Esses dados técnicos podem ser processados por provedores de hospedagem, rede e distribuição de conteúdo somente para operar e proteger o serviço. Eles não são usados para publicidade direcionada nem vendidos a terceiros.
+
+Política completa: https://app.lofiever.dev/pt/privacy
+Suporte: https://app.lofiever.dev/pt/support

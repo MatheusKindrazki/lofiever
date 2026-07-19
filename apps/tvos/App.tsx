@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Image,
   LogBox,
+  Modal,
   Platform,
   Pressable,
   SafeAreaView,
@@ -41,7 +42,7 @@ type StreamData = {
   nextUp?: QueueTrack[];
 };
 
-const DEFAULT_API_BASE_URL = 'http://localhost:3000';
+const DEFAULT_API_BASE_URL = 'https://app.lofiever.dev';
 const API_BASE_URL = (process.env.EXPO_PUBLIC_LOFIEVER_API_URL ?? DEFAULT_API_BASE_URL).replace(/\/$/, '');
 const STREAM_METADATA_URL = `${API_BASE_URL}/api/stream`;
 const STREAM_METADATA_REFRESH_MS = 5_000;
@@ -123,6 +124,8 @@ export default function App() {
   const [playbackIntent, setPlaybackIntent] = useState(false);
   const [visualizerBars, setVisualizerBars] = useState<number[]>(() => buildVisualizerBars(false));
   const [playerFocused, setPlayerFocused] = useState(false);
+  const [privacyOpen, setPrivacyOpen] = useState(false);
+  const [privacyButtonFocused, setPrivacyButtonFocused] = useState(false);
   const wasPlayingRef = useRef(false);
   const playbackIntentRef = useRef(false);
   const playbackClockAvailableRef = useRef(false);
@@ -641,12 +644,60 @@ export default function App() {
 
           <View style={styles.colophon}>
             <Text style={styles.colophonStrong}>LOFIEVER — RÁDIO LO-FI 24/7</Text>
-            <Text style={styles.colophonText}>APPLE TV · SEM ANÚNCIOS · CURADORIA CONTÍNUA</Text>
+            <Pressable
+              accessibilityHint="Abre a política de privacidade e os canais de suporte"
+              accessibilityLabel="Privacidade e suporte"
+              accessibilityRole="button"
+              onBlur={() => setPrivacyButtonFocused(false)}
+              onFocus={() => setPrivacyButtonFocused(true)}
+              onPress={() => setPrivacyOpen(true)}
+              style={[
+                styles.colophonAction,
+                privacyButtonFocused ? styles.colophonActionFocused : null,
+              ]}
+            >
+              <Text style={styles.colophonActionText}>PRIVACIDADE &amp; SUPORTE</Text>
+            </Pressable>
+            <Text style={styles.colophonText}>APPLE TV · SEM ANÚNCIOS</Text>
             <Text style={styles.colophonText}>
               {lastUpdatedAt ? `SINAL ATUALIZADO ÀS ${lastUpdatedAt}` : 'AGUARDANDO SINAL DA ESTAÇÃO'}
             </Text>
           </View>
         </View>
+
+        <Modal
+          animationType="fade"
+          onRequestClose={() => setPrivacyOpen(false)}
+          transparent
+          visible={privacyOpen}
+        >
+          <View style={styles.privacyBackdrop}>
+            <View style={styles.privacyCard}>
+              <Text style={styles.privacyEyebrow}>INFORMAÇÕES DO APLICATIVO</Text>
+              <Text style={styles.privacyTitle}>Privacidade &amp; suporte</Text>
+              <Text style={styles.privacyBody}>
+                O Lofiever TV não exige conta, não exibe anúncios e não rastreia você entre apps.
+                A conexão transmite apenas os dados técnicos necessários para entregar o áudio,
+                manter a segurança e diagnosticar falhas.
+              </Text>
+              <View style={styles.privacyRule} />
+              <Text style={styles.privacyLink}>app.lofiever.dev/pt/privacy</Text>
+              <Text style={styles.privacyLink}>app.lofiever.dev/pt/support</Text>
+              <Pressable
+                accessibilityLabel="Fechar informações de privacidade e suporte"
+                accessibilityRole="button"
+                hasTVPreferredFocus={privacyOpen}
+                onPress={() => setPrivacyOpen(false)}
+                style={({ focused }) => [
+                  styles.privacyClose,
+                  focused ? styles.privacyCloseFocused : null,
+                ]}
+              >
+                <Text style={styles.privacyCloseText}>FECHAR</Text>
+              </Pressable>
+            </View>
+          </View>
+        </Modal>
       </View>
     </SafeAreaView>
   );
@@ -1187,5 +1238,94 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '700',
     letterSpacing: 1,
+  },
+  colophonAction: {
+    borderColor: 'transparent',
+    borderWidth: 2,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  colophonActionFocused: {
+    backgroundColor: ACCENT,
+    borderColor: INK,
+  },
+  colophonActionText: {
+    color: INK,
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 1,
+  },
+  privacyBackdrop: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(28, 24, 19, 0.86)',
+    flex: 1,
+    justifyContent: 'center',
+    padding: 80,
+  },
+  privacyCard: {
+    backgroundColor: PAPER,
+    borderColor: INK,
+    borderWidth: 5,
+    maxWidth: 980,
+    paddingHorizontal: 62,
+    paddingVertical: 48,
+    shadowColor: ACCENT,
+    shadowOffset: { height: 14, width: 14 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
+    width: '100%',
+  },
+  privacyEyebrow: {
+    color: ACCENT,
+    fontSize: 14,
+    fontWeight: '900',
+    letterSpacing: 2.2,
+  },
+  privacyTitle: {
+    color: INK,
+    fontSize: 52,
+    fontWeight: '900',
+    letterSpacing: -1.4,
+    marginTop: 8,
+  },
+  privacyBody: {
+    color: INK_SOFT,
+    fontSize: 22,
+    lineHeight: 32,
+    marginTop: 24,
+  },
+  privacyRule: {
+    backgroundColor: INK,
+    height: 3,
+    marginVertical: 28,
+  },
+  privacyLink: {
+    color: INK,
+    fontSize: 20,
+    fontWeight: '800',
+    letterSpacing: 0.3,
+    marginTop: 8,
+  },
+  privacyClose: {
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    backgroundColor: INK,
+    borderColor: INK,
+    borderWidth: 4,
+    marginTop: 34,
+    minWidth: 190,
+    paddingHorizontal: 28,
+    paddingVertical: 15,
+  },
+  privacyCloseFocused: {
+    backgroundColor: ACCENT,
+    borderColor: ACCENT_GOLD,
+    transform: [{ scale: 1.04 }],
+  },
+  privacyCloseText: {
+    color: '#FFF7E8',
+    fontSize: 17,
+    fontWeight: '900',
+    letterSpacing: 2,
   },
 });

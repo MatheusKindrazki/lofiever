@@ -2,6 +2,7 @@
   "expo": {
     "name": "Lofiever TV",
     "slug": "lofiever-tv",
+    "version": "1.0.0",
     "scheme": "lofievertv",
     "orientation": "landscape",
     "plugins": [
@@ -20,27 +21,56 @@
           }
         }
       ],
-      "expo-audio"
+      [
+        "expo-audio",
+        {
+          "microphonePermission": false,
+          "recordAudioAndroid": false,
+          "enableBackgroundPlayback": true,
+          "enableBackgroundRecording": false
+        }
+      ]
     ],
     "android": {
       "splash": {
         "image": "./assets/images/icon-1920x720.png"
       },
-      "permissions": [
-        "android.permission.RECORD_AUDIO",
-        "android.permission.MODIFY_AUDIO_SETTINGS",
-        "android.permission.FOREGROUND_SERVICE",
-        "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"
-      ],
-      "package": "com.matheuskindrazki.lofievertv"
+      "package": "com.matheuskindrazki.lofievertv",
+      "versionCode": 1
     },
     "ios": {
       "bundleIdentifier": "com.matheuskindrazki.lofievertv",
+      "buildNumber": "1",
+      "appleTeamId": "YFYB6NKC73",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      },
+      "privacyManifests": {
+        "NSPrivacyAccessedAPITypes": [
+          {
+            "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryUserDefaults",
+            "NSPrivacyAccessedAPITypeReasons": ["CA92.1"]
+          },
+          {
+            "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryFileTimestamp",
+            "NSPrivacyAccessedAPITypeReasons": ["0A2A.1", "3B52.1", "C617.1"]
+          },
+          {
+            "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryDiskSpace",
+            "NSPrivacyAccessedAPITypeReasons": ["E174.1", "85F4.1"]
+          },
+          {
+            "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategorySystemBootTime",
+            "NSPrivacyAccessedAPITypeReasons": ["35F9.1"]
+          }
+        ],
+        "NSPrivacyCollectedDataTypes": [],
+        "NSPrivacyTracking": false
+      },
       "splash": {
         "image": "./assets/images/icon-1920x720.png"
       }
     },
-    "newArchEnabled": true,
     "extra": {
       "projectName": "lofiever-tv"
     }

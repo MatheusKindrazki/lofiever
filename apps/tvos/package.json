@@ -1,22 +1,36 @@
 {
   "name": "tvos",
   "version": "1.0.0",
+  "packageManager": "npm@11.6.0",
+  "engines": {
+    "node": ">=20.19 <25"
+  },
   "scripts": {
-    "start": "expo start",
-    "android": "expo run:android",
-    "ios": "expo run:ios",
+    "start": "EXPO_TV=1 expo start",
+    "android": "EXPO_TV=1 expo run:android",
+    "ios": "EXPO_TV=1 expo run:ios",
     "web": "expo start --web",
-    "prebuild:tv": "EXPO_TV=1 expo prebuild --clean",
-    "prebuild": "expo prebuild --clean",
-    "lint": "expo lint"
+    "prebuild:tv": "EXPO_TV=1 expo prebuild --clean && node scripts/sync-store-assets.mjs",
+    "prebuild": "npm run prebuild:tv",
+    "store:assets": "node scripts/sync-store-assets.mjs",
+    "store:generate": "sh scripts/generate-store-assets.sh",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "jest --runInBand",
+    "doctor": "npx expo-doctor",
+    "verify": "npm run lint && npm run typecheck && npm test && npm run doctor && npm run release:bundle",
+    "release:bundle": "EXPO_TV=1 EXPO_PUBLIC_LOFIEVER_API_URL=https://app.lofiever.dev expo export --platform ios --output-dir .expo/release-export",
+    "release:archive": "node scripts/release-tvos.mjs archive",
+    "release:export": "node scripts/release-tvos.mjs export"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.2",
-    "expo": "^55.0.2",
-    "expo-audio": "~55.0.8",
-    "expo-linear-gradient": "~55.0.8",
-    "expo-splash-screen": "~55.0.9",
-    "expo-status-bar": "~55.0.4",
+    "expo": "~55.0.28",
+    "expo-asset": "~55.0.13",
+    "expo-audio": "~55.0.16",
+    "expo-font": "~55.0.5",
+    "expo-splash-screen": "~55.0.23",
+    "expo-status-bar": "~55.0.6",
     "react": "19.2.0",
     "react-dom": "19.2.0",
     "react-native": "npm:react-native-tvos@0.83-stable",
@@ -24,8 +38,13 @@
   },
   "devDependencies": {
     "@react-native-tvos/config-tv": "^0.1.5",
+    "@types/jest": "^29.5.14",
     "@types/react": "~19.2.2",
+    "eslint": "^9.39.1",
+    "eslint-config-expo": "~55.0.0",
     "glob": "^13.0.0",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.4.11",
     "typescript": "~5.9.2"
   },
   "expo": {
@@ -33,7 +52,29 @@
       "exclude": [
         "react-native"
       ]
+    },
+    "doctor": {
+      "appConfigFieldsNotSyncedCheck": {
+        "enabled": false
+      }
     }
+  },
+  "overrides": {
+    "@babel/core@7": "7.29.7",
+    "brace-expansion@1": "1.1.16",
+    "brace-expansion@5": "5.0.7",
+    "js-yaml@3": "3.15.0",
+    "picomatch@2": "2.3.2",
+    "shell-quote": "1.10.0",
+    "ws@7": "7.5.13",
+    "yaml@2": "2.9.0"
+  },
+  "jest": {
+    "preset": "ts-jest",
+    "testEnvironment": "node",
+    "testMatch": [
+      "**/*.test.ts"
+    ]
   },
   "private": true
 }

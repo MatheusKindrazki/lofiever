@@ -59,14 +59,5 @@ target 'LofieverTV' do
       :mac_catalyst_enabled => false,
       :ccache_enabled => ccache_enabled?(podfile_properties),
     )
-
-    installer.pods_project.targets.each do |target|
-      next unless target.name == 'ExpoModulesCore'
-
-      target.build_configurations.each do |build_config|
-        build_config.build_settings['SWIFT_VERSION'] = '5.0'
-        build_config.build_settings['SWIFT_STRICT_CONCURRENCY'] = 'minimal'
-      end
-    end
   end
 end

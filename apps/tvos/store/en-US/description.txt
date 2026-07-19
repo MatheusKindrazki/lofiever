@@ -1,0 +1,11 @@
+A continuous lo-fi radio station for focus, relaxation, and sleep, made for Apple TV.
+
+Lofiever keeps the same programming for every listener. Open the app to see the current track and what comes next, then join the live broadcast with one click on the remote.
+
+• Lo-fi music 24 hours a day
+• Playback synchronized with the web radio
+• No ads and no account required
+• Designed for the big screen and Siri Remote
+• Continuous programming for studying, working, resting, or sleeping
+
+Press the center button to play or pause. Lofiever handles the rest and keeps Apple TV aligned with the shared broadcast.

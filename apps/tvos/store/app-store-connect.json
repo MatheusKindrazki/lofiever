@@ -1,0 +1,16 @@
+{
+  "name": "Lofiever",
+  "subtitle": "Rádio lo-fi ao vivo 24/7",
+  "bundleId": "com.matheuskindrazki.lofievertv",
+  "sku": "lofiever-tvos",
+  "primaryLanguage": "Portuguese (Brazil)",
+  "primaryCategory": "Music",
+  "secondaryCategory": "Entertainment",
+  "version": "1.0.0",
+  "build": "1",
+  "price": "Free",
+  "copyright": "2026 Matheus Kindrazki",
+  "privacyPolicyUrl": "https://app.lofiever.dev/pt/privacy",
+  "supportUrl": "https://app.lofiever.dev/pt/support",
+  "marketingUrl": "https://app.lofiever.dev/pt"
+}

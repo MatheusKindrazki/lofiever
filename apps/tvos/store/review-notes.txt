@@ -1,0 +1,13 @@
+The app is a free, accountless 24/7 lo-fi radio client.
+
+Review steps:
+1. Launch the app while connected to the internet.
+2. Wait for the current track metadata to appear.
+3. Press the center/OK button on the Siri Remote to start playback.
+4. The player seeks to the shared server clock so playback matches https://app.lofiever.dev.
+5. Press the center/OK button again to pause.
+
+No login, purchase, subscription, microphone, camera, or location permission is required. Privacy and support information is available from the footer inside the app.
+
+Production API: https://app.lofiever.dev/api/stream
+Support: https://app.lofiever.dev/pt/support

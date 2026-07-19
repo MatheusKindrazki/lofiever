@@ -1,78 +1,73 @@
-# Lofiever TV
+# Lofiever para TV
 
-Cliente Apple TV/tvOS do Lofiever usando Expo TV + React Native TV.
+Cliente Apple TV/tvOS do Lofiever, construído com Expo SDK 55 e `react-native-tvos`.
 
-## O que essa base ja faz
+## Funcionalidades
 
-- toca a stream em `/api/stream/audio-stream`
-- mostra a faixa atual, ouvintes e proximas faixas
-- atualiza metadata em polling
-- usa uma interface preparada para navegacao por controle remoto
+- rádio lo-fi 24/7 usando a API publicada;
+- reprodução sincronizada com o relógio da transmissão web;
+- faixa atual e próximas músicas, sem exibir contagem de ouvintes;
+- navegação e foco preparados para o Siri Remote;
+- política de privacidade e suporte acessíveis dentro do app;
+- áudio em segundo plano, sem permissão de microfone.
 
-## Stack escolhida
+## Desenvolvimento
 
-Eu escolhi `Expo TV` com `react-native-tvos` porque o projeto principal ja e `TypeScript + React`.
-Isso reduz o custo de manutencao e facilita reaproveitar contrato de API, tipos e regras de negocio do backend atual.
+Instale as dependências e abra o Metro no modo TV:
 
-## Configuracao
+```bash
+npm ci
+npm start
+```
 
-Crie um arquivo `.env` em `apps/tvos`:
+O endpoint padrão é `https://app.lofiever.dev`. Para usar o backend local, crie `.env.local`:
 
 ```bash
 EXPO_PUBLIC_LOFIEVER_API_URL=http://localhost:3000
 ```
 
-### Qual URL usar
-
-- Apple TV Simulator no mesmo Mac: `http://localhost:3000`
-- Apple TV fisica na rede: `http://SEU-IP-LOCAL:3000`
-
-Exemplo:
+No simulador ou dispositivo conectado:
 
 ```bash
-EXPO_PUBLIC_LOFIEVER_API_URL=http://192.168.0.15:3000
-```
-
-## Rodando
-
-Primeiro, suba o backend principal do Lofiever na raiz do repo:
-
-```bash
-npm run dev
-```
-
-Depois, neste diretório:
-
-```bash
-npm install
-npm run prebuild:tv
 npm run ios
 ```
 
-## Abrindo na Apple TV
+## Projeto nativo
 
-### Simulador
+Toda regeneração é explicitamente tvOS e reaplica o app icon em camadas:
 
-1. Rode `npm run prebuild:tv`
-2. Rode `npm run ios`
-3. Abra o workspace iOS no Xcode se quiser escolher explicitamente o destino Apple TV
+```bash
+npm run prebuild
+```
 
-### Apple TV fisica
+Os diretórios nativos são versionados. Por isso o check de sincronização automática do Expo Doctor está desativado de forma intencional; `prebuild` é o comando obrigatório depois de alterar `app.json` ou plugins.
 
-Inferencia pratica: o fluxo e o mesmo de qualquer app Apple assinado.
-Voce vai precisar de assinatura Apple Developer e apontar `EXPO_PUBLIC_LOFIEVER_API_URL` para o IP da sua maquina ou para um backend publicado.
+## Verificação
 
-Passo a passo:
+```bash
+npm run verify
+```
 
-1. `npm run prebuild:tv`
-2. Abra `ios` no Xcode
-3. Escolha seu Apple TV como destino
-4. Ajuste Team/Signing
-5. Build e install
+Esse gate executa lint, TypeScript, testes de sincronização, Expo Doctor e um bundle Release com a URL de produção.
 
-## Proximos passos recomendados
+## App Store
 
-- trocar polling por `Socket.IO` para sync mais fiel
-- portar quick actions do DJ para TV
-- adaptar Zen Mode para tvOS
-- substituir os assets placeholder por arte do Lofiever
+```bash
+npm run release:archive
+npm run release:export
+```
+
+Os comandos criam um archive Release e tentam exportá-lo com assinatura automática do Team `YFYB6NKC73`. Os metadados, textos de privacidade e checklist do App Store Connect ficam em `store/`.
+
+O primeiro export de distribuição exige uma conta Apple Developer com permissão para criar o certificado Apple Distribution e o perfil `tvOS App Store Connect` do Bundle ID `com.matheuskindrazki.lofievertv`.
+
+## Assets
+
+Os ícones tvOS têm camadas Back, Middle e Front distintas para o efeito de parallax. Para regenerar as imagens a partir dos SVGs editoriais:
+
+```bash
+npm run store:generate
+npm run store:assets
+```
+
+`store:generate` requer ImageMagick e librsvg no Mac. Os PNGs gerados ficam versionados, então isso não é necessário durante um build normal.

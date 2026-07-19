@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="720" viewBox="0 0 1920 720">
+  <defs>
+    <pattern id="dots" width="42" height="42" patternUnits="userSpaceOnUse">
+      <circle cx="8" cy="8" r="2" fill="#1c1813" opacity="0.08" />
+    </pattern>
+  </defs>
+  <rect width="1920" height="720" fill="#f2e7ce" />
+  <rect width="1920" height="720" fill="url(#dots)" />
+  <rect x="0" y="0" width="230" height="720" fill="#e8430f" />
+  <rect x="1690" y="0" width="230" height="720" fill="#f4b41a" />
+  <path d="M230 92 H1690" stroke="#1c1813" stroke-width="12" />
+  <path d="M230 626 H1690" stroke="#1c1813" stroke-width="6" />
+  <text x="960" y="333" text-anchor="middle" font-family="Arial Black, Arial, sans-serif" font-size="156" font-weight="900" letter-spacing="-8" fill="#1c1813">LOFIEVER</text>
+  <text x="960" y="414" text-anchor="middle" font-family="Arial, sans-serif" font-size="34" font-weight="700" letter-spacing="9" fill="#e8430f">RÁDIO LO-FI 24/7</text>
+  <text x="960" y="505" text-anchor="middle" font-family="Arial, sans-serif" font-size="29" font-weight="700" letter-spacing="3" fill="#625a4c">FOCO · RELAXAMENTO · SONO</text>
+  <g fill="#1c1813" opacity="0.86">
+    <rect x="710" y="548" width="14" height="28" /><rect x="738" y="532" width="14" height="44" />
+    <rect x="766" y="516" width="14" height="60" /><rect x="794" y="540" width="14" height="36" />
+    <rect x="822" y="504" width="14" height="72" /><rect x="850" y="526" width="14" height="50" />
+    <rect x="878" y="492" width="14" height="84" /><rect x="906" y="520" width="14" height="56" />
+    <rect x="934" y="500" width="14" height="76" /><rect x="962" y="514" width="14" height="62" />
+    <rect x="990" y="488" width="14" height="88" /><rect x="1018" y="528" width="14" height="48" />
+    <rect x="1046" y="508" width="14" height="68" /><rect x="1074" y="536" width="14" height="40" />
+    <rect x="1102" y="518" width="14" height="58" /><rect x="1130" y="544" width="14" height="32" />
+    <rect x="1158" y="526" width="14" height="50" /><rect x="1186" y="550" width="14" height="26" />
+  </g>
+</svg>

@@ -1,0 +1,1 @@
+Primeira versão do Lofiever para Apple TV, com rádio lo-fi 24/7, programação compartilhada e reprodução sincronizada com a web.

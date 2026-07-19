@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="768" viewBox="0 0 1280 768">
+  <defs>
+    <pattern id="grain" width="34" height="34" patternUnits="userSpaceOnUse">
+      <circle cx="6" cy="8" r="2" fill="#1c1813" opacity="0.08" />
+      <circle cx="25" cy="22" r="1.6" fill="#e8430f" opacity="0.11" />
+    </pattern>
+  </defs>
+  <rect width="1280" height="768" fill="#f2e7ce" />
+  <rect width="1280" height="768" fill="url(#grain)" />
+  <circle cx="1120" cy="-30" r="330" fill="#f4b41a" opacity="0.9" />
+  <circle cx="70" cy="770" r="330" fill="#e8430f" opacity="0.92" />
+  <path d="M0 110 H1280" stroke="#1c1813" stroke-width="18" />
+  <path d="M0 650 H1280" stroke="#1c1813" stroke-width="8" />
+</svg>

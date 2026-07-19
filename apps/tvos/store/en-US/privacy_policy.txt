@@ -1,0 +1,8 @@
+Lofiever TV does not require an account, use advertising, sell personal data, or track user activity across apps or websites.
+
+To deliver the broadcast, the app connects to Lofiever infrastructure and content providers. IP address, device type, operating system version, timestamps, and technical request logs may be processed temporarily for audio delivery, security, abuse prevention, and troubleshooting.
+
+This technical data may be processed by hosting, network, and content delivery providers only to operate and protect the service. It is not used for targeted advertising or sold to third parties.
+
+Full policy: https://app.lofiever.dev/en/privacy
+Support: https://app.lofiever.dev/en/support

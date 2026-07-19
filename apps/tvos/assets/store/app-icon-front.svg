@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="768" viewBox="0 0 1280 768">
+  <g transform="translate(220 292)">
+    <rect width="840" height="184" fill="#f2e7ce" stroke="#1c1813" stroke-width="14" />
+    <text x="420" y="118" text-anchor="middle" font-family="Arial Black, Arial, sans-serif" font-size="78" font-weight="900" letter-spacing="-3" fill="#1c1813">LOFIEVER</text>
+  </g>
+  <g transform="translate(889 438) rotate(-8)">
+    <rect width="188" height="88" rx="44" fill="#e8430f" stroke="#1c1813" stroke-width="10" />
+    <text x="94" y="59" text-anchor="middle" font-family="Arial Black, Arial, sans-serif" font-size="42" font-weight="900" fill="#fff7e8">24/7</text>
+  </g>
+</svg>
