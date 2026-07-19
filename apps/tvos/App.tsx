@@ -1,10 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Animated,
-  Easing,
   Image,
-  ImageBackground,
   LogBox,
   Platform,
   Pressable,
@@ -16,7 +13,7 @@ import {
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { setAudioModeAsync, useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
-import { LinearGradient } from 'expo-linear-gradient';
+import { calculateExpectedPosition, shouldSeekToExpectedPosition } from './playbackSync';
 
 type QueueTrack = {
   id: string;
@@ -25,34 +22,37 @@ type QueueTrack = {
   artworkUrl?: string;
   playbackUrl?: string;
   appleTvPlaybackUrl?: string;
+  duration?: number;
+  mood?: string;
+  genre?: string;
+  origin?: string;
 };
 
 type StreamData = {
   currentSong: QueueTrack | null;
-  listeners: number;
-};
-
-type BackgroundSpark = {
-  top: `${number}%`;
-  size: number;
-  opacity: number;
-  left?: `${number}%`;
-  right?: `${number}%`;
+  playback?: {
+    isPlaying: boolean;
+    position: number;
+    startedAt: number;
+    serverTime: number;
+  };
+  daysActive?: number;
+  songsPlayed?: number;
+  nextUp?: QueueTrack[];
 };
 
 const DEFAULT_API_BASE_URL = 'http://localhost:3000';
 const API_BASE_URL = (process.env.EXPO_PUBLIC_LOFIEVER_API_URL ?? DEFAULT_API_BASE_URL).replace(/\/$/, '');
 const STREAM_METADATA_URL = `${API_BASE_URL}/api/stream`;
+const STREAM_METADATA_REFRESH_MS = 5_000;
 const DEFAULT_VOLUME = 0.8;
-const VISUALIZER_BAR_COUNT = 34;
-const BACKGROUND_SPARKS: BackgroundSpark[] = [
-  { top: '18%', left: '12%', size: 5, opacity: 0.5 },
-  { top: '24%', right: '18%', size: 4, opacity: 0.36 },
-  { top: '31%', left: '74%', size: 6, opacity: 0.22 },
-  { top: '56%', left: '11%', size: 3, opacity: 0.32 },
-  { top: '62%', right: '14%', size: 4, opacity: 0.28 },
-  { top: '72%', left: '26%', size: 5, opacity: 0.26 },
-];
+const VISUALIZER_BAR_COUNT = 28;
+const PAPER = '#F2E7CE';
+const PAPER_RAISED = '#EADCBD';
+const INK = '#1C1813';
+const INK_SOFT = '#625A4C';
+const ACCENT = '#E8430F';
+const ACCENT_GOLD = '#F4B41A';
 
 if (__DEV__ && Platform.isTV) {
   LogBox.ignoreAllLogs(true);
@@ -88,7 +88,17 @@ function clamp(value: number, min: number, max: number) {
 }
 
 function formatNumber(value?: number) {
-  return `${value ?? 0}`;
+  return new Intl.NumberFormat('pt-BR').format(value ?? 0);
+}
+
+function formatDuration(value?: number) {
+  if (!value || !Number.isFinite(value)) {
+    return '--:--';
+  }
+
+  const minutes = Math.floor(value / 60);
+  const seconds = Math.floor(value % 60);
+  return `${minutes}:${seconds.toString().padStart(2, '0')}`;
 }
 
 function buildVisualizerBars(active: boolean) {
@@ -114,19 +124,21 @@ export default function App() {
   const [visualizerBars, setVisualizerBars] = useState<number[]>(() => buildVisualizerBars(false));
   const [playerFocused, setPlayerFocused] = useState(false);
   const wasPlayingRef = useRef(false);
+  const playbackIntentRef = useRef(false);
+  const playbackClockAvailableRef = useRef(false);
+  const streamSnapshotReceivedAtRef = useRef(Date.now());
+  const synchronizedTrackIdRef = useRef<string | null>(null);
   const recoveryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastFinishedTrackIdRef = useRef<string | null>(null);
-  const glowPulse = useRef(new Animated.Value(0)).current;
-  const ringRotation = useRef(new Animated.Value(0)).current;
-  const ambientDrift = useRef(new Animated.Value(0)).current;
-
   const { width, height } = useWindowDimensions();
+  const compact = width < 1500 || height < 850;
 
   const player = useAudioPlayer(null, {
     keepAudioSessionActive: true,
     updateInterval: 500,
   });
   const playbackStatus = useAudioPlayerStatus(player);
+  const playbackStatusRef = useRef(playbackStatus);
 
   useEffect(() => {
     void setAudioModeAsync({
@@ -134,7 +146,7 @@ export default function App() {
       playsInSilentMode: true,
       shouldPlayInBackground: true,
     }).catch(() => {
-      // tvOS pode recusar parte da configuracao da sessao sem afetar o player.
+      // tvOS pode recusar parte da configuração da sessão sem afetar o player.
     });
   }, []);
 
@@ -144,62 +156,8 @@ export default function App() {
 
   useEffect(() => {
     wasPlayingRef.current = playbackStatus.playing;
-  }, [playbackStatus.playing]);
-
-  useEffect(() => {
-    const pulseAnimation = Animated.loop(
-      Animated.sequence([
-        Animated.timing(glowPulse, {
-          duration: 3200,
-          easing: Easing.inOut(Easing.quad),
-          toValue: 1,
-          useNativeDriver: true,
-        }),
-        Animated.timing(glowPulse, {
-          duration: 3200,
-          easing: Easing.inOut(Easing.quad),
-          toValue: 0,
-          useNativeDriver: true,
-        }),
-      ])
-    );
-
-    const ringAnimation = Animated.loop(
-      Animated.timing(ringRotation, {
-        duration: 20000,
-        easing: Easing.linear,
-        toValue: 1,
-        useNativeDriver: true,
-      })
-    );
-
-    const ambientAnimation = Animated.loop(
-      Animated.sequence([
-        Animated.timing(ambientDrift, {
-          duration: 5400,
-          easing: Easing.inOut(Easing.sin),
-          toValue: 1,
-          useNativeDriver: true,
-        }),
-        Animated.timing(ambientDrift, {
-          duration: 5400,
-          easing: Easing.inOut(Easing.sin),
-          toValue: 0,
-          useNativeDriver: true,
-        }),
-      ])
-    );
-
-    pulseAnimation.start();
-    ringAnimation.start();
-    ambientAnimation.start();
-
-    return () => {
-      pulseAnimation.stop();
-      ringAnimation.stop();
-      ambientAnimation.stop();
-    };
-  }, [ambientDrift, glowPulse, ringRotation]);
+    playbackStatusRef.current = playbackStatus;
+  }, [playbackStatus]);
 
   useEffect(() => {
     const isActive = playbackStatus.playing || playbackStatus.timeControlStatus === 'waiting';
@@ -216,46 +174,45 @@ export default function App() {
     return () => clearInterval(interval);
   }, [playbackStatus.playing, playbackStatus.timeControlStatus]);
 
-  const loadStreamData = useCallback(
-    async (showLoader: boolean) => {
-      if (showLoader) {
-        setIsLoading(true);
+  const loadStreamData = useCallback(async (showLoader: boolean) => {
+    if (showLoader) {
+      setIsLoading(true);
+    }
+
+    try {
+      const response = await fetch(STREAM_METADATA_URL);
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
       }
 
-      try {
-        const response = await fetch(STREAM_METADATA_URL);
-
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`);
-        }
-
-        const data = (await response.json()) as StreamData;
-        setStreamData(data);
-        setError(null);
-        setLastUpdatedAt(
-          new Date().toLocaleTimeString('pt-BR', {
-            hour: '2-digit',
-            minute: '2-digit',
-          })
-        );
-      } catch (requestError) {
-        console.error('Falha ao carregar a stream do Lofiever TV:', requestError);
-        setError(
-          'Nao consegui falar com o backend do Lofiever. Confirme se o app web esta rodando e se a TV consegue acessar essa URL.'
-        );
-      } finally {
-        setIsLoading(false);
-      }
-    },
-    []
-  );
+      const data = (await response.json()) as StreamData;
+      playbackClockAvailableRef.current = Boolean(data.playback);
+      streamSnapshotReceivedAtRef.current = Date.now();
+      setStreamData(data);
+      setError(null);
+      setLastUpdatedAt(
+        new Date().toLocaleTimeString('pt-BR', {
+          hour: '2-digit',
+          minute: '2-digit',
+        })
+      );
+    } catch (requestError) {
+      console.error('Falha ao carregar a stream do Lofiever TV:', requestError);
+      setError(
+        'Não consegui falar com o Lofiever. Confirme se a TV consegue acessar o endereço configurado.'
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     void loadStreamData(true);
 
     const interval = setInterval(() => {
       void loadStreamData(false);
-    }, 15000);
+    }, STREAM_METADATA_REFRESH_MS);
 
     return () => clearInterval(interval);
   }, [loadStreamData]);
@@ -269,13 +226,76 @@ export default function App() {
       return;
     }
 
+    synchronizedTrackIdRef.current = null;
     player.replace({ uri: tvPlaybackUrl });
     player.volume = DEFAULT_VOLUME;
 
-    if (playbackIntent || wasPlayingRef.current) {
+    if (!playbackClockAvailableRef.current && (playbackIntentRef.current || wasPlayingRef.current)) {
       player.play();
     }
-  }, [playbackIntent, player, tvPlaybackUrl]);
+  }, [player, tvPlaybackUrl]);
+
+  useEffect(() => {
+    const playback = streamData?.playback;
+
+    if (!playback || !currentSong?.id || !tvPlaybackUrl || !playbackStatus.isLoaded) {
+      return;
+    }
+
+    const currentPlaybackStatus = playbackStatusRef.current;
+
+    const expectedPosition = calculateExpectedPosition({
+      duration: currentPlaybackStatus.duration || currentSong.duration,
+      isPlaying: playback.isPlaying,
+      position: playback.position,
+      receivedAt: streamSnapshotReceivedAtRef.current,
+    });
+    const trackNeedsInitialSync = synchronizedTrackIdRef.current !== currentSong.id;
+    const playbackDrifted = shouldSeekToExpectedPosition({
+      currentPosition: currentPlaybackStatus.currentTime,
+      expectedPosition,
+    });
+
+    if (!trackNeedsInitialSync && !playbackDrifted) {
+      if (playbackIntent && playback.isPlaying && !currentPlaybackStatus.playing) {
+        player.play();
+      }
+      return;
+    }
+
+    let active = true;
+
+    void player.seekTo(expectedPosition).then(() => {
+      if (!active) {
+        return;
+      }
+
+      synchronizedTrackIdRef.current = currentSong.id;
+
+      if (playbackIntentRef.current && playback.isPlaying) {
+        player.play();
+      }
+    }).catch((syncError: unknown) => {
+      if (!active) {
+        return;
+      }
+
+      console.error('Falha ao sincronizar a reprodução da Apple TV:', syncError);
+      setError('O áudio abriu, mas não consegui sincronizar com a transmissão ao vivo.');
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [
+    currentSong?.duration,
+    currentSong?.id,
+    playbackIntent,
+    playbackStatus.isLoaded,
+    player,
+    streamData?.playback,
+    tvPlaybackUrl,
+  ]);
 
   useEffect(() => {
     if (currentSong?.id !== lastFinishedTrackIdRef.current) {
@@ -357,425 +377,274 @@ export default function App() {
 
   const handleTogglePlayback = useCallback(() => {
     if (API_BASE_URL.includes('app.lofiever.dev') && !currentSong?.appleTvPlaybackUrl) {
-      setError(
-        'A API de producao ainda nao foi atualizada para tvOS. Ela entrega metadata, mas ainda nao entrega a URL MP3 assinada da faixa atual para a Apple TV.'
-      );
+      setError('A API de produção ainda não entregou uma URL de áudio compatível com a Apple TV.');
       return;
     }
 
     if (!tvPlaybackUrl) {
-      setError('Nao existe uma URL de playback compativel para a faixa atual na Apple TV.');
+      setError('Não existe uma faixa compatível disponível para a Apple TV agora.');
       return;
     }
 
     if (playbackIntent && (playbackStatus.playing || playbackStatus.timeControlStatus === 'waiting')) {
+      playbackIntentRef.current = false;
       setPlaybackIntent(false);
       player.pause();
       return;
     }
 
+    playbackIntentRef.current = true;
     setPlaybackIntent(true);
     setError(null);
-    player.play();
+
+    if (!streamData?.playback) {
+      player.play();
+    }
   }, [
     currentSong?.appleTvPlaybackUrl,
     playbackIntent,
     player,
     playbackStatus.playing,
     playbackStatus.timeControlStatus,
+    streamData?.playback,
     tvPlaybackUrl,
   ]);
 
   const liveLabel = playbackStatus.playing
-    ? 'ao vivo'
+    ? 'Ao vivo'
     : playbackStatus.timeControlStatus === 'waiting'
-      ? 'conectando'
-      : 'em pausa';
+      ? 'Conectando'
+      : 'Em pausa';
   const playerHint = playbackIntent
     ? playbackStatus.playing
-      ? 'Clique no player para pausar'
-      : 'O player vai tentar retomar sozinho'
-    : 'Clique no player para tocar';
-  const artworkSize = Math.round(Math.min(width * 0.28, height * 0.42, 430));
-  const curtainWidth = Math.round(Math.min(width * 0.24, 360));
-  const curtainHeight = Math.round(height * 0.94);
-  const rippleOuterSize = Math.round(Math.min(width * 0.64, 920));
-  const rippleInnerSize = Math.round(rippleOuterSize * 0.74);
-  const horizonWidth = Math.round(Math.min(width * 0.78, 1380));
-  const glowScale = glowPulse.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0.94, 1.08],
-  });
-  const glowOpacity = glowPulse.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0.2, 0.42],
-  });
-  const rotatingRing = ringRotation.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['0deg', '360deg'],
-  });
-  const curtainTranslateX = ambientDrift.interpolate({
-    inputRange: [0, 1],
-    outputRange: [-22, 18],
-  });
-  const curtainTranslateY = ambientDrift.interpolate({
-    inputRange: [0, 1],
-    outputRange: [-34, 24],
-  });
-  const curtainReverseX = ambientDrift.interpolate({
-    inputRange: [0, 1],
-    outputRange: [28, -16],
-  });
-  const curtainReverseY = ambientDrift.interpolate({
-    inputRange: [0, 1],
-    outputRange: [22, -24],
-  });
-  const curtainScale = ambientDrift.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0.96, 1.05],
-  });
-  const curtainOpacity = ambientDrift.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0.34, 0.52],
-  });
-  const ribbonOpacity = glowPulse.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0.16, 0.28],
-  });
-  const rippleInnerScale = glowPulse.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0.96, 1.03],
-  });
-  const rippleOuterScale = glowPulse.interpolate({
-    inputRange: [0, 1],
-    outputRange: [1.02, 1.12],
-  });
-  const horizonOpacity = glowPulse.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0.24, 0.42],
-  });
+      ? 'Pressione OK para pausar'
+      : 'A transmissão vai retomar automaticamente'
+    : 'Pressione OK para ouvir';
+  const editionDate = new Date()
+    .toLocaleDateString('pt-BR', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+    })
+    .replace('.', '')
+    .toUpperCase();
+  const nextTracks = streamData?.nextUp?.slice(0, compact ? 2 : 3) ?? [];
+  const playbackDuration = playbackStatus.duration || currentSong?.duration;
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.screen}>
-        {currentArtworkUrl ? (
-          <ImageBackground
-            blurRadius={36}
-            imageStyle={styles.backdropImage}
-            source={{ uri: currentArtworkUrl }}
-            style={StyleSheet.absoluteFill}
-          />
-        ) : (
-          <View style={[StyleSheet.absoluteFill, styles.backdropFallback]} />
-        )}
-
-        <View style={[StyleSheet.absoluteFill, styles.backdropShade]} />
-        <View style={[StyleSheet.absoluteFill, styles.backdropTint]} />
-
-        <View pointerEvents="none" style={styles.backgroundAtmosphere}>
-          <Animated.View
-            style={[
-              styles.lightCurtain,
-              {
-                height: curtainHeight,
-                left: width * 0.12,
-                top: -height * 0.06,
-                transform: [
-                  { translateX: curtainTranslateX },
-                  { translateY: curtainTranslateY },
-                  { rotate: '-18deg' },
-                  { scaleY: curtainScale },
-                ],
-                width: curtainWidth,
-              },
-            ]}
-          >
-            <LinearGradient
-              colors={[
-                'rgba(76, 234, 214, 0)',
-                'rgba(76, 234, 214, 0.24)',
-                'rgba(97, 163, 233, 0.16)',
-                'rgba(76, 234, 214, 0)',
-              ]}
-              end={{ x: 0.5, y: 1 }}
-              start={{ x: 0.5, y: 0 }}
-              style={StyleSheet.absoluteFill}
-            />
-          </Animated.View>
-
-          <Animated.View
-            style={[
-              styles.lightCurtain,
-              {
-                height: curtainHeight * 0.9,
-                left: width * 0.5 - curtainWidth * 0.46,
-                opacity: curtainOpacity,
-                top: height * 0.03,
-                transform: [
-                  { translateY: curtainReverseY },
-                  { rotate: '8deg' },
-                  { scaleY: curtainScale },
-                ],
-                width: curtainWidth * 0.92,
-              },
-            ]}
-          >
-            <LinearGradient
-              colors={[
-                'rgba(84, 132, 235, 0)',
-                'rgba(84, 132, 235, 0.14)',
-                'rgba(129, 225, 214, 0.24)',
-                'rgba(84, 132, 235, 0)',
-              ]}
-              end={{ x: 0.5, y: 1 }}
-              start={{ x: 0.5, y: 0 }}
-              style={StyleSheet.absoluteFill}
-            />
-          </Animated.View>
-
-          <Animated.View
-            style={[
-              styles.lightCurtain,
-              {
-                height: curtainHeight * 0.88,
-                right: width * 0.11,
-                top: -height * 0.04,
-                transform: [
-                  { translateX: curtainReverseX },
-                  { translateY: curtainReverseY },
-                  { rotate: '18deg' },
-                  { scaleY: curtainScale },
-                ],
-                width: curtainWidth * 0.88,
-              },
-            ]}
-          >
-            <LinearGradient
-              colors={[
-                'rgba(255, 158, 107, 0)',
-                'rgba(255, 158, 107, 0.18)',
-                'rgba(255, 208, 153, 0.1)',
-                'rgba(255, 158, 107, 0)',
-              ]}
-              end={{ x: 0.5, y: 1 }}
-              start={{ x: 0.5, y: 0 }}
-              style={StyleSheet.absoluteFill}
-            />
-          </Animated.View>
-
-          <Animated.View
-            style={[
-              styles.soundRipple,
-              {
-                borderRadius: rippleOuterSize / 2,
-                height: rippleOuterSize,
-                opacity: ribbonOpacity,
-                transform: [{ scale: rippleOuterScale }],
-                width: rippleOuterSize,
-              },
-            ]}
-          />
-          <Animated.View
-            style={[
-              styles.soundRipple,
-              styles.soundRippleInner,
-              {
-                borderRadius: rippleInnerSize / 2,
-                height: rippleInnerSize,
-                opacity: glowOpacity,
-                transform: [{ scale: rippleInnerScale }],
-                width: rippleInnerSize,
-              },
-            ]}
-          />
-
-          <Animated.View
-            style={[
-              styles.horizonGlow,
-              {
-                opacity: horizonOpacity,
-                top: height * 0.62,
-                width: horizonWidth,
-              },
-            ]}
-          >
-            <LinearGradient
-              colors={[
-                'rgba(0, 0, 0, 0)',
-                'rgba(92, 232, 214, 0.1)',
-                'rgba(132, 190, 255, 0.26)',
-                'rgba(255, 178, 133, 0.12)',
-                'rgba(0, 0, 0, 0)',
-              ]}
-              end={{ x: 1, y: 0.5 }}
-              start={{ x: 0, y: 0.5 }}
-              style={StyleSheet.absoluteFill}
-            />
-          </Animated.View>
-
-          {BACKGROUND_SPARKS.map((spark, index) => (
-            <Animated.View
-              key={index}
-              style={[
-                styles.backgroundSpark,
-                {
-                  height: spark.size,
-                  left: spark.left,
-                  opacity: spark.opacity,
-                  right: spark.right,
-                  top: spark.top,
-                  transform: [{ scale: glowScale }],
-                  width: spark.size,
-                },
-              ]}
-            />
-          ))}
+        <View pointerEvents="none" style={styles.paperTexture}>
+          <View style={[styles.textureDot, styles.textureDotOne]} />
+          <View style={[styles.textureDot, styles.textureDotTwo]} />
+          <View style={[styles.textureDot, styles.textureDotThree]} />
+          <View style={styles.textureRule} />
         </View>
 
-        <View style={styles.chrome}>
-          {error ? (
-            <View style={styles.errorBanner}>
-              <MaterialIcons color="#ffc0b2" name="warning-amber" size={22} />
-              <Text numberOfLines={2} style={styles.errorBannerText}>
-                {error}
+        <View style={[styles.sheet, compact ? styles.sheetCompact : null]}>
+          <View style={styles.masthead}>
+            <View style={styles.nameplate}>
+              <Text style={[styles.wordmark, compact ? styles.wordmarkCompact : null]}>
+                Lofieve<Text style={styles.wordmarkAccent}>r</Text>
               </Text>
+              <Text style={styles.tagline}>Música lo-fi para foco, relaxamento e sono</Text>
             </View>
-          ) : null}
 
-          <View style={styles.centerStage}>
-            <Text style={styles.brand}>LOFIEVER</Text>
-            <Text style={styles.brandSubcopy}>apple tv fullscreen player</Text>
+            <View style={styles.editionMark}>
+              <Text style={styles.editionEyebrow}>EDIÇÃO PARA TV</Text>
+              <Text style={styles.editionTitle}>TRANSMISSÃO DIÁRIA</Text>
+            </View>
+          </View>
 
+          <View style={styles.dateline}>
+            <View style={[styles.datelineItem, styles.datelineStatus]}>
+              <View style={[styles.liveDot, playbackStatus.playing ? styles.liveDotActive : null]} />
+              <Text style={styles.datelineStrong}>{liveLabel}</Text>
+            </View>
+            <View style={styles.datelineItem}>
+              <Text style={styles.datelineText}>STREAM 24/7</Text>
+            </View>
+            <View style={styles.datelineItem}>
+              <Text style={styles.datelineText}>LO-FI INSTRUMENTAL</Text>
+            </View>
+            <View style={[styles.datelineItem, styles.datelineWide]}>
+              <Text style={styles.datelineStrong}>PROGRAMAÇÃO COMPARTILHADA</Text>
+            </View>
+            <View style={styles.datelineItem}>
+              <Text style={styles.datelineText}>{editionDate}</Text>
+            </View>
+          </View>
+
+          <View style={styles.broadcastGrid}>
             <Pressable
+              accessibilityHint={playerHint}
+              accessibilityLabel={`${liveLabel}. ${currentSong?.title ?? 'Sem faixa ativa'}. ${playerHint}`}
+              accessibilityRole="button"
               hasTVPreferredFocus
               onBlur={() => setPlayerFocused(false)}
               onFocus={() => setPlayerFocused(true)}
               onPress={handleTogglePlayback}
               style={[
-                styles.playerCard,
-                playerFocused ? styles.playerCardFocused : null,
+                styles.nowPlayingCard,
+                playerFocused ? styles.nowPlayingCardFocused : null,
               ]}
             >
-              <Animated.View
-                style={[
-                  styles.artGlow,
-                  {
-                    borderRadius: (artworkSize + 120) / 2,
-                    height: artworkSize + 120,
-                    opacity: glowOpacity,
-                    transform: [{ scale: glowScale }],
-                    width: artworkSize + 120,
-                  },
-                ]}
-              />
-
-              <Animated.View
-                style={[
-                  styles.artRing,
-                  {
-                    borderRadius: (artworkSize + 34) / 2,
-                    height: artworkSize + 34,
-                    transform: [{ rotate: rotatingRing }],
-                    width: artworkSize + 34,
-                  },
-                ]}
-              />
-
-              <View
-                style={[
-                  styles.playerSurface,
-                  {
-                    borderRadius: 36,
-                    height: artworkSize + 10,
-                    width: artworkSize + 10,
-                  },
-                ]}
-              >
+              <View style={styles.artworkColumn}>
                 {currentArtworkUrl ? (
                   <Image
+                    accessibilityLabel={`Capa de ${currentSong?.title ?? 'faixa atual'}`}
+                    alt={`Capa de ${currentSong?.title ?? 'faixa atual'}`}
                     resizeMode="cover"
                     source={{ uri: currentArtworkUrl }}
-                    style={[
-                      styles.stageArtwork,
-                      {
-                        borderRadius: 31,
-                        height: artworkSize,
-                        width: artworkSize,
-                      },
-                    ]}
+                    style={styles.artwork}
                   />
                 ) : (
-                  <View
-                    style={[
-                      styles.stageArtwork,
-                      styles.stageArtworkFallback,
-                      {
-                        borderRadius: 31,
-                        height: artworkSize,
-                        width: artworkSize,
-                      },
-                    ]}
-                  >
+                  <View style={[styles.artwork, styles.artworkFallback]}>
                     {isLoading ? (
-                      <ActivityIndicator color="#f4efe6" size="large" />
+                      <ActivityIndicator color={INK} size="large" />
                     ) : (
                       <>
-                        <MaterialIcons color="#8fe1d5" name="graphic-eq" size={72} />
-                        <Text style={styles.stageArtworkFallbackLabel}>LOFI</Text>
+                        <MaterialIcons color={INK} name="graphic-eq" size={compact ? 68 : 92} />
+                        <Text style={styles.fallbackTitle}>LOFI</Text>
                       </>
                     )}
                   </View>
                 )}
 
-                <View style={styles.playerOverlayTop}>
-                  <View style={styles.liveChip}>
-                    <View style={[styles.liveChipDot, playbackStatus.playing ? styles.liveChipDotOn : null]} />
-                    <Text style={styles.liveChipText}>{liveLabel}</Text>
-                  </View>
+                <View style={styles.artworkCaption}>
+                  <Text style={styles.artworkCaptionText}>CAPA DA TRANSMISSÃO</Text>
+                  <Text style={styles.artworkCaptionText}>LOFIEVER TV</Text>
                 </View>
 
-                <View style={styles.playerOverlayBottom}>
-                  <View style={styles.playIconShell}>
-                    <MaterialIcons
-                      color="#071018"
-                      name={playbackStatus.playing ? 'pause' : 'play-arrow'}
-                      size={52}
+                <View style={[styles.playStamp, playerFocused ? styles.playStampFocused : null]}>
+                  <MaterialIcons
+                    color="#FFF7E8"
+                    name={playbackStatus.playing ? 'pause' : 'play-arrow'}
+                    size={compact ? 54 : 68}
+                  />
+                </View>
+              </View>
+
+              <View style={[styles.trackCopy, compact ? styles.trackCopyCompact : null]}>
+                <View style={styles.kickerRow}>
+                  <Text style={styles.kicker}>NO AR AGORA</Text>
+                  <Text style={styles.issueNumber}>EDIÇÃO 24/7</Text>
+                </View>
+
+                <View style={styles.titleRule} />
+
+                <Text
+                  numberOfLines={2}
+                  style={[styles.trackTitle, compact ? styles.trackTitleCompact : null]}
+                >
+                  {currentSong ? currentSong.title : isLoading ? 'Sintonizando a estação' : 'Sem faixa ativa'}
+                </Text>
+                <Text numberOfLines={1} style={styles.trackArtist}>
+                  {currentSong ? currentSong.artist : 'Lofiever'}
+                </Text>
+
+                <Text numberOfLines={2} style={styles.trackDeck}>
+                  Uma seleção contínua para acompanhar o seu espaço, sem anúncios e sem interrupções.
+                </Text>
+
+                <View style={styles.visualizer}>
+                  {visualizerBars.map((bar, index) => (
+                    <View
+                      key={index}
+                      style={[
+                        styles.visualizerBar,
+                        {
+                          height: 8 + bar * (compact ? 42 : 58),
+                          opacity: 0.32 + bar * 0.68,
+                        },
+                      ]}
                     />
+                  ))}
+                </View>
+
+                {error ? (
+                  <View style={styles.inlineError}>
+                    <MaterialIcons color={INK} name="warning-amber" size={22} />
+                    <Text numberOfLines={2} style={styles.inlineErrorText}>{error}</Text>
+                  </View>
+                ) : null}
+
+                <View style={styles.transportFooter}>
+                  <View>
+                    <Text style={styles.transportLabel}>{playerHint}</Text>
+                    <Text style={styles.transportMeta}>
+                      {formatDuration(playbackStatus.currentTime)} / {formatDuration(playbackDuration)}
+                    </Text>
+                  </View>
+                  <View style={styles.transportState}>
+                    <View style={[styles.transportDot, playbackStatus.playing ? styles.liveDotActive : null]} />
+                    <Text style={styles.transportStateText}>{liveLabel.toUpperCase()}</Text>
                   </View>
                 </View>
               </View>
             </Pressable>
 
-            <Text numberOfLines={2} style={styles.trackTitle}>
-              {currentSong ? currentSong.title : isLoading ? 'Carregando a programacao...' : 'Sem faixa ativa'}
-            </Text>
-            <Text numberOfLines={1} style={styles.trackArtist}>
-              {currentSong ? currentSong.artist : 'Assim que a API responder, o player entra no ar.'}
-            </Text>
+            <View style={styles.programPanel}>
+              <View style={styles.panelHeader}>
+                <Text style={styles.panelHeaderTitle}>PROGRAMAÇÃO</Text>
+                <Text style={styles.panelHeaderMeta}>A SEGUIR</Text>
+              </View>
 
-            <View style={styles.visualizerShell}>
-              <View style={styles.visualizerRow}>
-                {visualizerBars.map((bar, index) => (
-                  <View
-                    key={index}
-                    style={[
-                      styles.visualizerBar,
-                      {
-                        height: 18 + bar * 86,
-                        opacity: 0.28 + bar * 0.6,
-                      },
-                    ]}
-                  />
-                ))}
+              <View style={styles.programBody}>
+                <View style={styles.programSummary}>
+                  <Text style={styles.programSummaryLabel}>TRANSMISSÃO ATUAL</Text>
+                  <Text style={styles.programSummaryValue} numberOfLines={1}>
+                    {currentSong?.genre || currentSong?.mood || 'Seleção lo-fi'}
+                  </Text>
+                </View>
+
+                <View style={styles.programList}>
+                  {nextTracks.length > 0 ? (
+                    nextTracks.map((track, index) => (
+                      <View key={`${track.id}-${index}`} style={styles.programRow}>
+                        <Text style={styles.programIndex}>{String(index + 1).padStart(2, '0')}</Text>
+                        <View style={styles.programTrack}>
+                          <Text numberOfLines={1} style={styles.programTitle}>{track.title}</Text>
+                          <Text numberOfLines={1} style={styles.programArtist}>{track.artist}</Text>
+                        </View>
+                        <Text style={styles.programDuration}>{formatDuration(track.duration)}</Text>
+                      </View>
+                    ))
+                  ) : (
+                    <View style={styles.programEmpty}>
+                      <MaterialIcons color={INK_SOFT} name="schedule" size={30} />
+                      <Text style={styles.programEmptyText}>
+                        A próxima seleção está sendo preparada pela estação.
+                      </Text>
+                    </View>
+                  )}
+                </View>
+
+                <View style={styles.stationRule} />
+
+                <View style={styles.stationStats}>
+                  <View style={styles.statBlock}>
+                    <Text style={styles.statValue}>{formatNumber(streamData?.songsPlayed)}</Text>
+                    <Text style={styles.statLabel}>FAIXAS TOCADAS</Text>
+                  </View>
+                </View>
+
+                <View style={styles.sharedNotice}>
+                  <MaterialIcons color={INK} name="public" size={24} />
+                  <Text style={styles.sharedNoticeText}>
+                    Todos acompanham a mesma programação da rádio.
+                  </Text>
+                </View>
               </View>
             </View>
+          </View>
 
-            <View style={styles.metaRow}>
-              <Text style={styles.metaText}>{formatNumber(streamData?.listeners)} ouvintes</Text>
-              {lastUpdatedAt ? <Text style={styles.metaText}>atualizado {lastUpdatedAt}</Text> : null}
-            </View>
-
-            <Text style={styles.playerHint}>{playerHint}</Text>
+          <View style={styles.colophon}>
+            <Text style={styles.colophonStrong}>LOFIEVER — RÁDIO LO-FI 24/7</Text>
+            <Text style={styles.colophonText}>APPLE TV · SEM ANÚNCIOS · CURADORIA CONTÍNUA</Text>
+            <Text style={styles.colophonText}>
+              {lastUpdatedAt ? `SINAL ATUALIZADO ÀS ${lastUpdatedAt}` : 'AGUARDANDO SINAL DA ESTAÇÃO'}
+            </Text>
           </View>
         </View>
       </View>
@@ -785,247 +654,538 @@ export default function App() {
 
 const styles = StyleSheet.create({
   safeArea: {
+    backgroundColor: PAPER,
     flex: 1,
-    backgroundColor: '#040913',
   },
   screen: {
+    backgroundColor: PAPER,
     flex: 1,
-    backgroundColor: '#040913',
     overflow: 'hidden',
   },
-  backdropImage: {
+  paperTexture: {
+    ...StyleSheet.absoluteFillObject,
     opacity: 0.28,
   },
-  backdropFallback: {
-    backgroundColor: '#08111d',
-  },
-  backdropShade: {
-    backgroundColor: 'rgba(2, 5, 9, 0.64)',
-  },
-  backdropTint: {
-    backgroundColor: 'rgba(7, 12, 20, 0.54)',
-  },
-  backgroundAtmosphere: {
-    ...StyleSheet.absoluteFillObject,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  lightCurtain: {
+  textureDot: {
+    backgroundColor: ACCENT_GOLD,
     borderRadius: 999,
-    overflow: 'hidden',
+    height: 280,
+    opacity: 0.13,
     position: 'absolute',
+    width: 280,
   },
-  soundRipple: {
-    borderColor: 'rgba(159, 240, 229, 0.14)',
-    borderWidth: 1,
+  textureDotOne: {
+    left: -110,
+    top: -100,
+  },
+  textureDotTwo: {
+    right: -80,
+    top: 260,
+  },
+  textureDotThree: {
+    bottom: -180,
+    left: '42%',
+  },
+  textureRule: {
+    backgroundColor: INK,
+    bottom: 0,
+    left: '16%',
+    opacity: 0.06,
     position: 'absolute',
+    top: 0,
+    width: 1,
   },
-  soundRippleInner: {
-    borderColor: 'rgba(255, 255, 255, 0.12)',
-  },
-  horizonGlow: {
-    borderRadius: 999,
-    height: 140,
-    overflow: 'hidden',
-    position: 'absolute',
-  },
-  backgroundSpark: {
-    backgroundColor: '#dffaf5',
-    borderRadius: 999,
-    position: 'absolute',
-  },
-  chrome: {
+  sheet: {
     flex: 1,
-    paddingHorizontal: 64,
-    paddingVertical: 40,
+    paddingHorizontal: 56,
+    paddingVertical: 34,
   },
-  errorBanner: {
-    alignItems: 'center',
-    alignSelf: 'center',
-    backgroundColor: 'rgba(84, 22, 14, 0.72)',
-    borderColor: 'rgba(255, 176, 156, 0.22)',
-    borderRadius: 22,
-    borderWidth: 1,
+  sheetCompact: {
+    paddingHorizontal: 36,
+    paddingVertical: 22,
+  },
+  masthead: {
+    alignItems: 'flex-end',
     flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  nameplate: {
+    flexShrink: 1,
+  },
+  wordmark: {
+    color: INK,
+    fontSize: 88,
+    fontWeight: '900',
+    letterSpacing: -5,
+    lineHeight: 90,
+  },
+  wordmarkCompact: {
+    fontSize: 64,
+    lineHeight: 66,
+  },
+  wordmarkAccent: {
+    color: ACCENT,
+  },
+  tagline: {
+    color: INK_SOFT,
+    fontSize: 20,
+    fontStyle: 'italic',
     marginTop: 4,
-    maxWidth: 980,
-    paddingHorizontal: 18,
-    paddingVertical: 14,
   },
-  errorBannerText: {
-    color: '#ffd7cd',
-    flex: 1,
-    fontSize: 15,
-    lineHeight: 22,
-    marginLeft: 12,
+  editionMark: {
+    alignItems: 'flex-end',
+    borderLeftColor: INK,
+    borderLeftWidth: 2,
+    marginBottom: 6,
+    paddingLeft: 20,
   },
-  centerStage: {
-    alignItems: 'center',
-    flex: 1,
-    justifyContent: 'center',
-  },
-  brand: {
-    color: '#f4efe6',
-    fontSize: 24,
-    fontWeight: '800',
-    letterSpacing: 6,
-  },
-  brandSubcopy: {
-    color: '#8fa3b1',
+  editionEyebrow: {
+    color: INK_SOFT,
     fontSize: 13,
-    letterSpacing: 1.8,
-    marginTop: 8,
-    textTransform: 'uppercase',
+    fontWeight: '700',
+    letterSpacing: 2,
   },
-  playerCard: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 34,
-    minHeight: 420,
-    minWidth: 420,
-    transform: [{ scale: 1 }],
-  },
-  playerCardFocused: {
-    transform: [{ scale: 1.04 }],
-  },
-  artGlow: {
-    backgroundColor: 'rgba(119, 229, 213, 0.34)',
-    position: 'absolute',
-  },
-  artRing: {
-    borderColor: 'rgba(255, 255, 255, 0.16)',
-    borderStyle: 'dashed',
-    borderWidth: 2,
-    position: 'absolute',
-  },
-  playerSurface: {
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    borderColor: 'rgba(255, 255, 255, 0.16)',
-    borderWidth: 1,
-    justifyContent: 'center',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 24 },
-    shadowOpacity: 0.35,
-    shadowRadius: 38,
-  },
-  stageArtwork: {
-    backgroundColor: '#102131',
-  },
-  stageArtworkFallback: {
-    alignItems: 'center',
-    borderColor: 'rgba(143, 225, 213, 0.28)',
-    borderWidth: 1,
-    justifyContent: 'center',
-  },
-  stageArtworkFallbackLabel: {
-    color: '#95efe1',
-    fontSize: 28,
-    fontWeight: '800',
-    letterSpacing: 7,
-    marginTop: 10,
-  },
-  playerOverlayTop: {
-    left: 22,
-    position: 'absolute',
-    top: 22,
-  },
-  playerOverlayBottom: {
-    bottom: 22,
-    position: 'absolute',
-    right: 22,
-  },
-  liveChip: {
-    alignItems: 'center',
-    backgroundColor: 'rgba(7, 14, 22, 0.76)',
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: 999,
-    borderWidth: 1,
-    flexDirection: 'row',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  liveChipDot: {
-    backgroundColor: 'rgba(255, 255, 255, 0.28)',
-    borderRadius: 999,
-    height: 9,
-    marginRight: 8,
-    width: 9,
-  },
-  liveChipDotOn: {
-    backgroundColor: '#67e0c2',
-  },
-  liveChipText: {
-    color: '#f0f6f8',
-    fontSize: 14,
-    fontWeight: '800',
+  editionTitle: {
+    color: INK,
+    fontSize: 22,
+    fontWeight: '900',
     letterSpacing: 1.2,
-    textTransform: 'uppercase',
+    marginTop: 5,
   },
-  playIconShell: {
+  dateline: {
+    borderBottomColor: INK,
+    borderBottomWidth: 1,
+    borderTopColor: INK,
+    borderTopWidth: 4,
+    flexDirection: 'row',
+    marginTop: 20,
+    minHeight: 46,
+  },
+  datelineItem: {
     alignItems: 'center',
-    backgroundColor: '#86e2d4',
-    borderRadius: 999,
-    height: 86,
+    borderRightColor: 'rgba(28, 24, 19, 0.22)',
+    borderRightWidth: 1,
+    flex: 1,
+    flexDirection: 'row',
     justifyContent: 'center',
-    width: 86,
+    paddingHorizontal: 10,
   },
-  trackTitle: {
-    color: '#f7f2e9',
-    fontSize: 56,
-    fontWeight: '800',
-    letterSpacing: -1.3,
-    lineHeight: 62,
-    marginTop: 28,
-    maxWidth: 980,
+  datelineStatus: {
+    flex: 0.72,
+  },
+  datelineWide: {
+    flex: 1.35,
+  },
+  liveDot: {
+    backgroundColor: '#857B6C',
+    borderRadius: 999,
+    height: 10,
+    marginRight: 10,
+    width: 10,
+  },
+  liveDotActive: {
+    backgroundColor: ACCENT,
+  },
+  datelineText: {
+    color: INK_SOFT,
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.8,
     textAlign: 'center',
   },
+  datelineStrong: {
+    color: INK,
+    fontSize: 12,
+    fontWeight: '900',
+    letterSpacing: 0.8,
+    textAlign: 'center',
+    textTransform: 'uppercase',
+  },
+  broadcastGrid: {
+    flex: 1,
+    flexDirection: 'row',
+    gap: 24,
+    marginTop: 24,
+    minHeight: 0,
+  },
+  nowPlayingCard: {
+    backgroundColor: PAPER_RAISED,
+    borderColor: INK,
+    borderWidth: 3,
+    flex: 1.58,
+    flexDirection: 'row',
+    shadowColor: INK,
+    shadowOffset: { height: 8, width: 8 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
+    transform: [{ scale: 1 }],
+  },
+  nowPlayingCardFocused: {
+    borderColor: ACCENT,
+    borderWidth: 6,
+    shadowColor: ACCENT,
+    shadowOffset: { height: 10, width: 10 },
+    transform: [{ scale: 1.012 }],
+  },
+  artworkColumn: {
+    borderRightColor: INK,
+    borderRightWidth: 3,
+    position: 'relative',
+    width: '43%',
+  },
+  artwork: {
+    backgroundColor: ACCENT_GOLD,
+    height: '100%',
+    width: '100%',
+  },
+  artworkFallback: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  fallbackTitle: {
+    color: INK,
+    fontSize: 38,
+    fontWeight: '900',
+    letterSpacing: 8,
+    marginTop: 12,
+  },
+  artworkCaption: {
+    backgroundColor: 'rgba(28, 24, 19, 0.78)',
+    bottom: 0,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    left: 0,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    position: 'absolute',
+    right: 0,
+  },
+  artworkCaptionText: {
+    color: '#FFF7E8',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 1.1,
+  },
+  playStamp: {
+    alignItems: 'center',
+    backgroundColor: ACCENT,
+    borderColor: INK,
+    borderRadius: 999,
+    borderWidth: 4,
+    height: 116,
+    justifyContent: 'center',
+    position: 'absolute',
+    right: -58,
+    shadowColor: INK,
+    shadowOffset: { height: 6, width: 6 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
+    top: '41%',
+    transform: [{ rotate: '-7deg' }],
+    width: 116,
+    zIndex: 10,
+  },
+  playStampFocused: {
+    backgroundColor: INK,
+    borderColor: ACCENT,
+  },
+  trackCopy: {
+    flex: 1,
+    justifyContent: 'space-between',
+    paddingBottom: 30,
+    paddingLeft: 76,
+    paddingRight: 34,
+    paddingTop: 30,
+  },
+  trackCopyCompact: {
+    paddingBottom: 20,
+    paddingLeft: 66,
+    paddingRight: 24,
+    paddingTop: 20,
+  },
+  kickerRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  kicker: {
+    color: ACCENT,
+    fontSize: 14,
+    fontWeight: '900',
+    letterSpacing: 2.2,
+  },
+  issueNumber: {
+    color: INK_SOFT,
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 1.2,
+  },
+  titleRule: {
+    backgroundColor: INK,
+    height: 2,
+    marginTop: 14,
+  },
+  trackTitle: {
+    color: INK,
+    fontSize: 54,
+    fontWeight: '900',
+    letterSpacing: -1.8,
+    lineHeight: 58,
+    marginTop: 24,
+  },
+  trackTitleCompact: {
+    fontSize: 42,
+    lineHeight: 45,
+    marginTop: 16,
+  },
   trackArtist: {
-    color: '#c3d0d8',
+    color: INK_SOFT,
     fontSize: 24,
-    fontWeight: '500',
+    fontStyle: 'italic',
+    fontWeight: '600',
+    marginTop: 10,
+  },
+  trackDeck: {
+    color: INK_SOFT,
+    fontSize: 18,
+    lineHeight: 25,
+    marginTop: 20,
+  },
+  visualizer: {
+    alignItems: 'flex-end',
+    borderBottomColor: INK,
+    borderBottomWidth: 2,
+    flexDirection: 'row',
+    gap: 6,
+    height: 78,
+    marginTop: 18,
+    overflow: 'hidden',
+    paddingHorizontal: 3,
+  },
+  visualizerBar: {
+    backgroundColor: INK,
+    flex: 1,
+    maxWidth: 9,
+    minWidth: 3,
+  },
+  inlineError: {
+    alignItems: 'center',
+    backgroundColor: '#F4B41A',
+    borderColor: INK,
+    borderWidth: 2,
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  inlineErrorText: {
+    color: INK,
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '700',
+    lineHeight: 19,
+  },
+  transportFooter: {
+    alignItems: 'flex-end',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 18,
+  },
+  transportLabel: {
+    color: INK,
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  transportMeta: {
+    color: INK_SOFT,
+    fontSize: 13,
+    fontVariant: ['tabular-nums'],
+    marginTop: 5,
+  },
+  transportState: {
+    alignItems: 'center',
+    borderColor: INK,
+    borderWidth: 2,
+    flexDirection: 'row',
+    paddingHorizontal: 13,
+    paddingVertical: 9,
+  },
+  transportDot: {
+    backgroundColor: '#857B6C',
+    borderRadius: 999,
+    height: 8,
+    marginRight: 8,
+    width: 8,
+  },
+  transportStateText: {
+    color: INK,
+    fontSize: 11,
+    fontWeight: '900',
+    letterSpacing: 1.2,
+  },
+  programPanel: {
+    backgroundColor: PAPER_RAISED,
+    borderColor: INK,
+    borderWidth: 3,
+    flex: 0.72,
+    shadowColor: INK,
+    shadowOffset: { height: 8, width: 8 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
+  },
+  panelHeader: {
+    alignItems: 'center',
+    backgroundColor: INK,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    minHeight: 48,
+    paddingHorizontal: 16,
+  },
+  panelHeaderTitle: {
+    color: PAPER,
+    fontSize: 13,
+    fontWeight: '900',
+    letterSpacing: 2.1,
+  },
+  panelHeaderMeta: {
+    color: '#C8BFAF',
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 1.2,
+  },
+  programBody: {
+    flex: 1,
+    padding: 22,
+  },
+  programSummary: {
+    borderBottomColor: INK,
+    borderBottomWidth: 2,
+    paddingBottom: 16,
+  },
+  programSummaryLabel: {
+    color: ACCENT,
+    fontSize: 11,
+    fontWeight: '900',
+    letterSpacing: 1.7,
+  },
+  programSummaryValue: {
+    color: INK,
+    fontSize: 25,
+    fontWeight: '900',
+    marginTop: 7,
+    textTransform: 'capitalize',
+  },
+  programList: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  programRow: {
+    alignItems: 'center',
+    borderBottomColor: 'rgba(28, 24, 19, 0.22)',
+    borderBottomWidth: 1,
+    flexDirection: 'row',
+    minHeight: 82,
+    paddingVertical: 12,
+  },
+  programIndex: {
+    color: ACCENT,
+    fontSize: 13,
+    fontWeight: '900',
+    marginRight: 14,
+    width: 24,
+  },
+  programTrack: {
+    flex: 1,
+  },
+  programTitle: {
+    color: INK,
+    fontSize: 17,
+    fontWeight: '800',
+  },
+  programArtist: {
+    color: INK_SOFT,
+    fontSize: 14,
+    marginTop: 5,
+  },
+  programDuration: {
+    color: INK_SOFT,
+    fontSize: 12,
+    fontVariant: ['tabular-nums'],
+    marginLeft: 10,
+  },
+  programEmpty: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 18,
+  },
+  programEmptyText: {
+    color: INK_SOFT,
+    fontSize: 16,
+    lineHeight: 23,
     marginTop: 12,
     textAlign: 'center',
   },
-  visualizerShell: {
-    alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.2)',
-    borderColor: 'rgba(255, 255, 255, 0.08)',
-    borderRadius: 999,
-    borderWidth: 1,
-    marginTop: 30,
-    paddingHorizontal: 22,
+  stationRule: {
+    backgroundColor: INK,
+    height: 2,
+  },
+  stationStats: {
+    flexDirection: 'row',
     paddingVertical: 18,
-    width: 720,
   },
-  visualizerRow: {
-    alignItems: 'flex-end',
-    flexDirection: 'row',
-    height: 112,
-    justifyContent: 'space-between',
-    width: '100%',
-  },
-  visualizerBar: {
-    backgroundColor: '#dffaf5',
-    borderRadius: 999,
-    width: 8,
-  },
-  metaRow: {
+  statBlock: {
     alignItems: 'center',
+    flex: 1,
+  },
+  statValue: {
+    color: INK,
+    fontSize: 28,
+    fontWeight: '900',
+  },
+  statLabel: {
+    color: INK_SOFT,
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 1.1,
+    marginTop: 4,
+  },
+  sharedNotice: {
+    alignItems: 'center',
+    backgroundColor: ACCENT_GOLD,
+    borderColor: INK,
+    borderWidth: 2,
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-    marginTop: 22,
+    gap: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
   },
-  metaText: {
-    color: '#b8c6cf',
-    fontSize: 17,
-    marginHorizontal: 12,
+  sharedNoticeText: {
+    color: INK,
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '800',
+    lineHeight: 18,
   },
-  playerHint: {
-    color: '#8fa3b1',
-    fontSize: 16,
-    marginTop: 18,
-    textAlign: 'center',
+  colophon: {
+    alignItems: 'center',
+    borderTopColor: INK,
+    borderTopWidth: 2,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 24,
+    paddingTop: 13,
+  },
+  colophonStrong: {
+    color: INK,
+    fontSize: 11,
+    fontWeight: '900',
+    letterSpacing: 1.3,
+  },
+  colophonText: {
+    color: INK_SOFT,
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 1,
   },
 });

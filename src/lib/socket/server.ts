@@ -23,6 +23,7 @@ import {
   SocketAuthSchema,
   safeValidate,
 } from './schemas';
+import { createPlaybackClock } from '@/lib/playback-clock';
 
 const AI_HISTORY_LIMIT = 12;
 const PROACTIVE_MESSAGE_INTERVAL = 5 * 60 * 1000; // 5 minutes
@@ -801,9 +802,10 @@ async function syncClientState(socket: Socket<ClientToServerEvents, ServerToClie
     redisHelpers.getChatMessages(50),
   ]);
 
-  const position = playbackState.isPlaying
-    ? (Date.now() - (playbackState.startedAt || 0)) % (currentTrack?.duration || 0)
-    : playbackState.position;
+  const position = createPlaybackClock(
+    playbackState,
+    currentTrack?.duration || 0,
+  ).position;
 
   if (currentTrack) {
     socket.emit(SOCKET_EVENTS.SYNC_RESPONSE, {
