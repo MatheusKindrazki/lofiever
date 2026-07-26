@@ -63,7 +63,7 @@
     "music-metadata": "^11.14.0",
     "nanoid": "^5.1.5",
     "next": "15.3.0",
-    "next-auth": "^4.24.11",
+    "next-auth": "^4.24.15",
     "next-intl": "^4.5.5",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
