@@ -532,9 +532,6 @@ body:has(.broadcast-app)::before {
 .broadcast-app .tx-dj .who { color: var(--accent); }
 .broadcast-app .tx-dj .who .badge { font-family: var(--font-mono); font-size: 8.5px; font-weight: 600; letter-spacing: 0.07em; border: 1px solid var(--accent); color: var(--accent); padding: 1px 4px; text-transform: uppercase; }
 .broadcast-app .tx-typing { display: inline-flex; gap: 3px; align-items: center; color: var(--accent); }
-.broadcast-app .tx-typing i { width: 5px; height: 5px; border-radius: 50%; background: var(--accent); animation: bc-typing 1s infinite; }
-.broadcast-app .tx-typing i:nth-child(2) { animation-delay: 0.15s; }
-.broadcast-app .tx-typing i:nth-child(3) { animation-delay: 0.3s; }
 @keyframes bc-typing { 0%, 60%, 100% { opacity: 0.25; transform: translateY(0); } 30% { opacity: 1; transform: translateY(-3px); } }
 
 /* failed / pending message states */
@@ -821,7 +818,6 @@ body:has(.broadcast-app)::before {
 @media (prefers-reduced-motion: reduce) {
   .broadcast-app .play-stamp .ring-text,
   .broadcast-app .dl-blip.live,
-  .broadcast-app .tx-typing i,
   .broadcast-app .prog-spinner { animation: none; }
   .broadcast-app .masthead,
   .broadcast-app .cover-block,

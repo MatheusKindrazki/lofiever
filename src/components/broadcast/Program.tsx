@@ -147,7 +147,7 @@ export function Program({ current }: ProgramProps) {
                 history.map((h) => (
                   <div className="prog-row" key={`${h.id}-${String(h.playedAt)}`}>
                     <span className="prog-idx" style={{ fontSize: 11, width: 44 }}>
-                      {new Date(h.playedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      {new Date(h.playedAt).toLocaleTimeString(locale === 'en' ? 'en-US' : 'pt-BR', { hour: '2-digit', minute: '2-digit' })}
                     </span>
                     <div className="prog-meta">
                       <div className="t">{h.title}</div>

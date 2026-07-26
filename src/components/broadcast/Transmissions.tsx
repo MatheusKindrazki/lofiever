@@ -88,12 +88,7 @@ export function Transmissions({ accent, showMascot = true }: { accent: string; s
 
   // Track new messages for entrance animation
   const getMessageClass = useCallback((message: PendingChatMessage) => {
-    const isNew = !previousMessageIds.current.has(message.id);
-    if (isNew) {
-      previousMessageIds.current.add(message.id);
-      return 'bc-msg-enter';
-    }
-    return '';
+    return previousMessageIds.current.has(message.id) ? '' : 'bc-msg-enter';
   }, []);
 
   // Update message IDs on render
