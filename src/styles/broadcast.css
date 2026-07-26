@@ -707,6 +707,117 @@ body:has(.broadcast-app)::before {
   .broadcast-app .crop { display: none; }
 }
 
+/* ============================================================
+   CALM UI ANIMATIONS — purposeful motion for state changes
+   ============================================================ */
+
+/* 1. Play/Pause micro-interaction (NowPlaying) */
+.broadcast-app .play-stamp {
+  transition: transform 0.16s cubic-bezier(0.2, 0.8, 0.2, 1),
+              background-color 0.2s ease,
+              border-color 0.2s ease,
+              box-shadow 0.2s ease;
+}
+.broadcast-app .play-stamp.bc-play-state-change {
+  animation: bc-play-feedback 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@keyframes bc-play-feedback {
+  0% { transform: translate(-50%, -50%) rotate(-7deg) scale(1); }
+  50% { transform: translate(-50%, -50%) rotate(-4deg) scale(1.08); }
+  100% { transform: translate(-50%, -50%) rotate(-7deg) scale(1); }
+}
+
+/* 2. Masthead edition dial/popover animations */
+.broadcast-app .dial-pop {
+  animation: bc-dial-enter 0.25s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+@keyframes bc-dial-enter {
+  from { 
+    opacity: 0; 
+    transform: translateY(-8px); 
+    filter: blur(2px);
+  }
+  to { 
+    opacity: 1; 
+    transform: translateY(0); 
+    filter: blur(0);
+  }
+}
+
+.broadcast-app .dial-opt {
+  animation: bc-dial-stagger 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.broadcast-app .dial-opt:nth-child(1) { animation-delay: 0.05s; }
+.broadcast-app .dial-opt:nth-child(2) { animation-delay: 0.1s; }
+.broadcast-app .dial-opt:nth-child(3) { animation-delay: 0.15s; }
+.broadcast-app .dial-opt:nth-child(4) { animation-delay: 0.2s; }
+@keyframes bc-dial-stagger {
+  from { 
+    opacity: 0; 
+    transform: scale(0.94); 
+  }
+  to { 
+    opacity: 1; 
+    transform: scale(1); 
+  }
+}
+
+/* 3. Program tabs content transition */
+.broadcast-app .prog-content {
+  animation: bc-tab-content-in 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+@keyframes bc-tab-content-in {
+  from { 
+    opacity: 0; 
+    transform: translateX(12px); 
+  }
+  to { 
+    opacity: 1; 
+    transform: translateX(0); 
+  }
+}
+
+/* 4. Transmissions message entrance */
+.broadcast-app .tx-msg.bc-msg-enter {
+  animation: bc-msg-entrance 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+@keyframes bc-msg-entrance {
+  from { 
+    opacity: 0; 
+    transform: translateY(8px); 
+    filter: blur(1px);
+  }
+  to { 
+    opacity: 1; 
+    transform: translateY(0); 
+    filter: blur(0);
+  }
+}
+
+/* 5. Enhanced loading states */
+.broadcast-app .bc-loading-enhanced {
+  position: relative;
+  overflow: hidden;
+}
+.broadcast-app .bc-loading-enhanced::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(242, 231, 206, 0.15), transparent);
+  animation: bc-loading-shimmer 2s ease-in-out infinite;
+}
+@keyframes bc-loading-shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+/* Preserve existing animations with better naming */
+.broadcast-app .bc-typing-indicator i {
+  animation: bc-typing 1s infinite;
+}
+.broadcast-app .bc-typing-indicator i:nth-child(2) { animation-delay: 0.15s; }
+.broadcast-app .bc-typing-indicator i:nth-child(3) { animation-delay: 0.3s; }
+
 @media (prefers-reduced-motion: reduce) {
   .broadcast-app .play-stamp .ring-text,
   .broadcast-app .dl-blip.live,
@@ -717,4 +828,20 @@ body:has(.broadcast-app)::before {
   .broadcast-app .broadcast > .panel,
   .broadcast-app .colophon { animation: none; }
   .broadcast-app .zen { animation: none; }
+  
+  /* Disable new animations for reduced motion */
+  .broadcast-app .play-stamp.bc-play-state-change,
+  .broadcast-app .dial-pop,
+  .broadcast-app .dial-opt,
+  .broadcast-app .prog-content,
+  .broadcast-app .tx-msg.bc-msg-enter,
+  .broadcast-app .bc-loading-enhanced::before,
+  .broadcast-app .bc-typing-indicator i { 
+    animation: none; 
+  }
+  
+  /* Instant transitions for reduced motion */
+  .broadcast-app .play-stamp { 
+    transition: none; 
+  }
 }
