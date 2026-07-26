@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { useTranslations } from 'next-intl';
 import { Ic } from './icons';
 import { RisoCover, seedFromId } from './RisoCover';
@@ -61,6 +61,8 @@ export function NowPlaying({
   const tBroadcast = useTranslations('broadcast');
   const volRef = useRef<HTMLDivElement>(null);
   const dragging = useRef(false);
+  const playStampRef = useRef<HTMLButtonElement>(null);
+  const playingRef = useRef(playing);
 
   const setFromEvent = (clientX: number) => {
     if (!volRef.current) return;
@@ -68,6 +70,32 @@ export function NowPlaying({
     const x = clientX - r.left;
     onVolume(Math.round(Math.max(0, Math.min(1, x / r.width)) * 100));
   };
+
+  const toggleTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Handle play/pause animation feedback
+  const handleToggle = useCallback(() => {
+    const button = playStampRef.current;
+    if (button) {
+      if (toggleTimeoutRef.current) clearTimeout(toggleTimeoutRef.current);
+      button.classList.add('bc-play-state-change');
+      toggleTimeoutRef.current = setTimeout(() => {
+        button.classList.remove('bc-play-state-change');
+        toggleTimeoutRef.current = null;
+      }, 300);
+    }
+    onToggle();
+  }, [onToggle]);
+
+  // Clear pending animation timeout on unmount
+  useEffect(() => () => {
+    if (toggleTimeoutRef.current) clearTimeout(toggleTimeoutRef.current);
+  }, []);
+
+  // Track playing state changes for animation trigger
+  useEffect(() => {
+    playingRef.current = playing;
+  }, [playing]);
 
   useEffect(() => {
     const move = (e: MouseEvent) => {
@@ -113,8 +141,9 @@ export function NowPlaying({
         </figure>
 
         <button
+          ref={playStampRef}
           className={`play-stamp ${playing ? '' : 'paused'}`}
-          onClick={onToggle}
+          onClick={handleToggle}
           aria-label={playing ? t('paused') : t('live')}
         >
           <svg className="ring-text" viewBox="0 0 120 120" aria-hidden="true">

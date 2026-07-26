@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import type { PendingChatMessage } from '@/lib/socket/client';
 import { useChat as useSocketChat, useSocket } from '@/lib/socket/client';
@@ -52,6 +52,7 @@ export function Transmissions({ accent, showMascot = true }: { accent: string; s
   const [confirmingAdult, setConfirmingAdult] = useState(false);
   const feedRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const previousMessageIds = useRef(new Set<string>());
 
   useEffect(() => {
     if (!listenerToken) {
@@ -84,6 +85,16 @@ export function Transmissions({ accent, showMascot = true }: { accent: string; s
         .sort((a, b) => a.timestamp - b.timestamp),
     [messages, userId],
   );
+
+  // Track new messages for entrance animation
+  const getMessageClass = useCallback((message: PendingChatMessage) => {
+    return previousMessageIds.current.has(message.id) ? '' : 'bc-msg-enter';
+  }, []);
+
+  // Update message IDs on render
+  useEffect(() => {
+    visible.forEach((m) => previousMessageIds.current.add(m.id));
+  }, [visible]);
 
   const canSend = isConnected && !hasPendingMessage;
 
@@ -180,11 +191,12 @@ export function Transmissions({ accent, showMascot = true }: { accent: string; s
             onRemove={m.tempId ? () => removeFailedMessage(m.tempId!) : undefined}
             retryLabel={normalizedLocale === 'en' ? 'Retry' : 'Tentar de novo'}
             removeLabel={normalizedLocale === 'en' ? 'Remove' : 'Remover'}
+            extraClass={getMessageClass(m)}
           />
         ))}
 
         {isLoadingAI && (
-          <div className="tx-msg tx-dj">
+          <div className="tx-msg tx-dj bc-msg-enter">
             <div className="tx-byline">
               <span className="who">
                 {showMascot && <LofineMark size={18} color={accent} />}
@@ -192,7 +204,7 @@ export function Transmissions({ accent, showMascot = true }: { accent: string; s
                 <span className="badge">{tBroadcast('transmissions.aiHost')}</span>
               </span>
             </div>
-            <div className="tx-typing">
+            <div className="tx-typing bc-typing-indicator">
               <i />
               <i />
               <i />
@@ -290,6 +302,7 @@ function Message({
   onRemove,
   retryLabel,
   removeLabel,
+  extraClass = '',
 }: {
   message: PendingChatMessage;
   stamp: (ts: number) => string;
@@ -301,6 +314,7 @@ function Message({
   onRemove?: () => void;
   retryLabel: string;
   removeLabel: string;
+  extraClass?: string;
 }) {
   const tBroadcast = useTranslations('broadcast');
   const isDJ = message.userId === 'dj' || message.userId === 'ai' || message.type === 'ai' || message.username === DJ_NAME;
@@ -308,7 +322,7 @@ function Message({
 
   if (isSystem) {
     return (
-      <div className="tx-msg system">
+      <div className={`tx-msg system ${extraClass}`}>
         <div className="tx-text">— {message.content} —</div>
       </div>
     );
@@ -319,6 +333,7 @@ function Message({
   else cls.push('reader');
   if (message.isPending) cls.push('pending');
   if (message.isFailed) cls.push('failed');
+  if (extraClass) cls.push(extraClass);
 
   return (
     <div className={cls.join(' ')}>

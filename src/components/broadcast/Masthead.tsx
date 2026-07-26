@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState, useTransition } from 'react';
+import { useCallback, useEffect, useRef, useState, useTransition } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { usePathname, useRouter } from '@/i18n/routing';
 import { Ic } from './icons';
@@ -36,6 +36,10 @@ export function Masthead({
   const [dialOpen, setDialOpen] = useState(false);
   const isEnglish = locale === 'en';
 
+  const handleDialToggle = useCallback(() => {
+    setDialOpen((o) => !o);
+  }, []);
+
   return (
     <header className="masthead">
       <div className="masthead-top">
@@ -51,7 +55,7 @@ export function Masthead({
               className="chip icon-only"
               aria-label={tBroadcast('palette.aria')}
               aria-expanded={dialOpen}
-              onClick={() => setDialOpen((o) => !o)}
+              onClick={handleDialToggle}
             >
               <Ic.dial />
             </button>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { usePlaylistQueue } from '@/hooks/usePlaylistQueue';
 import { usePlaylistHistory } from '@/hooks/usePlaylistHistory';
@@ -26,6 +26,25 @@ export function Program({ current }: ProgramProps) {
   const locale = useLocale();
   const [tab, setTab] = useState<'program' | 'archive' | 'catalog'>('program');
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const contentRef = useRef<HTMLDivElement>(null);
+  const previousTab = useRef(tab);
+
+  // Handle tab transitions with animation
+  const handleTabChange = useCallback((newTab: typeof tab) => {
+    if (newTab === tab) return;
+    previousTab.current = tab;
+    setTab(newTab);
+  }, [tab]);
+
+  // Trigger animation on tab change
+  useEffect(() => {
+    if (previousTab.current !== tab && contentRef.current) {
+      contentRef.current.classList.remove('prog-content');
+      // Force reflow
+      void contentRef.current.offsetHeight;
+      contentRef.current.classList.add('prog-content');
+    }
+  }, [tab]);
 
   const { data: queue } = usePlaylistQueue();
   const upcoming = queue?.upcoming ?? [];
@@ -57,91 +76,93 @@ export function Program({ current }: ProgramProps) {
       <div className="prog-tabs">
         <button
           className={`prog-tab ${tab === 'program' ? 'active' : ''}`}
-          onClick={() => setTab('program')}
+          onClick={() => handleTabChange('program')}
         >
           {tBroadcast('program.upNext')}
         </button>
         <button
           className={`prog-tab ${tab === 'archive' ? 'active' : ''}`}
-          onClick={() => setTab('archive')}
+          onClick={() => handleTabChange('archive')}
         >
           {tBroadcast('program.history')}
         </button>
         <button
           className={`prog-tab ${tab === 'catalog' ? 'active' : ''}`}
-          onClick={() => setTab('catalog')}
+          onClick={() => handleTabChange('catalog')}
         >
           {localeLabel('title')}
         </button>
       </div>
 
-      {tab === 'catalog' ? (
-        <CatalogRequest />
-      ) : tab === 'program' ? (
-        <>
-          <div className="prog-list">
-            {current && (
-              <div className="prog-row now">
-                <span className="prog-idx">{tBroadcast('program.now')}</span>
-                <div className="prog-meta">
-                  <div className="t">{current.title}</div>
-                  <div className="a">{current.artist}</div>
-                </div>
-                <span className="prog-dur">{fmt(current.duration)}</span>
-              </div>
-            )}
-            {upcoming.length > 0 ? (
-              upcoming.slice(0, 15).map((tr, i) => (
-                <div className="prog-row" key={tr.id}>
-                  <span className="prog-idx">{String(i + 1).padStart(2, '0')}</span>
+      <div ref={contentRef} className="prog-content">
+        {tab === 'catalog' ? (
+          <CatalogRequest />
+        ) : tab === 'program' ? (
+          <>
+            <div className="prog-list">
+              {current && (
+                <div className="prog-row now">
+                  <span className="prog-idx">{tBroadcast('program.now')}</span>
                   <div className="prog-meta">
-                    <div className="t">{tr.title}</div>
-                    <div className="a">{tr.artist}</div>
+                    <div className="t">{current.title}</div>
+                    <div className="a">{current.artist}</div>
                   </div>
-                  <span className="prog-dur">{fmt(tr.duration)}</span>
+                  <span className="prog-dur">{fmt(current.duration)}</span>
                 </div>
-              ))
-            ) : !current ? (
-              <div className="prog-empty">{t('emptyQueue')}</div>
-            ) : null}
-          </div>
-          <div className="no-skip">↻ {tBroadcast('program.shared')}</div>
-        </>
-      ) : (
-        <>
-          <div className="date-nav">
-            <button onClick={() => changeDate(-1)} aria-label={tBroadcast('program.older')}>
-              <Ic.left />
-            </button>
-            <span className="d">{dayLabel}</span>
-            <button onClick={() => changeDate(1)} disabled={isToday} aria-label={tBroadcast('program.newer')}>
-              <Ic.right />
-            </button>
-          </div>
-          <div className="prog-list">
-            {historyLoading ? (
-              <div className="prog-loading">
-                <span className="prog-spinner" />
-              </div>
-            ) : history.length > 0 ? (
-              history.map((h) => (
-                <div className="prog-row" key={`${h.id}-${String(h.playedAt)}`}>
-                  <span className="prog-idx" style={{ fontSize: 11, width: 44 }}>
-                    {new Date(h.playedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                  </span>
-                  <div className="prog-meta">
-                    <div className="t">{h.title}</div>
-                    <div className="a">{h.artist}</div>
+              )}
+              {upcoming.length > 0 ? (
+                upcoming.slice(0, 15).map((tr, i) => (
+                  <div className="prog-row" key={tr.id}>
+                    <span className="prog-idx">{String(i + 1).padStart(2, '0')}</span>
+                    <div className="prog-meta">
+                      <div className="t">{tr.title}</div>
+                      <div className="a">{tr.artist}</div>
+                    </div>
+                    <span className="prog-dur">{fmt(tr.duration)}</span>
                   </div>
-                  <span className="prog-dur">{fmt(h.duration)}</span>
+                ))
+              ) : !current ? (
+                <div className="prog-empty">{t('emptyQueue')}</div>
+              ) : null}
+            </div>
+            <div className="no-skip">↻ {tBroadcast('program.shared')}</div>
+          </>
+        ) : (
+          <>
+            <div className="date-nav">
+              <button onClick={() => changeDate(-1)} aria-label={tBroadcast('program.older')}>
+                <Ic.left />
+              </button>
+              <span className="d">{dayLabel}</span>
+              <button onClick={() => changeDate(1)} disabled={isToday} aria-label={tBroadcast('program.newer')}>
+                <Ic.right />
+              </button>
+            </div>
+            <div className="prog-list">
+              {historyLoading ? (
+                <div className="prog-loading bc-loading-enhanced">
+                  <span className="prog-spinner" />
                 </div>
-              ))
-            ) : (
-              <div className="prog-empty">{t('emptyHistory')}</div>
-            )}
-          </div>
-        </>
-      )}
+              ) : history.length > 0 ? (
+                history.map((h) => (
+                  <div className="prog-row" key={`${h.id}-${String(h.playedAt)}`}>
+                    <span className="prog-idx" style={{ fontSize: 11, width: 44 }}>
+                      {new Date(h.playedAt).toLocaleTimeString(locale === 'en' ? 'en-US' : 'pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                    <div className="prog-meta">
+                      <div className="t">{h.title}</div>
+                      <div className="a">{h.artist}</div>
+                    </div>
+                    <span className="prog-dur">{fmt(h.duration)}</span>
+                  </div>
+                ))
+              ) : (
+                <div className="prog-empty">{t('emptyHistory')}</div>
+              )}
+            </div>
+          </>
+        )}
+      </div>
     </section>
   );
 }
