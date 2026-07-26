@@ -71,19 +71,26 @@ export function NowPlaying({
     onVolume(Math.round(Math.max(0, Math.min(1, x / r.width)) * 100));
   };
 
+  const toggleTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // Handle play/pause animation feedback
   const handleToggle = useCallback(() => {
     const button = playStampRef.current;
     if (button) {
-      // Add animation class
+      if (toggleTimeoutRef.current) clearTimeout(toggleTimeoutRef.current);
       button.classList.add('bc-play-state-change');
-      // Remove after animation completes
-      setTimeout(() => {
+      toggleTimeoutRef.current = setTimeout(() => {
         button.classList.remove('bc-play-state-change');
+        toggleTimeoutRef.current = null;
       }, 300);
     }
     onToggle();
   }, [onToggle]);
+
+  // Clear pending animation timeout on unmount
+  useEffect(() => () => {
+    if (toggleTimeoutRef.current) clearTimeout(toggleTimeoutRef.current);
+  }, []);
 
   // Track playing state changes for animation trigger
   useEffect(() => {
