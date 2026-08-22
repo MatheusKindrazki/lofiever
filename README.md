@@ -226,6 +226,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines.
 | [SECURITY.md](SECURITY.md) | Security policy and reporting |
 | [ENV_VARIABLES.md](ENV_VARIABLES.md) | Environment variables reference |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | System architecture overview |
+| [docs/QUALITY-PROCESS.md](docs/QUALITY-PROCESS.md) | Track generation, quality, and copyright process |
 | [docs/STREAMING.md](docs/STREAMING.md) | Audio streaming configuration |
 
 ## Roadmap
