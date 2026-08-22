@@ -109,7 +109,10 @@ Each card is a JSON object derived from a cluster of similar reference profiles.
 
 For each style card, generate **N = 10** candidate tracks.
 
-- Use the style card prompt in the generation model (Suno / Udio / local MusicGen / future provider).
+- Use only a provider approved by the current architecture RFC and its license gate. The initial
+  shortlist is ACE-Step 1.5 **only after the local spike passes**, with Google Lyria as the API
+  fallback. DiffRhythm2 is a research challenger; MusicGen is ineligible because its official
+  weights are non-commercial. Suno/Udio wrappers are not approved providers.
 - Always use **Custom Mode** if available; keep lyrics empty (instrumental) or use `[Instrumental]` tags.
 - Generation provider must be configured to refuse prompts containing artist names or trademarks (pre-filter).
 - Each candidate gets a unique `generationId` and is stored in cold storage (S3/R2) with metadata.
@@ -125,25 +128,39 @@ Run every generated track through the scoring harness. Output a `TrackScore` rec
 
 | Metric | Target | Reject If | Why |
 |--------|--------|-----------|-----|
-| **Duration** | 150–225 s | < 120 s or > 240 s | radio rotation friendly |
+| **Duration** | 150–184 s | < 145 s or > 190 s | aligned with the current fail-closed validator and Lyria ceiling |
 | **Integrated LUFS** | -14.0 ± 1.0 | outside -16 to -12 | platform loudness norm |
 | **True peak** | ≤ -1.0 dBTP | > -0.5 dBTP | clipping, downstream distortion |
 | **Dynamic range / PLR** | ≥ 8 LU | < 5 LU | too crushed or too variable |
 | **BPM match** | within ±3 of style card | > ±5 | style drift |
 | **Key match confidence** | ≥ 0.6 | < 0.4 | harmonic incoherence |
-| **Reference embedding distance** | ≤ 0.70 cosine | > 0.85 | too close to original references |
-| **Catalog embedding distance** | ≤ 0.75 nearest neighbor | > 0.85 | near-duplicate of existing track |
+| **Reference cosine similarity** | < 0.80 | ≥ 0.88 | too close to original references |
+| **Catalog cosine similarity** | < 0.82 nearest neighbor | ≥ 0.90 | near-duplicate of existing track |
 | **Internal repetition** | entropy 0.4–0.8 | < 0.25 | over-looped / static |
 | **Silence / dead air** | < 2 s lead/trail | > 5 s | bad broadcast experience |
 | **Clipping events** | 0 | > 3 | technical defect |
 
 **Audio embedding model**: CLAP or a music-specific embedding (e.g., Microsoft CLAP, Laion-CLAP, or MERT). Use the same model for reference, catalog, and generated tracks to keep distances comparable.
 
-**Scoring function**:
+These similarity thresholds are **initial estimates**, not universal constants. Calibrate them on
+the 50-generation pilot and version them with the embedding model and revision. Scores between the
+target and reject thresholds require human review.
+
+**Eligibility and ranking**:
 ```
-qualityScore = 0.35 * technicalPass + 0.25 * referenceDistanceOk + 0.20 * catalogDistanceOk + 0.20 * humanRating
+# Eligibility is fail-closed and non-compensable:
+eligible = technicalPass && referenceSimilarityPass && catalogSimilarityPass && fingerprintPass
+
+# Only rank candidates that are already eligible. Every term is normalized to [0, 1].
+qualityScore = 0.45 * humanRating01
+             + 0.25 * (1 - referenceSimilarity01)
+             + 0.20 * (1 - catalogSimilarity01)
+             + 0.10 * technicalMargin01
 ```
-`qualityScore >= 0.75` = eligible for catalog (after remaining gates).
+
+`qualityScore` never overrides a failed gate. It only orders eligible candidates for listening,
+deduplication, and promotion. When no human review exists, `humanRating01 = 0.5` (neutral); the
+pilot calibrates the ranking weights before production.
 
 ## 8. Step 6 — Human Listening Gates
 
@@ -153,7 +170,7 @@ Human ears catch what embeddings miss (artifacts, annoying loops, wrong mood).
 
 | Stage | Human Listen % | Population |
 |-------|----------------|------------|
-| Pilot | 100 % | all 50 tracks |
+| Pilot | 100 % | all 50 generated candidates |
 | Production batch | 30 % | stratified: 100% of first batch in a new style card, 20% of stable style cards |
 | Auto-escalation | 100 % | any automatic flag (similarity > 0.80, clipping, key mismatch, low entropy) |
 | Random audit | 5 % | sample from auto-approved tracks |
@@ -169,8 +186,11 @@ Human ears catch what embeddings miss (artifacts, annoying loops, wrong mood).
 Before mastering, run a catalog deduplication pass.
 
 1. **Embedding cluster**: build a FAISS / Annoy index of all accepted tracks + catalog.
-2. **Flag pairs** with cosine similarity > 0.85.
-3. For each flagged pair, keep the higher `qualityScore`; archive the other.
+2. **Build a graph**: connect candidates in the review band; reject edges use cosine similarity
+   ≥ 0.90 (initial estimate; calibrate and version with the embedding model).
+3. **Resolve each connected component deterministically**: sort by
+   `(qualityScore desc, generationId asc)`, keep the first, and archive the rest with the survivor's
+   ID as the reason. Do not resolve pairs independently; pair order must not change the result.
 4. **Style coverage check**: ensure no style card dominates > 30 % of the batch. Re-balance if needed.
 5. **Diversity metric**: compute silhouette score of the batch using style-card labels. Target > 0.25. Below 0.15 = reject batch.
 
@@ -215,7 +235,8 @@ This is a **blocking** gate, not a scoring gate.
 
 ### 12.2 Output-level checks
 1. **Acoustic fingerprint** against references and a curated commercial corpus using Chromaprint / AcoustID.
-2. **Embedding similarity** to references must stay ≤ 0.85 (soft) and ≤ 0.90 (hard reject).
+2. **Embedding similarity** to references enters human review at ≥ 0.80 and is rejected at ≥ 0.88
+   (initial estimates; calibrate and version with the embedding model).
 3. **Perceptual hash** of mel-spectrogram to catch near-copies.
 4. **Third-party detection** (e.g., AudD, Shazam API) on the final master for high-confidence tracks.
 
@@ -232,7 +253,7 @@ If the generator uses audio samples (not text-to-audio), log every sample source
 
 ## 13. Operational Cadence
 
-**Batch size**: 50 tracks per week.
+**Initial planning unit**: 50 candidate generations per week — not 50 approved tracks.
 
 **Weekly workflow**:
 1. Monday: collect references, generate style cards.
@@ -241,11 +262,15 @@ If the generator uses audio samples (not text-to-audio), log every sample source
 4. Friday: human listening + deduplication.
 5. Weekend: master + ingest.
 
-**At 400 tracks**: 8 weeks of production at 50/week. Add one buffer week for pilot validation.
+**Capacity is yield-dependent.** With the initial gates below, the illustrative compound yield is
+`0.70 × 0.80 × 0.85 = 0.476`, so 50 generations produce about 24 approved tracks and 400 approved
+tracks require about 840 generations, or 16.8 weeks at 50 generations/week. This is a derived
+planning scenario, not a commitment; replace it with measured pilot yield before scheduling the
+campaign.
 
 ## 14. Pilot Recommendation
 
-**Pilot scope**: 50 tracks.
+**Pilot scope**: 50 candidate generations (the number of approved tracks is an output).
 
 - 5 style cards.
 - 10 generations per card.
@@ -283,7 +308,7 @@ A `PILOT_REPORT.md` with:
 | Function | Tool | Notes |
 |----------|------|-------|
 | Analysis | `librosa`, `aubio`, `ffmpeg`, `essentia` | BPM, key, structure, texture |
-| Embeddings | CLAP, MERT, MusicLM embeddings | consistent model across pipeline |
+| Embeddings | CLAP or MERT after license/version review | consistent model and revision across pipeline |
 | Similarity search | FAISS, Annoy, pgvector | catalog dedup |
 | Fingerprinting | Chromaprint / AcoustID | copyright gate |
 | Mastering | `ffmpeg` loudnorm, `sox`, `pydub` | automated chain |
