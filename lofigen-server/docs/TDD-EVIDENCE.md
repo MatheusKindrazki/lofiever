@@ -30,11 +30,13 @@ corresponding production change.
 | Mandatory worker identity | missing worker identity and CI without `--worker-id` were accepted (`2 failures`) | `b93e565` | `9625d8a` |
 | Runtime/path identity hardening | focused run: `14 tests`, `18 failures` across raw config, staging/run/database swaps, protected GET framing, key representation/ownership, schemas, cache contract, and CI | `8a9a061` | `a6aab07` |
 | Direct server constructor validation | direct `LofigenHttpServer(...)` accepted a raw wildcard/short-key/oversized-window config and created runtime state (`1 failure`) | `1772cbe` | `0f6ba70` |
+| Exact numeric config types | public config accepted booleans for port, HMAC window, VAE chunk, and batch ceiling (`1 test`, `4 failures`) | `8291ae8` | `6b35070` |
+| HTTP safety limit types | public server kwargs accepted non-finite/fractional limits and `True`, creating runtime state instead of rejecting before side effects (`1 test`, `7 failures`) | `f977aa2` | `0bb677d` |
 
 Focused GREEN after the last implementation slice:
 
 ```text
-python3.12: Ran 74 tests in 19.149s ... OK
+python3.12: Ran 75 tests in 18.667s ... OK
 ```
 
 The final verification receipt may have a larger count as documentation/packaging checks are
