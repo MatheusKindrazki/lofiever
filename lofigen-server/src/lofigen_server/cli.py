@@ -141,11 +141,37 @@ def main(arguments: Sequence[str] | None = None) -> int:
 
     from .server import create_server
 
-    server = create_server(config)
+    try:
+        server = create_server(config)
+    except Exception:
+        _write_json(
+            sys.stderr,
+            {"error": {"code": "runtime_start_failed"}, "status": "error"},
+        )
+        return 1
+
+    exit_code = 0
     try:
         server.serve_forever()
     except KeyboardInterrupt:
-        return 0
-    finally:
+        pass
+    except Exception:
+        _write_json(
+            sys.stderr,
+            {"error": {"code": "runtime_failed"}, "status": "error"},
+        )
+        exit_code = 1
+
+    try:
         server.server_close()
-    return 0
+    except Exception:
+        if exit_code == 0:
+            _write_json(
+                sys.stderr,
+                {
+                    "error": {"code": "runtime_shutdown_failed"},
+                    "status": "error",
+                },
+            )
+            exit_code = 1
+    return exit_code

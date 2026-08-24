@@ -58,16 +58,16 @@ class LofigenHttpServer(ThreadingHTTPServer):
         self.request_timeout_seconds = request_timeout_seconds
         self._handler_slots = BoundedSemaphore(maximum_handlers)
         self.staging = StagingRoot(config.staging_dir)
-        self.signature_verifier = SignatureVerifier(
-            config.hmac_key,
-            worker_id=config.worker_id,
-            window_seconds=config.hmac_window_seconds,
-            clock=clock,
-            nonce_store=SqliteNonceStore(config.run_dir),
-        )
-        if ":" in config.bind:
-            self.address_family = socket.AF_INET6
         try:
+            self.signature_verifier = SignatureVerifier(
+                config.hmac_key,
+                worker_id=config.worker_id,
+                window_seconds=config.hmac_window_seconds,
+                clock=clock,
+                nonce_store=SqliteNonceStore(config.run_dir),
+            )
+            if ":" in config.bind:
+                self.address_family = socket.AF_INET6
             super().__init__((config.bind, config.port), LofigenRequestHandler)
         except BaseException:
             self.staging.close()
