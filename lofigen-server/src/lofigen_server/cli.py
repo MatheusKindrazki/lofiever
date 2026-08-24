@@ -52,6 +52,34 @@ def build_parser(environment: Mapping[str, str]) -> argparse.ArgumentParser:
         action="store_true",
         default=False,
     )
+    parser.add_argument(
+        "--device",
+        default=_environment_default(environment, "LOFIGEN_DEVICE", "mps"),
+    )
+    parser.add_argument(
+        "--lm-backend",
+        default=_environment_default(environment, "LOFIGEN_LM_BACKEND", "mlx"),
+    )
+    parser.add_argument(
+        "--model-id",
+        default=_environment_default(environment, "LOFIGEN_MODEL_ID"),
+    )
+    parser.add_argument(
+        "--model-revision",
+        default=_environment_default(environment, "LOFIGEN_MODEL_REVISION"),
+    )
+    parser.add_argument(
+        "--vae-chunk",
+        default=_environment_default(
+            environment,
+            "LOFIGEN_VAE_CHUNK",
+            _environment_default(environment, "ACESTEP_MLX_VAE_CHUNK"),
+        ),
+    )
+    parser.add_argument(
+        "--batch-ceiling",
+        default=_environment_default(environment, "LOFIGEN_MAX_BATCH", "1"),
+    )
     parser.add_argument("--check-config", action="store_true")
     return parser
 
@@ -95,8 +123,13 @@ def main(arguments: Sequence[str] | None = None) -> int:
         )
         return 0
 
-    _write_json(
-        sys.stderr,
-        {"error": {"code": "server_not_implemented"}, "status": "error"},
-    )
-    return 2
+    from .server import create_server
+
+    server = create_server(config)
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        return 0
+    finally:
+        server.server_close()
+    return 0

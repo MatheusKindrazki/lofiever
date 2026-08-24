@@ -11,6 +11,7 @@ from typing import Mapping
 
 PROTOCOL_VERSION_PATTERN = re.compile(r"^[1-9][0-9]*(?:\.[0-9]+){0,2}$")
 WORKER_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
+CAPABILITY_VALUE_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]{0,127}$")
 MINIMUM_HMAC_KEY_BYTES = 32
 MAXIMUM_HMAC_KEY_BYTES = 1024
 
@@ -34,6 +35,12 @@ class ServerConfig:
     hmac_key: bytes = field(repr=False)
     hmac_window_seconds: int = 300
     allow_non_loopback: bool = False
+    device: str = "mps"
+    lm_backend: str = "mlx"
+    model_id: str | None = None
+    model_revision: str | None = None
+    vae_chunk: int | None = None
+    batch_ceiling: int = 1
 
 
 def _parse_bool(value: str | None, *, default: bool = False) -> bool:
@@ -108,6 +115,15 @@ def _load_hmac_key(raw_path: str | None) -> tuple[Path, bytes]:
     return candidate.resolve(strict=True), key
 
 
+def _optional_capability_value(value: object, *, code: str) -> str | None:
+    if value is None or str(value).strip() == "":
+        return None
+    normalized = str(value).strip()
+    if not CAPABILITY_VALUE_PATTERN.fullmatch(normalized) or normalized.startswith("/"):
+        raise ConfigError(code)
+    return normalized
+
+
 def load_config(
     values: Mapping[str, str | bool | int | None],
 ) -> ServerConfig:
@@ -152,6 +168,39 @@ def load_config(
         str(values["hmac_key_file"]) if values.get("hmac_key_file") else None
     )
 
+    device = _optional_capability_value(values.get("device", "mps"), code="invalid_device")
+    lm_backend = _optional_capability_value(
+        values.get("lm_backend", "mlx"),
+        code="invalid_lm_backend",
+    )
+    if device is None or lm_backend is None:
+        raise ConfigError("invalid_capabilities")
+    model_id = _optional_capability_value(values.get("model_id"), code="invalid_model_id")
+    model_revision = _optional_capability_value(
+        values.get("model_revision"),
+        code="invalid_model_revision",
+    )
+
+    vae_chunk_value = values.get("vae_chunk")
+    vae_chunk = None
+    if vae_chunk_value not in {None, ""}:
+        vae_chunk = (
+            vae_chunk_value
+            if isinstance(vae_chunk_value, int)
+            else _parse_integer(str(vae_chunk_value), code="invalid_vae_chunk")
+        )
+        if vae_chunk <= 0:
+            raise ConfigError("invalid_vae_chunk")
+
+    batch_value = values.get("batch_ceiling", 1)
+    batch_ceiling = (
+        batch_value
+        if isinstance(batch_value, int)
+        else _parse_integer(str(batch_value), code="invalid_batch_ceiling")
+    )
+    if not 1 <= batch_ceiling <= 8:
+        raise ConfigError("invalid_batch_ceiling")
+
     return ServerConfig(
         bind=bind,
         port=port,
@@ -162,4 +211,10 @@ def load_config(
         hmac_key=hmac_key,
         hmac_window_seconds=hmac_window_seconds,
         allow_non_loopback=allow_non_loopback,
+        device=device,
+        lm_backend=lm_backend,
+        model_id=model_id,
+        model_revision=model_revision,
+        vae_chunk=vae_chunk,
+        batch_ceiling=batch_ceiling,
     )
