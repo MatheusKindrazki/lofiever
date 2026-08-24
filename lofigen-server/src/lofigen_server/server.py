@@ -9,7 +9,7 @@ import re
 import secrets
 import socket
 import sys
-from threading import BoundedSemaphore, Event, Timer
+from threading import BoundedSemaphore, Event, TIMEOUT_MAX, Timer
 import time
 from typing import TextIO
 from urllib.parse import urlsplit
@@ -38,7 +38,7 @@ def _valid_request_timeout(value: int | float) -> bool:
     if type(value) not in {int, float}:
         return False
     try:
-        return value > 0 and math.isfinite(value)
+        return math.isfinite(value) and 0 < value <= TIMEOUT_MAX
     except OverflowError:
         return False
 
