@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lofiever.local/contracts/v1/capabilities.response.schema.json",
+  "title": "Lofigen capabilities response",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "protocolVersion",
+    "workerId",
+    "engine",
+    "device",
+    "lmBackend",
+    "vaeChunk",
+    "batchCeiling",
+    "durationSeconds",
+    "referenceAudio",
+    "modelId",
+    "modelRevision",
+    "modelLoaded",
+    "generationAvailable"
+  ],
+  "properties": {
+    "protocolVersion": { "type": "string", "pattern": "^1(?:\\.[0-9]+){0,2}$" },
+    "workerId": { "type": "string", "minLength": 1, "maxLength": 64 },
+    "engine": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "repoCommit", "upstreamApiVersion"],
+      "properties": {
+        "name": { "const": "ace-step-1.5" },
+        "repoCommit": { "const": "14c0211d5a0653b0f63e27686f4c3f151b4d8629" },
+        "upstreamApiVersion": { "const": "1" }
+      }
+    },
+    "device": { "type": "string", "minLength": 1 },
+    "lmBackend": { "type": "string", "minLength": 1 },
+    "vaeChunk": { "type": ["integer", "null"], "minimum": 1 },
+    "batchCeiling": { "type": "integer", "minimum": 1, "maximum": 8 },
+    "durationSeconds": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["minimum", "maximum"],
+      "properties": {
+        "minimum": { "const": 150 },
+        "maximum": { "const": 184 }
+      }
+    },
+    "referenceAudio": { "const": false },
+    "modelId": { "type": ["string", "null"] },
+    "modelRevision": { "type": ["string", "null"] },
+    "modelLoaded": { "const": false },
+    "generationAvailable": { "const": false }
+  }
+}

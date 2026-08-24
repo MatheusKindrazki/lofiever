@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lofiever.local/contracts/v1/drain.request.schema.json",
+  "title": "Lofigen drain request",
+  "type": "object",
+  "additionalProperties": false,
+  "maxProperties": 1,
+  "properties": {
+    "reason": {
+      "type": "string",
+      "enum": [
+        "interactive_use",
+        "low_disk",
+        "maintenance",
+        "operator_request",
+        "power_state",
+        "thermal_pressure"
+      ]
+    }
+  }
+}

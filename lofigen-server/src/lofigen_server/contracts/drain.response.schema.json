@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lofiever.local/contracts/v1/drain.response.schema.json",
+  "title": "Lofigen drain response",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "status",
+    "protocolVersion",
+    "acceptingJobs",
+    "draining",
+    "jobsInFlight"
+  ],
+  "properties": {
+    "status": { "const": "draining" },
+    "protocolVersion": { "type": "string", "pattern": "^1(?:\\.[0-9]+){0,2}$" },
+    "acceptingJobs": { "const": false },
+    "draining": { "const": true },
+    "jobsInFlight": { "type": "integer", "minimum": 0 }
+  }
+}
