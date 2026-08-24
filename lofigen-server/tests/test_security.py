@@ -90,6 +90,23 @@ class LofigenServerSecurityTests(unittest.TestCase):
         connection.close()
         return response.status, payload
 
+    def request_with_duplicate_header(
+        self,
+        duplicate_name: str,
+        headers: dict[str, str],
+    ) -> tuple[int, dict[str, object]]:
+        connection = HTTPConnection("127.0.0.1", self.server.server_port, timeout=2)
+        connection.putrequest("GET", "/v1/capabilities")
+        for name, value in headers.items():
+            connection.putheader(name, value)
+            if name == duplicate_name:
+                connection.putheader(name, value)
+        connection.endheaders()
+        response = connection.getresponse()
+        payload = json.loads(response.read())
+        connection.close()
+        return response.status, payload
+
     def test_hmac_headers_are_case_insensitive_as_required_by_http(self) -> None:
         headers = {
             name.lower(): value
@@ -156,6 +173,75 @@ class LofigenServerSecurityTests(unittest.TestCase):
                 {"error": {"code": "authentication_failed"}, "status": "error"},
                 payload,
             )
+
+    def test_unbounded_decimal_timestamp_is_rejected_as_structured_unauthorized(self) -> None:
+        status, payload = self.request(
+            "GET",
+            "/v1/capabilities",
+            headers={
+                "X-Lofiever-Timestamp": "9" * 5_000,
+                "X-Lofiever-Nonce": "giant-timestamp-000001",
+                "X-Lofiever-Signature": "0" * 64,
+            },
+        )
+
+        self.assertEqual(401, status)
+        self.assertEqual(
+            {"error": {"code": "authentication_failed"}, "status": "error"},
+            payload,
+        )
+
+    def test_each_hmac_header_must_appear_exactly_once(self) -> None:
+        header_names = [
+            "X-Lofiever-Timestamp",
+            "X-Lofiever-Nonce",
+            "X-Lofiever-Signature",
+        ]
+
+        for index, duplicate_name in enumerate(header_names):
+            with self.subTest(duplicate_name=duplicate_name):
+                headers = signed_headers(
+                    "GET",
+                    "/v1/capabilities",
+                    b"",
+                    nonce=f"duplicate-header-{index:08d}",
+                )
+                status, payload = self.request_with_duplicate_header(
+                    duplicate_name,
+                    headers,
+                )
+
+                self.assertEqual(401, status)
+                self.assertEqual(
+                    {
+                        "error": {"code": "authentication_failed"},
+                        "status": "error",
+                    },
+                    payload,
+                )
+
+    def test_signature_hex_is_canonical_lowercase(self) -> None:
+        headers = signed_headers(
+            "GET",
+            "/v1/capabilities",
+            b"",
+            nonce="uppercase-signature-0001",
+        )
+        headers["X-Lofiever-Signature"] = headers[
+            "X-Lofiever-Signature"
+        ].upper()
+
+        status, payload = self.request(
+            "GET",
+            "/v1/capabilities",
+            headers=headers,
+        )
+
+        self.assertEqual(401, status)
+        self.assertEqual(
+            {"error": {"code": "authentication_failed"}, "status": "error"},
+            payload,
+        )
 
     def test_nonce_replay_is_rejected(self) -> None:
         headers = signed_headers(
