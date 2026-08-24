@@ -86,6 +86,7 @@ class StagingConfinementTests(unittest.TestCase):
             outside.mkdir()
             campaign = root / "campaign-1"
             campaign.mkdir()
+            canonical_root = root.resolve()
             staging = StagingRoot(root)
             self.addCleanup(staging.close)
 
@@ -97,7 +98,7 @@ class StagingConfinementTests(unittest.TestCase):
                 with staging.open_for_write("campaign-1/raw.wav"):
                     self.fail("secure staging I/O followed a swapped symlink")
 
-            self.assertEqual(root / "campaign-1" / "raw.wav", preview)
+            self.assertEqual(canonical_root / "campaign-1" / "raw.wav", preview)
             self.assertFalse((outside / "raw.wav").exists())
 
     def test_root_path_swap_does_not_redirect_the_open_staging_directory(self) -> None:

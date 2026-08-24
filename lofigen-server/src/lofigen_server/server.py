@@ -66,7 +66,17 @@ class LofigenHttpServer(ThreadingHTTPServer):
         )
         if ":" in config.bind:
             self.address_family = socket.AF_INET6
-        super().__init__((config.bind, config.port), LofigenRequestHandler)
+        try:
+            super().__init__((config.bind, config.port), LofigenRequestHandler)
+        except BaseException:
+            self.staging.close()
+            raise
+
+    def server_close(self) -> None:
+        try:
+            super().server_close()
+        finally:
+            self.staging.close()
 
     def get_request(self) -> tuple[socket.socket, object]:
         request, client_address = super().get_request()
