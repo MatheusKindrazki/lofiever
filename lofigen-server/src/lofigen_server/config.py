@@ -75,7 +75,11 @@ def _parse_bool(value: str | None, *, default: bool = False) -> bool:
     raise ConfigError("invalid_boolean")
 
 
-def _parse_integer(value: str, *, code: str) -> int:
+def _parse_integer(value: object, *, code: str) -> int:
+    if type(value) is int:
+        return value
+    if not isinstance(value, str):
+        raise ConfigError(code)
     try:
         return int(value)
     except (TypeError, ValueError) as error:
@@ -373,7 +377,7 @@ def load_config(
         allow_non_loopback=allow_non_loopback,
     )
     port_value = values.get("port", 8787)
-    port = port_value if isinstance(port_value, int) else _parse_integer(str(port_value), code="invalid_port")
+    port = _parse_integer(port_value, code="invalid_port")
     if not 1 <= port <= 65535:
         raise ConfigError("invalid_port")
 
@@ -392,10 +396,9 @@ def load_config(
         raise ConfigError("invalid_worker_id")
 
     window_value = values.get("hmac_window_seconds", 300)
-    hmac_window_seconds = (
-        window_value
-        if isinstance(window_value, int)
-        else _parse_integer(str(window_value), code="invalid_hmac_window")
+    hmac_window_seconds = _parse_integer(
+        window_value,
+        code="invalid_hmac_window",
     )
     if not 1 <= hmac_window_seconds <= 300:
         raise ConfigError("invalid_hmac_window")
@@ -426,19 +429,17 @@ def load_config(
     vae_chunk_value = values.get("vae_chunk")
     vae_chunk = None
     if vae_chunk_value not in {None, ""}:
-        vae_chunk = (
-            vae_chunk_value
-            if isinstance(vae_chunk_value, int)
-            else _parse_integer(str(vae_chunk_value), code="invalid_vae_chunk")
+        vae_chunk = _parse_integer(
+            vae_chunk_value,
+            code="invalid_vae_chunk",
         )
         if vae_chunk <= 0:
             raise ConfigError("invalid_vae_chunk")
 
     batch_value = values.get("batch_ceiling", 1)
-    batch_ceiling = (
-        batch_value
-        if isinstance(batch_value, int)
-        else _parse_integer(str(batch_value), code="invalid_batch_ceiling")
+    batch_ceiling = _parse_integer(
+        batch_value,
+        code="invalid_batch_ceiling",
     )
     if not 1 <= batch_ceiling <= 8:
         raise ConfigError("invalid_batch_ceiling")
