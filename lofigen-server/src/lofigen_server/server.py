@@ -49,6 +49,7 @@ class LofigenHttpServer(ThreadingHTTPServer):
     ) -> None:
         if request_timeout_seconds <= 0 or maximum_handlers < 1:
             raise ValueError("invalid HTTP safety limits")
+        config = revalidate_server_config(config)
         self.config = config
         self.clock = clock
         self.started_at = clock()
@@ -56,10 +57,13 @@ class LofigenHttpServer(ThreadingHTTPServer):
         self.drain_controller = drain_controller
         self.request_timeout_seconds = request_timeout_seconds
         self._handler_slots = BoundedSemaphore(maximum_handlers)
-        self.staging = StagingRoot(
-            config.staging_dir,
-            expected_identity=config._staging_identity,
-        )
+        try:
+            self.staging = StagingRoot(
+                config.staging_dir,
+                expected_identity=config._staging_identity,
+            )
+        except StagingPathError as error:
+            raise ConfigError(error.code) from error
         self.nonce_store: SqliteNonceStore | None = None
         try:
             self.nonce_store = SqliteNonceStore(
@@ -481,15 +485,11 @@ def create_server(
     request_timeout_seconds: float = DEFAULT_REQUEST_TIMEOUT_SECONDS,
     maximum_handlers: int = DEFAULT_MAXIMUM_HANDLERS,
 ) -> LofigenHttpServer:
-    validated_config = revalidate_server_config(config)
-    try:
-        return LofigenHttpServer(
-            validated_config,
-            clock=clock,
-            logger=SafeJsonLogger(log_stream or sys.stdout),
-            drain_controller=drain_controller or DrainController(),
-            request_timeout_seconds=request_timeout_seconds,
-            maximum_handlers=maximum_handlers,
-        )
-    except StagingPathError as error:
-        raise ConfigError(error.code) from error
+    return LofigenHttpServer(
+        config,
+        clock=clock,
+        logger=SafeJsonLogger(log_stream or sys.stdout),
+        drain_controller=drain_controller or DrainController(),
+        request_timeout_seconds=request_timeout_seconds,
+        maximum_handlers=maximum_handlers,
+    )

@@ -139,9 +139,10 @@ Bind, SQLite, staging setup, serving, and shutdown failures emit only stable JSO
 (`runtime_start_failed`, `runtime_failed`, or `runtime_shutdown_failed`), never exception text,
 tracebacks, `$HOME`, or configured paths.
 
-`ServerConfig` is a value object, not a validation token. `create_server()` rebuilds every config
-through the same CLI/environment validator, securely re-reads and compares the key, and propagates
-fresh run/staging device, inode, owner, and mode identities to the fd-backed runtime. Direct
+`ServerConfig` is a value object, not a validation token. The public `LofigenHttpServer`
+constructor rebuilds every config through the same CLI/environment validator, securely re-reads
+and compares the key, and propagates fresh run/staging device, inode, owner, and mode identities
+to the fd-backed runtime. `create_server()` delegates to that single validation boundary. Direct
 construction, `dataclasses.replace`, or a directory swap between parsing and boot cannot bypass
 the bind, key, timestamp-window, or private-directory rules.
 

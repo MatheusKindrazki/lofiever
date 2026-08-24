@@ -109,14 +109,11 @@ class RuntimeConfigValidationTests(unittest.TestCase):
         self.assert_create_rejected(base_config, "unsafe_staging_dir")
 
     def test_direct_http_server_rejects_raw_config_before_bind_or_runtime_handles(self) -> None:
-        occupied = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.addCleanup(occupied.close)
-        occupied.bind(("127.0.0.1", 0))
-        occupied.listen(1)
+        port = unused_loopback_port()
         missing_key_file = self.root / "missing.key"
         raw_config = ServerConfig(
             bind="0.0.0.0",
-            port=occupied.getsockname()[1],
+            port=port,
             protocol_version="1",
             worker_id="m5-local",
             staging_dir=self.staging_dir,
@@ -144,6 +141,11 @@ class RuntimeConfigValidationTests(unittest.TestCase):
         self.assertEqual("unsafe_bind", caught.exception.code)
         self.assertFalse((self.run_dir / "hmac-nonces.sqlite3").exists())
         self.assertEqual([], descriptors_beneath(self.root))
+        bind_probe = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            bind_probe.bind(("0.0.0.0", port))
+        finally:
+            bind_probe.close()
 
     def test_staging_replacement_between_load_and_server_is_rejected(self) -> None:
         config = load_config(self.values())
