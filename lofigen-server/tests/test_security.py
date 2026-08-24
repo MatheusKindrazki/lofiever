@@ -107,6 +107,31 @@ class LofigenServerSecurityTests(unittest.TestCase):
         self.assertEqual(200, status)
         self.assertEqual("1", payload["protocolVersion"])
 
+    def test_oversized_drain_payload_is_rejected_without_logging_the_body(self) -> None:
+        marker = "sensitive-prompt-marker"
+        body = json.dumps({"reason": marker * 100}).encode("utf-8")
+        headers = signed_headers(
+            "POST",
+            "/v1/admin/drain",
+            body,
+            nonce="oversized-body-0000001",
+        )
+        headers["Content-Type"] = "application/json"
+
+        status, payload = self.request(
+            "POST",
+            "/v1/admin/drain",
+            body=body,
+            headers=headers,
+        )
+
+        self.assertEqual(413, status)
+        self.assertEqual(
+            {"error": {"code": "payload_too_large"}, "status": "error"},
+            payload,
+        )
+        self.assertNotIn(marker, self.logs.getvalue())
+
 
 if __name__ == "__main__":
     unittest.main()
