@@ -1,9 +1,10 @@
 # TDD evidence — lofigen-server PR-1
 
 All commands ran from the isolated branch `feat/local-music-worker-contract`. Initial slices used
-`PYTHONPATH=lofigen-server/src` on Python 3.12.7; review-fix slices and the final installed-package
-suite used Python 3.12.11 without `PYTHONPATH`. Each RED commit contains the test before its
-corresponding production change.
+`PYTHONPATH=lofigen-server/src` on Python 3.12.7. Review-fix source suites used uv-managed Python
+3.12.11. The latest installed-wheel suites used isolated Python 3.11.15 and 3.12.11 environments
+without `PYTHONPATH`. Each RED commit contains the test before its corresponding production
+change.
 
 | Slice | RED evidence | RED commit | GREEN commit |
 | --- | --- | --- | --- |
@@ -32,11 +33,19 @@ corresponding production change.
 | Direct server constructor validation | direct `LofigenHttpServer(...)` accepted a raw wildcard/short-key/oversized-window config and created runtime state (`1 failure`) | `1772cbe` | `0f6ba70` |
 | Exact numeric config types | public config accepted booleans for port, HMAC window, VAE chunk, and batch ceiling (`1 test`, `4 failures`) | `8291ae8` | `6b35070` |
 | HTTP safety limit types | public server kwargs accepted non-finite/fractional limits and `True`, creating runtime state instead of rejecting before side effects (`1 test`, `7 failures`) | `f977aa2` | `0bb677d` |
+| Platform request-timeout ceiling | a timeout above `threading.TIMEOUT_MAX` survived bootstrap while the exact platform boundary remained usable (`2 tests`, `1 failure`) | `112a90c` | `c6275a6` |
 
-Focused GREEN after the last implementation slice:
+Current source-tree GREEN at `c6275a6`:
 
 ```text
-python3.12: Ran 75 tests in 18.667s ... OK
+python3.12.11: Ran 76 tests in 20.247s ... OK
+```
+
+Latest installed-wheel full-suite evidence at `6b35070`, before the final HTTP-limit slices:
+
+```text
+python3.11.15: Ran 74 tests in 18.599s ... OK
+python3.12.11: Ran 74 tests in 18.251s ... OK
 ```
 
 The final verification receipt may have a larger count as documentation/packaging checks are
