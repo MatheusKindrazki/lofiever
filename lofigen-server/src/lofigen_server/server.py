@@ -15,9 +15,11 @@ from .auth import SignatureVerifier
 from .config import ServerConfig
 from .runtime import DrainController
 from .safe_logging import SafeJsonLogger
+from .schemas import PayloadError, validate_drain_request
 
 
 ACE_STEP_REPO_COMMIT = "14c0211d5a0653b0f63e27686f4c3f151b4d8629"
+MAXIMUM_REQUEST_BODY_BYTES = 1024
 
 
 class LofigenHttpServer(ThreadingHTTPServer):
@@ -167,9 +169,73 @@ class LofigenRequestHandler(BaseHTTPRequestHandler):
         )
 
     def do_POST(self) -> None:
-        self._write_json(
-            HTTPStatus.NOT_FOUND,
-            {"error": {"code": "not_found"}, "status": "error"},
+        started_at = time.monotonic()
+        route = self._route()
+        status = HTTPStatus.NOT_FOUND
+        if route != "/v1/admin/drain":
+            self._write_json(
+                status,
+                {"error": {"code": "not_found"}, "status": "error"},
+            )
+        else:
+            length_text = self.headers.get("Content-Length")
+            try:
+                content_length = int(length_text or "")
+            except ValueError:
+                content_length = -1
+
+            if content_length < 0:
+                status = HTTPStatus.LENGTH_REQUIRED
+                self._write_json(
+                    status,
+                    {"error": {"code": "content_length_required"}, "status": "error"},
+                )
+            elif content_length > MAXIMUM_REQUEST_BODY_BYTES:
+                status = HTTPStatus.CONTENT_TOO_LARGE
+                self._write_json(
+                    status,
+                    {"error": {"code": "payload_too_large"}, "status": "error"},
+                )
+            else:
+                body = self.rfile.read(content_length)
+                if not self._authenticate("POST", route, body):
+                    status = HTTPStatus.UNAUTHORIZED
+                elif self.headers.get_content_type().lower() != "application/json":
+                    status = HTTPStatus.UNSUPPORTED_MEDIA_TYPE
+                    self._write_json(
+                        status,
+                        {"error": {"code": "json_required"}, "status": "error"},
+                    )
+                else:
+                    try:
+                        validate_drain_request(body)
+                    except PayloadError:
+                        status = HTTPStatus.BAD_REQUEST
+                        self._write_json(
+                            status,
+                            {"error": {"code": "invalid_payload"}, "status": "error"},
+                        )
+                    else:
+                        snapshot = self.server.drain_controller.request_drain()
+                        status = HTTPStatus.ACCEPTED
+                        self._write_json(
+                            status,
+                            {
+                                "acceptingJobs": False,
+                                "draining": snapshot.draining,
+                                "jobsInFlight": snapshot.jobs_in_flight,
+                                "protocolVersion": self.server.config.protocol_version,
+                                "status": "draining",
+                            },
+                        )
+
+        self.server.logger.emit(
+            "request_completed",
+            requestId=secrets.token_hex(8),
+            method="POST",
+            route=route if route == "/v1/admin/drain" else "unknown",
+            status=status.value,
+            elapsedMs=round((time.monotonic() - started_at) * 1000, 3),
         )
 
 
