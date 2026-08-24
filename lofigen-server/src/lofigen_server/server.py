@@ -4,6 +4,7 @@ from collections.abc import Callable
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
+import math
 import re
 import secrets
 import socket
@@ -33,6 +34,15 @@ DEFAULT_REQUEST_TIMEOUT_SECONDS = 5.0
 DEFAULT_MAXIMUM_HANDLERS = 16
 
 
+def _valid_request_timeout(value: int | float) -> bool:
+    if type(value) not in {int, float}:
+        return False
+    try:
+        return value > 0 and math.isfinite(value)
+    except OverflowError:
+        return False
+
+
 class LofigenHttpServer(ThreadingHTTPServer):
     daemon_threads = False
     block_on_close = True
@@ -47,7 +57,11 @@ class LofigenHttpServer(ThreadingHTTPServer):
         request_timeout_seconds: float,
         maximum_handlers: int,
     ) -> None:
-        if request_timeout_seconds <= 0 or maximum_handlers < 1:
+        if (
+            not _valid_request_timeout(request_timeout_seconds)
+            or type(maximum_handlers) is not int
+            or maximum_handlers < 1
+        ):
             raise ValueError("invalid HTTP safety limits")
         config = revalidate_server_config(config)
         self.config = config
