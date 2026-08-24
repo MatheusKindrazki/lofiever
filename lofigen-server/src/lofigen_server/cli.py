@@ -40,6 +40,10 @@ def build_parser(environment: Mapping[str, str]) -> argparse.ArgumentParser:
         default=_environment_default(environment, "LOFIGEN_STAGING_DIR"),
     )
     parser.add_argument(
+        "--run-dir",
+        default=_environment_default(environment, "LOFIGEN_RUN_DIR"),
+    )
+    parser.add_argument(
         "--hmac-key-file",
         default=_environment_default(environment, "LOFIGEN_HMAC_KEY_FILE"),
     )

@@ -21,6 +21,8 @@ class LofigenServerCliTests(unittest.TestCase):
         self.root = Path(self.temp_dir.name)
         self.staging_dir = self.root / "staging"
         self.staging_dir.mkdir()
+        self.run_dir = self.root / "run"
+        self.run_dir.mkdir(mode=0o700)
         self.key_file = self.root / "hmac.key"
         self.key_file.write_bytes(b"k" * 32)
         self.key_file.chmod(0o600)
@@ -52,6 +54,8 @@ class LofigenServerCliTests(unittest.TestCase):
             "--check-config",
             "--staging-dir",
             str(self.staging_dir),
+            "--run-dir",
+            str(self.run_dir),
             "--hmac-key-file",
             str(self.key_file),
         ]
@@ -88,6 +92,8 @@ class LofigenServerCliTests(unittest.TestCase):
             "--check-config",
             "--staging-dir",
             str(self.staging_dir),
+            "--run-dir",
+            str(self.run_dir),
         )
 
         self.assertEqual(2, result.returncode)

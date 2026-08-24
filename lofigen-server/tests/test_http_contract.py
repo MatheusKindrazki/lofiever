@@ -60,6 +60,8 @@ class LofigenServerHttpContractTests(unittest.TestCase):
         self.root = Path(self.temp_dir.name)
         self.staging_dir = self.root / "staging"
         self.staging_dir.mkdir()
+        self.run_dir = self.root / "run"
+        self.run_dir.mkdir(mode=0o700)
         self.key_file = self.root / "hmac.key"
         self.key_file.write_bytes(FIXED_KEY)
         self.key_file.chmod(0o600)
@@ -70,6 +72,7 @@ class LofigenServerHttpContractTests(unittest.TestCase):
             protocol_version="1",
             worker_id="m5-local",
             staging_dir=self.staging_dir,
+            run_dir=self.run_dir,
             hmac_key_file=self.key_file,
             hmac_key=FIXED_KEY,
             hmac_window_seconds=300,

@@ -32,6 +32,7 @@ class ServerConfig:
     protocol_version: str
     worker_id: str
     staging_dir: Path = field(repr=False)
+    run_dir: Path = field(repr=False)
     hmac_key_file: Path = field(repr=False)
     hmac_key: bytes = field(repr=False)
     hmac_window_seconds: int = 300
@@ -89,6 +90,28 @@ def _validate_staging_dir(raw_path: str | None) -> Path:
         raise ConfigError("staging_dir_unavailable") from error
     if not resolved.is_dir() or not os.access(resolved, os.R_OK | os.W_OK | os.X_OK):
         raise ConfigError("staging_dir_unavailable")
+    return resolved
+
+
+def _validate_run_dir(raw_path: str | None) -> Path:
+    if not raw_path:
+        raise ConfigError("run_dir_required")
+
+    candidate = Path(raw_path).expanduser()
+    if candidate.is_symlink():
+        raise ConfigError("unsafe_run_dir")
+    try:
+        resolved = candidate.resolve(strict=True)
+        metadata = resolved.stat()
+    except OSError as error:
+        raise ConfigError("run_dir_unavailable") from error
+    if (
+        not stat.S_ISDIR(metadata.st_mode)
+        or metadata.st_uid != os.geteuid()
+        or stat.S_IMODE(metadata.st_mode) & 0o077
+        or not os.access(resolved, os.R_OK | os.W_OK | os.X_OK)
+    ):
+        raise ConfigError("unsafe_run_dir")
     return resolved
 
 
@@ -191,6 +214,9 @@ def load_config(
     staging_dir = _validate_staging_dir(
         str(values["staging_dir"]) if values.get("staging_dir") else None
     )
+    run_dir = _validate_run_dir(
+        str(values["run_dir"]) if values.get("run_dir") else None
+    )
     hmac_key_file, hmac_key = _load_hmac_key(
         str(values["hmac_key_file"]) if values.get("hmac_key_file") else None
     )
@@ -237,6 +263,7 @@ def load_config(
         protocol_version=protocol_version,
         worker_id=worker_id,
         staging_dir=staging_dir,
+        run_dir=run_dir,
         hmac_key_file=hmac_key_file,
         hmac_key=hmac_key,
         hmac_window_seconds=hmac_window_seconds,

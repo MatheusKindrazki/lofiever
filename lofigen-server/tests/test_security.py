@@ -45,6 +45,8 @@ class LofigenServerSecurityTests(unittest.TestCase):
         root = Path(self.temp_dir.name)
         staging_dir = root / "staging"
         staging_dir.mkdir()
+        run_dir = root / "run"
+        run_dir.mkdir(mode=0o700)
         key_file = root / "hmac.key"
         key_file.write_bytes(FIXED_KEY)
         key_file.chmod(0o600)
@@ -54,6 +56,7 @@ class LofigenServerSecurityTests(unittest.TestCase):
             protocol_version="1",
             worker_id="m5-local",
             staging_dir=staging_dir,
+            run_dir=run_dir,
             hmac_key_file=key_file,
             hmac_key=FIXED_KEY,
         )

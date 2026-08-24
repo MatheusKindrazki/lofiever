@@ -11,7 +11,7 @@ import time
 from typing import TextIO
 from urllib.parse import urlsplit
 
-from .auth import SignatureVerifier
+from .auth import SignatureVerifier, SqliteNonceStore
 from .config import ServerConfig
 from .runtime import DrainController
 from .safe_logging import SafeJsonLogger
@@ -45,6 +45,7 @@ class LofigenHttpServer(ThreadingHTTPServer):
             config.hmac_key,
             window_seconds=config.hmac_window_seconds,
             clock=clock,
+            nonce_store=SqliteNonceStore(config.run_dir),
         )
         super().__init__((config.bind, config.port), LofigenRequestHandler)
 
