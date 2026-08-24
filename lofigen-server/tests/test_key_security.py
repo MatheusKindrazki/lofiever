@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+import stat
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -92,7 +93,8 @@ class HmacKeyLoadingSecurityTests(unittest.TestCase):
 
         def swapping_fstat(descriptor: int) -> os.stat_result:
             metadata = real_fstat(descriptor)
-            swap_path_once()
+            if stat.S_ISREG(metadata.st_mode):
+                swap_path_once()
             return metadata
 
         with (
@@ -104,6 +106,55 @@ class HmacKeyLoadingSecurityTests(unittest.TestCase):
         self.assertTrue(swapped)
         self.assertEqual(ORIGINAL_KEY, config.hmac_key)
         self.assertEqual(REPLACEMENT_KEY, key_file.read_bytes())
+
+    def test_parent_swap_cannot_redirect_the_validated_key_open(self) -> None:
+        key_parent = self.root / "key-parent"
+        detached_parent = self.root / "detached-key-parent"
+        attacker_parent = self.root / "attacker-parent"
+        key_parent.mkdir(mode=0o700)
+        attacker_parent.mkdir(mode=0o700)
+        key_file = key_parent / "hmac.key"
+        attacker_key = attacker_parent / "hmac.key"
+        self.write_key(key_file)
+        self.write_key(attacker_key, REPLACEMENT_KEY)
+        original_parent_inode = key_parent.stat().st_ino
+        real_open = os.open
+        real_fstat = os.fstat
+        swapped = False
+
+        def swap_parent_once() -> None:
+            nonlocal swapped
+            if not swapped:
+                key_parent.rename(detached_parent)
+                key_parent.symlink_to(attacker_parent, target_is_directory=True)
+                swapped = True
+
+        def swapping_open(
+            path: object,
+            flags: int,
+            mode: int = 0o777,
+            *,
+            dir_fd: int | None = None,
+        ) -> int:
+            if dir_fd is None and Path(path) == key_file:
+                swap_parent_once()
+            return real_open(path, flags, mode, dir_fd=dir_fd)
+
+        def swapping_fstat(descriptor: int) -> os.stat_result:
+            metadata = real_fstat(descriptor)
+            if stat.S_ISDIR(metadata.st_mode) and metadata.st_ino == original_parent_inode:
+                swap_parent_once()
+            return metadata
+
+        with (
+            patch("lofigen_server.config.os.open", side_effect=swapping_open),
+            patch("lofigen_server.config.os.fstat", side_effect=swapping_fstat),
+        ):
+            config = load_config(self.values(key_file))
+
+        self.assertTrue(swapped)
+        self.assertEqual(ORIGINAL_KEY, config.hmac_key)
+        self.assertEqual(REPLACEMENT_KEY, (key_parent / "hmac.key").read_bytes())
 
 
 if __name__ == "__main__":

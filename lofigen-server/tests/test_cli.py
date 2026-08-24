@@ -19,7 +19,8 @@ class LofigenServerCliTests(unittest.TestCase):
 
         self.root = Path(self.temp_dir.name)
         self.staging_dir = self.root / "staging"
-        self.staging_dir.mkdir()
+        self.staging_dir.mkdir(mode=0o700)
+        self.staging_dir.chmod(0o700)
         self.run_dir = self.root / "run"
         self.run_dir.mkdir(mode=0o700)
         self.key_file = self.root / "hmac.key"
@@ -116,6 +117,17 @@ class LofigenServerCliTests(unittest.TestCase):
             json.loads(result.stderr),
         )
         self.assertNotIn(str(Path.home()), result.stderr)
+
+    def test_staging_directory_must_be_owned_and_private(self) -> None:
+        self.staging_dir.chmod(0o750)
+
+        result = self.run_cli(*self.valid_arguments())
+
+        self.assertEqual(2, result.returncode)
+        self.assertEqual(
+            {"error": {"code": "unsafe_staging_dir"}, "status": "error"},
+            json.loads(result.stderr),
+        )
 
     def test_startup_rejects_wildcard_bind_even_when_non_loopback_is_explicit(self) -> None:
         result = self.run_cli(
