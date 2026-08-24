@@ -191,7 +191,7 @@ class LofigenRequestHandler(BaseHTTPRequestHandler):
                     {"error": {"code": "content_length_required"}, "status": "error"},
                 )
             elif content_length > MAXIMUM_REQUEST_BODY_BYTES:
-                status = HTTPStatus.CONTENT_TOO_LARGE
+                status = HTTPStatus.REQUEST_ENTITY_TOO_LARGE
                 self._write_json(
                     status,
                     {"error": {"code": "payload_too_large"}, "status": "error"},
