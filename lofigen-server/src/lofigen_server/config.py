@@ -5,7 +5,9 @@ import ipaddress
 import os
 from pathlib import Path
 import re
+import shutil
 import stat
+import subprocess
 from typing import Mapping
 from urllib.parse import urlsplit
 
@@ -15,6 +17,8 @@ WORKER_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 CAPABILITY_VALUE_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]{0,127}$")
 MINIMUM_HMAC_KEY_BYTES = 32
 MAXIMUM_HMAC_KEY_BYTES = 1024
+TAILSCALE_IPV4_NETWORK = ipaddress.ip_network("100.64.0.0/10")
+TAILSCALE_IPV6_NETWORK = ipaddress.ip_network("fd7a:115c:a1e0::/48")
 
 
 class ConfigError(ValueError):
@@ -72,9 +76,59 @@ def _validate_bind(bind: str, *, allow_non_loopback: bool) -> str:
 
     if address.is_unspecified or address.is_multicast:
         raise ConfigError("unsafe_bind")
-    if not address.is_loopback and not allow_non_loopback:
-        raise ConfigError("non_loopback_requires_opt_in")
+    if not address.is_loopback:
+        if not allow_non_loopback:
+            raise ConfigError("non_loopback_requires_opt_in")
+        expected_network = (
+            TAILSCALE_IPV4_NETWORK
+            if address.version == 4
+            else TAILSCALE_IPV6_NETWORK
+        )
+        if address not in expected_network:
+            raise ConfigError("tailscale_bind_required")
+        if address not in _local_tailscale_addresses():
+            raise ConfigError("tailscale_address_not_local")
     return address.compressed
+
+
+def _local_tailscale_addresses() -> frozenset[ipaddress.IPv4Address | ipaddress.IPv6Address]:
+    executable = shutil.which("tailscale")
+    if executable is None:
+        raise ConfigError("tailscale_unavailable")
+    try:
+        result = subprocess.run(
+            [executable, "ip"],
+            capture_output=True,
+            check=False,
+            text=True,
+            timeout=2,
+        )
+    except (OSError, subprocess.SubprocessError) as error:
+        raise ConfigError("tailscale_unavailable") from error
+    if result.returncode != 0:
+        raise ConfigError("tailscale_unavailable")
+
+    addresses: set[ipaddress.IPv4Address | ipaddress.IPv6Address] = set()
+    lines = result.stdout.splitlines()
+    if not lines or len(lines) > 16:
+        raise ConfigError("tailscale_unavailable")
+    for line in lines:
+        candidate = line.strip()
+        if not candidate or len(candidate) > 64:
+            raise ConfigError("tailscale_unavailable")
+        try:
+            address = ipaddress.ip_address(candidate)
+        except ValueError as error:
+            raise ConfigError("tailscale_unavailable") from error
+        network = (
+            TAILSCALE_IPV4_NETWORK
+            if address.version == 4
+            else TAILSCALE_IPV6_NETWORK
+        )
+        if address not in network:
+            raise ConfigError("tailscale_unavailable")
+        addresses.add(address)
+    return frozenset(addresses)
 
 
 def _validate_staging_dir(raw_path: str | None) -> Path:
