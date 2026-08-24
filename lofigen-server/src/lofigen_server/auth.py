@@ -76,9 +76,10 @@ class SignatureVerifier:
         body: bytes,
         headers: Mapping[str, str],
     ) -> AuthDecision:
-        timestamp_text = (headers.get(TIMESTAMP_HEADER) or "").strip()
-        nonce = (headers.get(NONCE_HEADER) or "").strip()
-        signature = (headers.get(SIGNATURE_HEADER) or "").strip()
+        normalized_headers = {name.lower(): value for name, value in headers.items()}
+        timestamp_text = (normalized_headers.get(TIMESTAMP_HEADER.lower()) or "").strip()
+        nonce = (normalized_headers.get(NONCE_HEADER.lower()) or "").strip()
+        signature = (normalized_headers.get(SIGNATURE_HEADER.lower()) or "").strip()
         if not timestamp_text.isascii() or not timestamp_text.isdecimal():
             return AuthDecision(False)
         if not NONCE_PATTERN.fullmatch(nonce):
