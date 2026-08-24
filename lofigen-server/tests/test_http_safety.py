@@ -151,6 +151,38 @@ class HttpResourceSafetyTests(unittest.TestCase):
         )
         self.assertEqual(200, health.status)
 
+    def test_body_deadline_is_absolute_even_when_the_client_drips_bytes(self) -> None:
+        body = b'{"reason":"maintenance"}'
+        with running_server(
+            self.config,
+            logs=self.logs,
+            request_timeout_seconds=0.2,
+        ) as server:
+            sock = socket.create_connection(("127.0.0.1", server.server_port), timeout=1)
+            sock.settimeout(2)
+            sock.sendall(
+                raw_post_headers(
+                    server,
+                    body,
+                    nonce="drip-deadline-0000001",
+                )
+            )
+            started_at = time.monotonic()
+            for byte in body:
+                try:
+                    sock.sendall(bytes([byte]))
+                except OSError:
+                    break
+                time.sleep(0.05)
+
+            status, payload = receive_json(sock)
+            elapsed = time.monotonic() - started_at
+            sock.close()
+
+        self.assertEqual(408, status)
+        self.assertEqual("request_timeout", payload["error"]["code"])
+        self.assertLess(elapsed, 1)
+
     def test_incomplete_body_at_eof_is_rejected(self) -> None:
         body = b'{"reason":"maintenance"}'
         with running_server(self.config, logs=self.logs) as server:
