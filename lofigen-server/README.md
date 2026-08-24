@@ -26,7 +26,9 @@ without exception text.
 The machine-readable contracts live in
 [`src/lofigen_server/contracts`](src/lofigen_server/contracts). The two disk fields in health are
 intentional during protocol stabilization: `freeStagingBytes` is the RFC name and `freeDisk` is a
-compatibility alias with the same byte value.
+compatibility alias with the same byte value. Both come from `fstatvfs` on the staging root fd, so
+renaming or replacing the configured pathname cannot redirect the metric. Health and capabilities
+both report the same stable `workerId`.
 
 This PR deliberately reports:
 
@@ -43,26 +45,37 @@ slices. No placeholder route for them exists here.
 Protected requests carry these headers:
 
 ```text
+X-Lofiever-Signature-Version: 1
+X-Lofiever-Worker-Id: <configured workerId>
 X-Lofiever-Timestamp: <Unix seconds>
 X-Lofiever-Nonce: <16-128 ASCII letters, digits, underscore, or hyphen>
 X-Lofiever-Signature: <lowercase hex HMAC-SHA256>
 ```
 
-Each protected request must contain exactly one timestamp, nonce, and signature header. Drain
-requests must also contain exactly one `Content-Length` and one `Content-Type`; combined values,
-duplicate fields, and `Transfer-Encoding` are rejected before body read. The timestamp is the
-canonical unsigned decimal Unix-seconds representation (1-12 digits, with no leading zero except
-`0`). Signature hex is strictly lowercase.
+Each protected request must contain exactly one signature-version, worker-ID, timestamp, nonce,
+and signature header. The signed worker ID must exactly equal the server's configured identity.
+Drain requests must also contain exactly one `Content-Length` and one `Content-Type`; combined
+values, duplicate fields, and `Transfer-Encoding` are rejected before body read. The timestamp is
+the canonical unsigned decimal Unix-seconds representation (1-12 digits, with no leading zero
+except `0`). Signature hex is strictly lowercase.
 
 The signed bytes are UTF-8 for this exact newline-delimited message, with no trailing newline:
 
 ```text
+LOFIEVER-HMAC-SHA256-V1
+WORKER_ID
 METHOD
 /exact/path
 TIMESTAMP
 NONCE
 SHA256_HEX_OF_EXACT_BODY_BYTES
 ```
+
+The legacy five-line message without label and worker audience is intentionally rejected; PR-2
+does not exist yet, so there is no unsafe compatibility fallback. A request signed for `m5-local`
+fails on `m4-local` even if both machines were accidentally provisioned with identical key bytes.
+That audience binding is defense in depth, not permission to share keys: provision one unique HMAC
+key per worker, keep `LOFIGEN_WORKER_ID` stable, and rotate that worker's key independently.
 
 The default timestamp window is ±300 seconds and cannot be configured above 300 seconds. A nonce
 is accepted once inside that window. Accepted nonces are committed atomically to the bounded
@@ -74,8 +87,10 @@ bounded batch of older rows and fails closed if the bounded ledger remains full 
 The key is read once at boot from `LOFIGEN_HMAC_KEY_FILE`. Boot fails when the file is missing,
 shorter than 32 bytes, longer than 1024 bytes, a symlink, non-regular, not owned by the process
 user, or readable by group/other. Every parent is checked against symlinks and group/world write
-access. The server opens the key once with `O_NOFOLLOW`, validates that descriptor with `fstat`,
-and reads from the same descriptor. The key value and key path are never returned or logged.
+access while walking from the filesystem root with `dir_fd`, `O_DIRECTORY`, and `O_NOFOLLOW`.
+The final key is opened relative to the already validated parent fd, validated with `fstat`, and
+read from the same descriptor. Parent or final-path swaps cannot redirect the read. The key value
+and key path are never returned or logged.
 
 ## Configuration
 
@@ -86,8 +101,8 @@ CLI arguments override their corresponding environment variables.
 | `LOFIGEN_BIND` | `--bind` | `127.0.0.1`; `0.0.0.0` is always rejected |
 | `LOFIGEN_PORT` | `--port` | `8787` |
 | `LOFIGEN_PROTOCOL_VERSION` | `--protocol-version` | `1`; only v1 major is accepted |
-| `LOFIGEN_WORKER_ID` | `--worker-id` | `local-worker`; non-sensitive stable identifier |
-| `LOFIGEN_STAGING_DIR` | `--staging-dir` | required existing writable directory; no symlink |
+| `LOFIGEN_WORKER_ID` | `--worker-id` | `local-worker`; stable signed HMAC audience |
+| `LOFIGEN_STAGING_DIR` | `--staging-dir` | required existing `0700` directory owned by the process user |
 | `LOFIGEN_RUN_DIR` | `--run-dir` | required existing `0700` directory owned by the process user |
 | `LOFIGEN_HMAC_KEY_FILE` | `--hmac-key-file` | required `0600` regular file |
 | `LOFIGEN_HMAC_WINDOW_SECONDS` | `--hmac-window-seconds` | `300`; allowed `1..300` |
@@ -109,6 +124,9 @@ The HTTP server admits at most 16 request handlers and applies a five-second abs
 the entire request, including headers and a slowly dripped body. Shutdown waits for admitted
 handlers, while that deadline prevents a partial client from holding shutdown indefinitely. Drain
 still affects job admission only: jobs already counted by `DrainController` continue to completion.
+Bind, SQLite, staging setup, serving, and shutdown failures emit only stable JSON error codes
+(`runtime_start_failed`, `runtime_failed`, or `runtime_shutdown_failed`), never exception text,
+tracebacks, `$HOME`, or configured paths.
 
 See [`lofigen.example.env`](lofigen.example.env) for a value-free template.
 
@@ -125,6 +143,7 @@ mkdir -p "$HOME/lofigen/staging" "$HOME/lofigen/run" "$HOME/lofigen/logs"
 chmod 700 "$HOME/lofigen" "$HOME/lofigen/staging" "$HOME/lofigen/run" "$HOME/lofigen/logs"
 openssl rand -hex 32 > "$HOME/lofigen/.hmac"
 chmod 600 "$HOME/lofigen/.hmac"
+# Run this independently on each worker. Never copy one worker's .hmac to another.
 
 cp lofigen.example.env "$HOME/lofigen/lofigen.env"
 # Replace only <user> and worker identity values in ~/lofigen/lofigen.env.
@@ -207,7 +226,7 @@ result is a preview for diagnostics only and is **not** an I/O authorization. Fu
 must use `open_for_read()` or exclusive `open_for_write()`: those APIs hold the root directory fd,
 walk each descendant with `dir_fd` + `O_NOFOLLOW`, and remain confined even if the configured root
 or a descendant path is swapped after validation. Accepting a path from an upstream response is
-prohibited.
+prohibited. The staging root itself must already be owned by the process user with mode `0700`.
 
 ## Drain and rollback
 

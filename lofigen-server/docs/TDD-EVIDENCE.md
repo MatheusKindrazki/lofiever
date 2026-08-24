@@ -23,11 +23,15 @@ corresponding production change.
 | HMAC key descriptor | parent permissions and symlinked parent were accepted; path swap loaded replacement bytes (`3 failures`) | `3d89c07` | `e42d838` |
 | Race-safe staging I/O | `4 errors`: no fd-backed read/write/close API existed | `661340f` | `1bc0b63` |
 | Installed-wheel CI | Python matrix, wheel install, packaged-schema smoke, and console smoke assertions failed (`2 failures`) | `711de45` | `3cebcb1` |
+| Worker-bound HMAC audience | versioned M5 request returned `401`; health omitted `workerId` (`1 failure`, `1 error`) | `3f2a263` | `c524172` |
+| Redacted runtime failures | bind/SQLite subprocesses emitted traceback output; staging/create and serve errors escaped (`4 errors`) | `095f123` | `b1f5caa` |
+| Key-parent and staging config | swapping the validated key parent loaded attacker bytes; a `0750` staging root passed config (`2 failures`) | `970545a` | `51d0fd2` |
+| Staging volume metric | closing the held fd still returned `200`, while moving the root pathname returned `500` (`2 failures`) | `c98f256` | `84d6a24` |
 
 Focused GREEN after the last implementation slice:
 
 ```text
-python3.12: Ran 48 tests in 14.402s ... OK
+python3.12: Ran 57 tests in 16.547s ... OK
 ```
 
 The final verification receipt may have a larger count as documentation/packaging checks are
