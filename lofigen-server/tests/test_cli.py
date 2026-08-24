@@ -123,6 +123,32 @@ class LofigenServerCliTests(unittest.TestCase):
         self.assertEqual(0, result.returncode, result.stderr)
         self.assertEqual("100.64.0.10", json.loads(result.stdout)["bind"])
 
+    def test_v1_routes_reject_a_different_protocol_major(self) -> None:
+        result = self.run_cli(
+            *self.valid_arguments(),
+            "--protocol-version",
+            "2.0.0",
+        )
+
+        self.assertEqual(2, result.returncode)
+        self.assertEqual(
+            {"error": {"code": "invalid_protocol_version"}, "status": "error"},
+            json.loads(result.stderr),
+        )
+
+    def test_ace_step_upstream_must_stay_on_loopback(self) -> None:
+        result = self.run_cli(
+            *self.valid_arguments(),
+            "--acestep-url",
+            "http://192.0.2.10:8001",
+        )
+
+        self.assertEqual(2, result.returncode)
+        self.assertEqual(
+            {"error": {"code": "unsafe_acestep_url"}, "status": "error"},
+            json.loads(result.stderr),
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
