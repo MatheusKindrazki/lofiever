@@ -8,7 +8,10 @@ from pathlib import Path
 import re
 import sqlite3
 import stat
+from threading import Lock
 from typing import Callable, Mapping
+
+from .staging import DirectoryIdentity
 
 
 TIMESTAMP_HEADER = "X-Lofiever-Timestamp"
@@ -62,15 +65,67 @@ class SqliteNonceStore:
         self,
         run_dir: Path,
         *,
+        expected_run_identity: DirectoryIdentity | None = None,
         maximum_entries: int = 10_000,
         cleanup_batch: int = 256,
     ) -> None:
-        self._path = run_dir / "hmac-nonces.sqlite3"
+        self._run_dir = run_dir.absolute()
+        self._database_name = "hmac-nonces.sqlite3"
+        self._path = self._run_dir / self._database_name
         self._maximum_entries = maximum_entries
         self._cleanup_batch = cleanup_batch
-        self._prepare_database_file()
-        with self._connect() as connection:
-            connection.execute(
+        self._lock = Lock()
+        self._run_fd = -1
+        self._database_fd = -1
+        self._connection: sqlite3.Connection | None = None
+        nofollow = getattr(os, "O_NOFOLLOW", 0)
+        directory = getattr(os, "O_DIRECTORY", 0)
+        if nofollow == 0 or directory == 0:
+            raise OSError("secure nonce store descriptors are unavailable")
+        close_on_exec = getattr(os, "O_CLOEXEC", 0)
+        try:
+            self._run_fd = os.open(
+                self._run_dir,
+                os.O_RDONLY | directory | nofollow | close_on_exec,
+            )
+            run_metadata = os.fstat(self._run_fd)
+            if (
+                not stat.S_ISDIR(run_metadata.st_mode)
+                or run_metadata.st_uid != os.geteuid()
+                or stat.S_IMODE(run_metadata.st_mode) != 0o700
+            ):
+                raise OSError("unsafe nonce store directory")
+            self._run_identity = DirectoryIdentity.from_stat(run_metadata)
+            if (
+                expected_run_identity is not None
+                and expected_run_identity != self._run_identity
+            ):
+                raise OSError("nonce store directory identity changed")
+
+            self._database_fd = os.open(
+                self._database_name,
+                os.O_RDWR | os.O_CREAT | nofollow | close_on_exec,
+                0o600,
+                dir_fd=self._run_fd,
+            )
+            database_metadata = os.fstat(self._database_fd)
+            if (
+                not stat.S_ISREG(database_metadata.st_mode)
+                or database_metadata.st_uid != os.geteuid()
+                or stat.S_IMODE(database_metadata.st_mode) & 0o077
+            ):
+                raise OSError("unsafe nonce store file")
+            self._database_identity = self._file_identity(database_metadata)
+
+            self._connection = sqlite3.connect(
+                self._path,
+                timeout=2.0,
+                check_same_thread=False,
+            )
+            self._connection.execute("PRAGMA busy_timeout = 2000")
+            self._connection.execute("PRAGMA journal_mode = DELETE")
+            self._connection.execute("PRAGMA synchronous = FULL")
+            self._connection.execute(
                 """
                 CREATE TABLE IF NOT EXISTS used_nonces (
                     nonce TEXT PRIMARY KEY,
@@ -78,33 +133,66 @@ class SqliteNonceStore:
                 ) WITHOUT ROWID
                 """
             )
-            connection.execute(
+            self._connection.execute(
                 "CREATE INDEX IF NOT EXISTS used_nonces_expiry ON used_nonces(expires_at)"
             )
+            self._connection.commit()
+            if not self._identities_intact():
+                raise OSError("nonce store identity changed during setup")
+        except BaseException:
+            self.close()
+            raise
 
-    def _prepare_database_file(self) -> None:
-        flags = os.O_RDWR | os.O_CREAT | getattr(os, "O_CLOEXEC", 0)
-        nofollow = getattr(os, "O_NOFOLLOW", 0)
-        if nofollow == 0:
-            raise OSError("O_NOFOLLOW is required for the nonce store")
-        descriptor = os.open(self._path, flags | nofollow, 0o600)
+    @staticmethod
+    def _file_identity(metadata: os.stat_result) -> tuple[int, int, int, int]:
+        return (
+            metadata.st_dev,
+            metadata.st_ino,
+            metadata.st_uid,
+            stat.S_IMODE(metadata.st_mode),
+        )
+
+    def _identities_intact(self) -> bool:
+        if self._run_fd < 0 or self._database_fd < 0:
+            return False
         try:
-            metadata = os.fstat(descriptor)
-            if (
-                not stat.S_ISREG(metadata.st_mode)
-                or metadata.st_uid != os.geteuid()
-                or metadata.st_mode & 0o077
-            ):
-                raise OSError("unsafe nonce store file")
-        finally:
-            os.close(descriptor)
+            held_run = os.fstat(self._run_fd)
+            current_run = self._run_dir.lstat()
+            held_database = os.fstat(self._database_fd)
+            current_database = os.stat(
+                self._database_name,
+                dir_fd=self._run_fd,
+                follow_symlinks=False,
+            )
+        except OSError:
+            return False
+        return (
+            stat.S_ISDIR(held_run.st_mode)
+            and stat.S_ISDIR(current_run.st_mode)
+            and self._run_identity.matches(held_run)
+            and self._run_identity.matches(current_run)
+            and stat.S_ISREG(held_database.st_mode)
+            and stat.S_ISREG(current_database.st_mode)
+            and self._file_identity(held_database) == self._database_identity
+            and self._file_identity(current_database) == self._database_identity
+        )
 
-    def _connect(self) -> sqlite3.Connection:
-        connection = sqlite3.connect(self._path, timeout=2.0)
-        connection.execute("PRAGMA busy_timeout = 2000")
-        connection.execute("PRAGMA journal_mode = DELETE")
-        connection.execute("PRAGMA synchronous = FULL")
-        return connection
+    def close(self) -> None:
+        with self._lock:
+            connection = self._connection
+            self._connection = None
+            try:
+                if connection is not None:
+                    connection.close()
+            finally:
+                try:
+                    if self._database_fd >= 0:
+                        os.close(self._database_fd)
+                        self._database_fd = -1
+                finally:
+                    if self._run_fd >= 0:
+                        os.close(self._run_fd)
+                        self._run_fd = -1
 
     def accept(
         self,
@@ -115,8 +203,11 @@ class SqliteNonceStore:
         window_seconds: int,
     ) -> bool:
         expires_at = float(signed_timestamp + window_seconds)
-        try:
-            with self._connect() as connection:
+        with self._lock:
+            connection = self._connection
+            if connection is None or not self._identities_intact():
+                return False
+            try:
                 connection.execute("BEGIN IMMEDIATE")
                 expired = connection.execute(
                     """
@@ -147,9 +238,14 @@ class SqliteNonceStore:
                 except sqlite3.IntegrityError:
                     connection.rollback()
                     return False
-            return True
-        except sqlite3.Error:
-            return False
+                connection.commit()
+                return True
+            except sqlite3.Error:
+                try:
+                    connection.rollback()
+                except sqlite3.Error:
+                    pass
+                return False
 
 
 @dataclass(frozen=True)

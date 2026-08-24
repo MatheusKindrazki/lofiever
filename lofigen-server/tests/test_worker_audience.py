@@ -7,12 +7,14 @@ from http.client import HTTPConnection
 import io
 import json
 from pathlib import Path
+import socket
 import tempfile
 import threading
 from typing import Iterator
 import unittest
 
 from lofigen_server import ServerConfig
+from lofigen_server.config import load_config
 from lofigen_server.server import LofigenHttpServer, create_server
 
 
@@ -20,6 +22,15 @@ FIXED_NOW = 1_700_000_000
 SHARED_BY_MISTAKE_KEY = b"0123456789abcdef0123456789abcdef"
 SIGNATURE_VERSION = "1"
 CANONICAL_LABEL = "LOFIEVER-HMAC-SHA256-V1"
+
+
+def unused_loopback_port() -> int:
+    probe = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        probe.bind(("127.0.0.1", 0))
+        return int(probe.getsockname()[1])
+    finally:
+        probe.close()
 
 
 def versioned_headers(*, worker_id: str, nonce: str) -> dict[str, str]:
@@ -94,15 +105,16 @@ class WorkerAudienceContractTests(unittest.TestCase):
         key_file = worker_root / "hmac.key"
         key_file.write_bytes(SHARED_BY_MISTAKE_KEY)
         key_file.chmod(0o600)
-        return ServerConfig(
-            bind="127.0.0.1",
-            port=0,
-            protocol_version="1",
-            worker_id=worker_id,
-            staging_dir=staging_dir,
-            run_dir=run_dir,
-            hmac_key_file=key_file,
-            hmac_key=SHARED_BY_MISTAKE_KEY,
+        return load_config(
+            {
+                "bind": "127.0.0.1",
+                "port": unused_loopback_port(),
+                "protocol_version": "1",
+                "worker_id": worker_id,
+                "staging_dir": str(staging_dir),
+                "run_dir": str(run_dir),
+                "hmac_key_file": str(key_file),
+            }
         )
 
     def test_request_signed_for_m5_is_rejected_by_m4_even_with_the_same_key(self) -> None:

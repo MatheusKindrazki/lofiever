@@ -6,11 +6,13 @@ from http.client import HTTPConnection
 import io
 import json
 from pathlib import Path
+import socket
 import tempfile
 import threading
 import unittest
 
 from lofigen_server import ServerConfig
+from lofigen_server.config import load_config
 from lofigen_server.server import create_server
 
 
@@ -18,6 +20,15 @@ FIXED_NOW = 1_700_000_000
 FIXED_KEY = b"0123456789abcdef0123456789abcdef"
 WORKER_ID = "m5-local"
 CANONICAL_LABEL = "LOFIEVER-HMAC-SHA256-V1"
+
+
+def unused_loopback_port() -> int:
+    probe = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        probe.bind(("127.0.0.1", 0))
+        return int(probe.getsockname()[1])
+    finally:
+        probe.close()
 
 
 def signed_headers(
@@ -56,21 +67,22 @@ class LofigenServerSecurityTests(unittest.TestCase):
         self.addCleanup(self.temp_dir.cleanup)
         root = Path(self.temp_dir.name)
         staging_dir = root / "staging"
-        staging_dir.mkdir()
+        staging_dir.mkdir(mode=0o700)
         run_dir = root / "run"
         run_dir.mkdir(mode=0o700)
         key_file = root / "hmac.key"
         key_file.write_bytes(FIXED_KEY)
         key_file.chmod(0o600)
-        config = ServerConfig(
-            bind="127.0.0.1",
-            port=0,
-            protocol_version="1",
-            worker_id="m5-local",
-            staging_dir=staging_dir,
-            run_dir=run_dir,
-            hmac_key_file=key_file,
-            hmac_key=FIXED_KEY,
+        config = load_config(
+            {
+                "bind": "127.0.0.1",
+                "port": unused_loopback_port(),
+                "protocol_version": "1",
+                "worker_id": "m5-local",
+                "staging_dir": str(staging_dir),
+                "run_dir": str(run_dir),
+                "hmac_key_file": str(key_file),
+            }
         )
         self.logs = io.StringIO()
         self.server = create_server(

@@ -23,10 +23,22 @@
   "properties": {
     "status": { "enum": ["ok", "draining"] },
     "protocolVersion": { "type": "string", "pattern": "^1(?:\\.[0-9]+){0,2}$" },
-    "modelId": { "type": ["string", "null"] },
-    "modelRevision": { "type": ["string", "null"] },
-    "device": { "type": "string", "minLength": 1 },
-    "lmBackend": { "type": "string", "minLength": 1 },
+    "modelId": {
+      "type": ["string", "null"],
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]{0,127}$"
+    },
+    "modelRevision": {
+      "type": ["string", "null"],
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]{0,127}$"
+    },
+    "device": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]{0,127}$"
+    },
+    "lmBackend": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]{0,127}$"
+    },
     "vaeChunk": { "type": ["integer", "null"], "minimum": 1 },
     "batchCeiling": { "type": "integer", "minimum": 1, "maximum": 8 },
     "freeDisk": { "type": "integer", "minimum": 0 },

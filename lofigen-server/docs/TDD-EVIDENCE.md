@@ -28,11 +28,12 @@ corresponding production change.
 | Key-parent and staging config | swapping the validated key parent loaded attacker bytes; a `0750` staging root passed config (`2 failures`) | `970545a` | `51d0fd2` |
 | Staging volume metric | closing the held fd still returned `200`, while moving the root pathname returned `500` (`2 failures`) | `c98f256` | `84d6a24` |
 | Mandatory worker identity | missing worker identity and CI without `--worker-id` were accepted (`2 failures`) | `b93e565` | `9625d8a` |
+| Runtime/path identity hardening | focused run: `14 tests`, `18 failures` across raw config, staging/run/database swaps, protected GET framing, key representation/ownership, schemas, cache contract, and CI | `8a9a061` | `fix(lofigen): anchor validated runtime state` |
 
 Focused GREEN after the last implementation slice:
 
 ```text
-python3.12: Ran 58 tests in 16.022s ... OK
+python3.12: Ran 72 tests in 18.744s ... OK
 ```
 
 The final verification receipt may have a larger count as documentation/packaging checks are

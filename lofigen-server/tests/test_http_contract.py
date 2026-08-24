@@ -5,18 +5,29 @@ from http.client import HTTPConnection
 import io
 import json
 from pathlib import Path
+import socket
 import threading
 import tempfile
 from typing import Iterator
 import unittest
 
 from lofigen_server import ServerConfig
+from lofigen_server.config import load_config
 from lofigen_server.server import LofigenHttpServer, create_server
 
 
 ACE_STEP_COMMIT = "14c0211d5a0653b0f63e27686f4c3f151b4d8629"
 FIXED_NOW = 1_700_000_000
 FIXED_KEY = b"0123456789abcdef0123456789abcdef"
+
+
+def unused_loopback_port() -> int:
+    probe = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        probe.bind(("127.0.0.1", 0))
+        return int(probe.getsockname()[1])
+    finally:
+        probe.close()
 
 
 @contextmanager
@@ -59,29 +70,27 @@ class LofigenServerHttpContractTests(unittest.TestCase):
         self.addCleanup(self.temp_dir.cleanup)
         self.root = Path(self.temp_dir.name)
         self.staging_dir = self.root / "staging"
-        self.staging_dir.mkdir()
+        self.staging_dir.mkdir(mode=0o700)
         self.run_dir = self.root / "run"
         self.run_dir.mkdir(mode=0o700)
         self.key_file = self.root / "hmac.key"
         self.key_file.write_bytes(FIXED_KEY)
         self.key_file.chmod(0o600)
         self.logs = io.StringIO()
-        self.config = ServerConfig(
-            bind="127.0.0.1",
-            port=0,
-            protocol_version="1",
-            worker_id="m5-local",
-            staging_dir=self.staging_dir,
-            run_dir=self.run_dir,
-            hmac_key_file=self.key_file,
-            hmac_key=FIXED_KEY,
-            hmac_window_seconds=300,
-            device="mps",
-            lm_backend="mlx",
-            model_id=None,
-            model_revision=None,
-            vae_chunk=None,
-            batch_ceiling=1,
+        self.config = load_config(
+            {
+                "bind": "127.0.0.1",
+                "port": unused_loopback_port(),
+                "protocol_version": "1",
+                "worker_id": "m5-local",
+                "staging_dir": str(self.staging_dir),
+                "run_dir": str(self.run_dir),
+                "hmac_key_file": str(self.key_file),
+                "hmac_window_seconds": 300,
+                "device": "mps",
+                "lm_backend": "mlx",
+                "batch_ceiling": 1,
+            }
         )
 
     def test_health_is_public_minimal_and_reports_no_loaded_model(self) -> None:

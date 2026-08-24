@@ -9,6 +9,9 @@ description = "Headless local music worker contract for Lofiever"
 requires-python = ">=3.11,<3.13"
 dependencies = []
 
+[dependency-groups]
+dev = ["jsonschema>=4.23,<5"]
+
 [project.scripts]
 lofigen-server = "lofigen_server.cli:main"
 

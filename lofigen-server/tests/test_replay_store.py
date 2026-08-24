@@ -6,17 +6,28 @@ import hmac
 from http.client import HTTPConnection
 import io
 from pathlib import Path
+import socket
 import tempfile
 import threading
 from typing import Iterator
 import unittest
 
 from lofigen_server import ServerConfig
+from lofigen_server.config import load_config
 from lofigen_server.server import LofigenHttpServer, create_server
 
 
 FIXED_KEY = b"0123456789abcdef0123456789abcdef"
 WORKER_ID = "m5-local"
+
+
+def unused_loopback_port() -> int:
+    probe = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        probe.bind(("127.0.0.1", 0))
+        return int(probe.getsockname()[1])
+    finally:
+        probe.close()
 
 
 def signed_headers(*, timestamp: int, nonce: str) -> dict[str, str]:
@@ -91,23 +102,26 @@ class DurableReplayProtectionTests(unittest.TestCase):
         self.temp_dir = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp_dir.cleanup)
         root = Path(self.temp_dir.name)
-        staging_dir = root / "staging"
-        staging_dir.mkdir(mode=0o700)
-        run_dir = root / "run"
-        run_dir.mkdir(mode=0o700)
-        key_file = root / "hmac.key"
-        key_file.write_bytes(FIXED_KEY)
-        key_file.chmod(0o600)
-        self.config = ServerConfig(
-            bind="127.0.0.1",
-            port=0,
-            protocol_version="1",
-            worker_id="m5-local",
-            staging_dir=staging_dir,
-            run_dir=run_dir,
-            hmac_key_file=key_file,
-            hmac_key=FIXED_KEY,
-            hmac_window_seconds=300,
+        self.staging_dir = root / "staging"
+        self.staging_dir.mkdir(mode=0o700)
+        self.run_dir = root / "run"
+        self.run_dir.mkdir(mode=0o700)
+        self.key_file = root / "hmac.key"
+        self.key_file.write_bytes(FIXED_KEY)
+        self.key_file.chmod(0o600)
+
+    def config(self) -> ServerConfig:
+        return load_config(
+            {
+                "bind": "127.0.0.1",
+                "port": unused_loopback_port(),
+                "protocol_version": "1",
+                "worker_id": "m5-local",
+                "staging_dir": str(self.staging_dir),
+                "run_dir": str(self.run_dir),
+                "hmac_key_file": str(self.key_file),
+                "hmac_window_seconds": 300,
+            }
         )
 
     def test_replay_remains_rejected_after_server_restart(self) -> None:
@@ -117,9 +131,9 @@ class DurableReplayProtectionTests(unittest.TestCase):
             nonce="restart-replay-000001",
         )
 
-        with running_server(self.config, clock=clock) as first_server:
+        with running_server(self.config(), clock=clock) as first_server:
             first_status = request_capabilities(first_server, headers)
-        with running_server(self.config, clock=clock) as restarted_server:
+        with running_server(self.config(), clock=clock) as restarted_server:
             replay_status = request_capabilities(restarted_server, headers)
 
         self.assertEqual(200, first_status)
@@ -133,7 +147,7 @@ class DurableReplayProtectionTests(unittest.TestCase):
             nonce="future-boundary-000001",
         )
 
-        with running_server(self.config, clock=clock) as server:
+        with running_server(self.config(), clock=clock) as server:
             first_status = request_capabilities(server, headers)
             clock.now = signed_timestamp + 300
             boundary_replay_status = request_capabilities(server, headers)
@@ -148,8 +162,8 @@ class DurableReplayProtectionTests(unittest.TestCase):
             nonce="shared-concurrent-00001",
         )
 
-        with running_server(self.config, clock=clock) as first_server:
-            with running_server(self.config, clock=clock) as second_server:
+        with running_server(self.config(), clock=clock) as first_server:
+            with running_server(self.config(), clock=clock) as second_server:
                 barrier = threading.Barrier(3)
                 statuses: list[int] = []
 

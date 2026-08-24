@@ -7,12 +7,14 @@ from http.client import HTTPConnection
 import io
 import json
 from pathlib import Path
+import socket
 import tempfile
 import threading
 from typing import Iterator
 import unittest
 
 from lofigen_server import ServerConfig
+from lofigen_server.config import load_config
 from lofigen_server.runtime import DrainController, DrainingError
 from lofigen_server.server import LofigenHttpServer, create_server
 
@@ -20,6 +22,15 @@ from lofigen_server.server import LofigenHttpServer, create_server
 FIXED_NOW = 1_700_000_000
 FIXED_KEY = b"0123456789abcdef0123456789abcdef"
 WORKER_ID = "m5-local"
+
+
+def unused_loopback_port() -> int:
+    probe = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        probe.bind(("127.0.0.1", 0))
+        return int(probe.getsockname()[1])
+    finally:
+        probe.close()
 
 
 def signed_headers(method: str, path: str, body: bytes, nonce: str) -> dict[str, str]:
@@ -88,21 +99,22 @@ class LofigenDrainContractTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             staging_dir = root / "staging"
-            staging_dir.mkdir()
+            staging_dir.mkdir(mode=0o700)
             run_dir = root / "run"
             run_dir.mkdir(mode=0o700)
             key_file = root / "hmac.key"
             key_file.write_bytes(FIXED_KEY)
             key_file.chmod(0o600)
-            config = ServerConfig(
-                bind="127.0.0.1",
-                port=0,
-                protocol_version="1",
-                worker_id="m5-local",
-                staging_dir=staging_dir,
-                run_dir=run_dir,
-                hmac_key_file=key_file,
-                hmac_key=FIXED_KEY,
+            config = load_config(
+                {
+                    "bind": "127.0.0.1",
+                    "port": unused_loopback_port(),
+                    "protocol_version": "1",
+                    "worker_id": "m5-local",
+                    "staging_dir": str(staging_dir),
+                    "run_dir": str(run_dir),
+                    "hmac_key_file": str(key_file),
+                }
             )
             controller = DrainController()
             drain_body = b'{"reason":"operator_request"}'

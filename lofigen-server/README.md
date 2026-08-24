@@ -38,7 +38,8 @@ This PR deliberately reports:
 - `modelId` and `modelRevision` as `null` unless metadata is explicitly configured.
 
 Jobs, status polling, artifacts, cancellation, and the generation adapter are later protocol
-slices. No placeholder route for them exists here.
+slices. No placeholder route for them exists here. **G-JOBS is a future gate**: it must stabilize
+the jobs/status/artifacts/cancel contract in PR-2 before any of those routes are implemented.
 
 ## HMAC wire format
 
@@ -57,7 +58,9 @@ and signature header. The signed worker ID must exactly equal the server's confi
 Drain requests must also contain exactly one `Content-Length` and one `Content-Type`; combined
 values, duplicate fields, and `Transfer-Encoding` are rejected before body read. The timestamp is
 the canonical unsigned decimal Unix-seconds representation (1-12 digits, with no leading zero
-except `0`). Signature hex is strictly lowercase.
+except `0`). A protected `GET` accepts no `Transfer-Encoding`, no duplicate `Content-Length`, and
+only an absent or canonical zero `Content-Length`; this framing check runs before authentication.
+Signature hex is strictly lowercase.
 
 The signed bytes are UTF-8 for this exact newline-delimited message, with no trailing newline:
 
@@ -83,11 +86,19 @@ SQLite ledger at `$LOFIGEN_RUN_DIR/hmac-nonces.sqlite3`. The ledger is shared by
 that run directory and survives restart. A nonce remains retained through
 `signed_timestamp + window`, including the exact validity boundary; each admission removes only a
 bounded batch of older rows and fails closed if the bounded ledger remains full or unavailable.
+Each process holds one SQLite connection plus directory and database proof fds for its lifetime.
+Before every admission it compares the held and current device/inode/owner/mode identities; a
+renamed run directory, replacement path, or replaced final database fails closed instead of
+opening a fresh ledger by pathname.
 
-The key is read once at boot from `LOFIGEN_HMAC_KEY_FILE`. Boot fails when the file is missing,
-shorter than 32 bytes, longer than 1024 bytes, a symlink, non-regular, not owned by the process
-user, or readable by group/other. Every parent is checked against symlinks and group/world write
-access while walking from the filesystem root with `dir_fd`, `O_DIRECTORY`, and `O_NOFOLLOW`.
+The key is read once at boot from `LOFIGEN_HMAC_KEY_FILE`. Its physical representation is 32–1024
+key bytes followed by at most one optional LF byte; repeated newline bytes, CRLF, or more than
+1025 physical bytes are rejected. Boot also fails when the file is missing, a symlink,
+non-regular, not owned by the process user, or readable by group/other. Every parent must be owned
+by root or the effective process user and is checked against symlinks and group/world write access
+while walking from the filesystem root with `dir_fd`, `O_DIRECTORY`, and `O_NOFOLLOW`. A root-owned
+sticky world-writable system directory is accepted only as an intermediate parent, never as the
+key's direct parent.
 The final key is opened relative to the already validated parent fd, validated with `fstat`, and
 read from the same descriptor. Parent or final-path swaps cannot redirect the read. The key value
 and key path are never returned or logged.
@@ -128,6 +139,12 @@ Bind, SQLite, staging setup, serving, and shutdown failures emit only stable JSO
 (`runtime_start_failed`, `runtime_failed`, or `runtime_shutdown_failed`), never exception text,
 tracebacks, `$HOME`, or configured paths.
 
+`ServerConfig` is a value object, not a validation token. `create_server()` rebuilds every config
+through the same CLI/environment validator, securely re-reads and compares the key, and propagates
+fresh run/staging device, inode, owner, and mode identities to the fd-backed runtime. Direct
+construction, `dataclasses.replace`, or a directory swap between parsing and boot cannot bypass
+the bind, key, timestamp-window, or private-directory rules.
+
 See [`lofigen.example.env`](lofigen.example.env) for a value-free template.
 
 ## Reproducible local boot (without weights)
@@ -139,8 +156,11 @@ cd lofigen-server
 uv sync --frozen --python 3.12
 
 umask 077
-mkdir -p "$HOME/lofigen/staging" "$HOME/lofigen/run" "$HOME/lofigen/logs"
-chmod 700 "$HOME/lofigen" "$HOME/lofigen/staging" "$HOME/lofigen/run" "$HOME/lofigen/logs"
+mkdir -p "$HOME/lofigen/staging" "$HOME/lofigen/run" "$HOME/lofigen/logs" \
+  "$HOME/lofigen/modelscope-cache" "$HOME/lofigen/modelscope-credentials"
+chmod 700 "$HOME/lofigen" "$HOME/lofigen/staging" "$HOME/lofigen/run" \
+  "$HOME/lofigen/logs" "$HOME/lofigen/modelscope-cache" \
+  "$HOME/lofigen/modelscope-credentials"
 openssl rand -hex 32 > "$HOME/lofigen/.hmac"
 chmod 600 "$HOME/lofigen/.hmac"
 # Run this independently on each worker. Never copy one worker's .hmac to another.
@@ -195,18 +215,25 @@ The precise answer is layered:
 2. Set `HF_HOME=$HOME/lofigen/hf-cache`, `HF_HUB_CACHE=$HF_HOME/hub`, and
    `HF_XET_CACHE=$HF_HOME/xet` before importing `huggingface_hub` to confine any residual Hub/Xet
    cache.
-3. Set `ACESTEP_DOWNLOAD_SOURCE=huggingface` to choose Hugging Face first. This is **not** a hard
+3. ModelScope 1.34.0 reads `MODELSCOPE_CREDENTIALS_PATH` while its hub constants are imported and
+   uses `MODELSCOPE_CACHE` as the configured cache root. Set
+   `MODELSCOPE_CACHE=$HOME/lofigen/modelscope-cache` and
+   `MODELSCOPE_CREDENTIALS_PATH=$HOME/lofigen/modelscope-credentials/credentials` before importing `modelscope`
+   (and therefore before importing or booting ACE-Step). These are two distinct
+   controls; there is no single ModelScope variable that relocates both cache and credentials.
+4. Set `ACESTEP_DOWNLOAD_SOURCE=huggingface` to choose Hugging Face first. This is **not** a hard
    disable: the pinned downloader falls back to ModelScope after a Hugging Face failure. Both
-   ModelScope call shapes in the snapshot receive the same in-tree `local_dir`/`cache_dir`, but
-   uninstall still checks the default ModelScope cache for unexpected residues.
-4. `acestep/api/lifespan_runtime.py` keeps its own `.cache/acestep` under the ACE-Step project
+   ModelScope call shapes in the snapshot receive the same in-tree `local_dir`/`cache_dir`; the
+   explicit variables also confine library-level fallback state under `$HOME/lofigen`.
+5. `acestep/api/lifespan_runtime.py` keeps its own `.cache/acestep` under the ACE-Step project
    root. It separately honors `ACESTEP_TMPDIR`, `TRITON_CACHE_DIR`, and
    `TORCHINDUCTOR_CACHE_DIR`; no upstream variable moves the entire root cache.
 
 Because the ACE-Step clone itself is installed under `$HOME/lofigen/ACE-Step-1.5`, both
 `checkpoints/.cache/huggingface` and `.cache/acestep` remain under the uninstall tree. The explicit
-Hub variables cover library-level residuals. Uninstall must still inspect for leftovers; it must
-not claim total cleanup solely because `$HOME/lofigen` moved away.
+Hub and ModelScope variables cover library-level residuals. Uninstall must still inspect the
+libraries' defaults for leftovers, including `$HOME/.modelscope/credentials`; it must not claim
+total cleanup solely because `$HOME/lofigen` moved away.
 
 Hugging Face's primary documentation for `HF_HOME`, `HF_HUB_CACHE`, and local-dir metadata:
 
@@ -252,6 +279,7 @@ Rollback/uninstall procedure:
    ```bash
    find "$HOME/.cache/huggingface" -maxdepth 4 -iname '*ace-step*' -print 2>/dev/null
    find "$HOME/.cache/modelscope" -maxdepth 4 -iname '*ace-step*' -print 2>/dev/null
+   test ! -e "$HOME/.modelscope/credentials" || printf '%s\n' "$HOME/.modelscope/credentials"
    ```
 
 7. Move the isolated tree to Trash for recoverable removal, after confirming the exact target:

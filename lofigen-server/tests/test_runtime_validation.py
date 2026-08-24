@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 import os
 from pathlib import Path
 import socket
@@ -10,6 +11,7 @@ from unittest.mock import patch
 from lofigen_server import ServerConfig
 from lofigen_server.config import ConfigError, load_config
 from lofigen_server.server import create_server
+from lofigen_server.staging import StagingRoot
 
 
 FIXED_KEY = b"0123456789abcdef0123456789abcdef"
@@ -22,6 +24,22 @@ def unused_loopback_port() -> int:
         return int(probe.getsockname()[1])
     finally:
         probe.close()
+
+
+def descriptors_beneath(root: Path) -> list[str]:
+    descriptor_root = Path("/dev/fd")
+    if not descriptor_root.exists():
+        descriptor_root = Path("/proc/self/fd")
+    prefix = str(root.resolve())
+    targets: list[str] = []
+    for descriptor in descriptor_root.iterdir():
+        try:
+            target = os.readlink(descriptor)
+        except OSError:
+            continue
+        if target.startswith(prefix):
+            targets.append(target)
+    return targets
 
 
 class RuntimeConfigValidationTests(unittest.TestCase):
@@ -60,55 +78,77 @@ class RuntimeConfigValidationTests(unittest.TestCase):
                 server.server_close()
 
     def test_create_server_revalidates_a_raw_server_config(self) -> None:
-        self.staging_dir.chmod(0o755)
-        raw_config = ServerConfig(
-            bind="0.0.0.0",
-            port=0,
+        base_config = ServerConfig(
+            bind="127.0.0.1",
+            port=unused_loopback_port(),
             protocol_version="1",
             worker_id="m5-local",
             staging_dir=self.staging_dir,
             run_dir=self.run_dir,
             hmac_key_file=self.key_file,
-            hmac_key=b"x",
-            hmac_window_seconds=301,
+            hmac_key=FIXED_KEY,
+            hmac_window_seconds=300,
         )
 
-        self.assert_create_rejected(raw_config, "unsafe_bind")
+        invalid_values = {
+            "wildcard bind": (replace(base_config, bind="0.0.0.0"), "unsafe_bind"),
+            "one-byte key": (replace(base_config, hmac_key=b"x"), "invalid_hmac_key"),
+            "oversized window": (
+                replace(base_config, hmac_window_seconds=301),
+                "invalid_hmac_window",
+            ),
+        }
+        for label, (raw_config, code) in invalid_values.items():
+            with self.subTest(label=label):
+                self.assert_create_rejected(raw_config, code)
+
+        self.staging_dir.chmod(0o755)
+        self.assert_create_rejected(base_config, "unsafe_staging_dir")
 
     def test_staging_replacement_between_load_and_server_is_rejected(self) -> None:
         config = load_config(self.values())
         original = self.root / "original-staging"
         self.staging_dir.rename(original)
-        self.staging_dir.mkdir(mode=0o777)
-        self.staging_dir.chmod(0o777)
+        self.staging_dir.mkdir(mode=0o700)
+        self.staging_dir.chmod(0o700)
 
-        self.assert_create_rejected(config, "unsafe_staging_dir")
+        self.assert_create_rejected(config, "staging_identity_changed")
 
     def test_staging_swap_during_server_construction_fails_closed(self) -> None:
         config = load_config(self.values())
         original = self.root / "original-staging"
-        real_open = os.open
         swapped = False
 
-        def swapping_open(
-            path: object,
-            flags: int,
-            mode: int = 0o777,
-            *,
-            dir_fd: int | None = None,
-        ) -> int:
+        def swapping_staging_root(root: Path, **arguments: object) -> StagingRoot:
             nonlocal swapped
-            if not swapped and dir_fd is None and Path(path) == self.staging_dir:
+            if not swapped:
                 self.staging_dir.rename(original)
                 self.staging_dir.mkdir(mode=0o777)
                 self.staging_dir.chmod(0o777)
                 swapped = True
-            return real_open(path, flags, mode, dir_fd=dir_fd)
+            return StagingRoot(root, **arguments)
 
-        with patch("lofigen_server.staging.os.open", side_effect=swapping_open):
+        with patch(
+            "lofigen_server.server.StagingRoot",
+            side_effect=swapping_staging_root,
+        ):
             self.assert_create_rejected(config, "staging_identity_changed")
 
         self.assertTrue(swapped)
+
+    def test_bind_failure_after_partial_bootstrap_closes_all_runtime_handles(self) -> None:
+        occupied = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.addCleanup(occupied.close)
+        occupied.bind(("127.0.0.1", 0))
+        occupied.listen(1)
+        values = self.values()
+        values["port"] = occupied.getsockname()[1]
+        config = load_config(values)
+
+        with self.assertRaises(OSError):
+            create_server(config)
+
+        self.assertEqual([], descriptors_beneath(self.root))
 
 
 if __name__ == "__main__":

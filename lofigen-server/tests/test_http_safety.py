@@ -6,6 +6,7 @@ import hmac
 from http.client import HTTPConnection
 import io
 import json
+import os
 from pathlib import Path
 import select
 import socket
@@ -16,12 +17,22 @@ from typing import Iterator
 import unittest
 
 from lofigen_server import ServerConfig
+from lofigen_server.config import load_config
 from lofigen_server.server import LofigenHttpServer, create_server
 
 
 FIXED_NOW = 1_700_000_000
 FIXED_KEY = b"0123456789abcdef0123456789abcdef"
 WORKER_ID = "m5-local"
+
+
+def unused_loopback_port() -> int:
+    probe = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        probe.bind(("127.0.0.1", 0))
+        return int(probe.getsockname()[1])
+    finally:
+        probe.close()
 
 
 def signed_headers(method: str, path: str, body: bytes, nonce: str) -> dict[str, str]:
@@ -85,6 +96,22 @@ def receive_json(sock: socket.socket) -> tuple[int, dict[str, object]]:
     return status, json.loads(body)
 
 
+def descriptors_beneath(root: Path) -> list[str]:
+    descriptor_root = Path("/dev/fd")
+    if not descriptor_root.exists():
+        descriptor_root = Path("/proc/self/fd")
+    prefix = str(root.resolve())
+    targets: list[str] = []
+    for descriptor in descriptor_root.iterdir():
+        try:
+            target = os.readlink(descriptor)
+        except OSError:
+            continue
+        if target.startswith(prefix):
+            targets.append(target)
+    return targets
+
+
 @contextmanager
 def running_server(
     config: ServerConfig,
@@ -122,15 +149,16 @@ class HttpResourceSafetyTests(unittest.TestCase):
         key_file = self.root / "hmac.key"
         key_file.write_bytes(FIXED_KEY)
         key_file.chmod(0o600)
-        self.config = ServerConfig(
-            bind="127.0.0.1",
-            port=0,
-            protocol_version="1",
-            worker_id="m5-local",
-            staging_dir=self.staging_dir,
-            run_dir=run_dir,
-            hmac_key_file=key_file,
-            hmac_key=FIXED_KEY,
+        self.config = load_config(
+            {
+                "bind": "127.0.0.1",
+                "port": unused_loopback_port(),
+                "protocol_version": "1",
+                "worker_id": "m5-local",
+                "staging_dir": str(self.staging_dir),
+                "run_dir": str(run_dir),
+                "hmac_key_file": str(key_file),
+            }
         )
         self.logs = io.StringIO()
 
@@ -326,6 +354,45 @@ class HttpResourceSafetyTests(unittest.TestCase):
         self.assertEqual(503, overloaded.status)
         self.assertEqual("server_busy", overloaded_payload["error"]["code"])
         self.assertLess(time.monotonic() - started_at, 2)
+
+    def test_shutdown_waits_for_hostile_partial_body_then_closes_runtime_handles(self) -> None:
+        body = b'{"reason":"maintenance"}'
+        server = create_server(
+            self.config,
+            clock=lambda: FIXED_NOW,
+            log_stream=self.logs,
+            request_timeout_seconds=0.2,
+            maximum_handlers=1,
+        )
+        thread = threading.Thread(target=server.serve_forever, daemon=False)
+        thread.start()
+        sock = socket.create_connection(("127.0.0.1", server.server_port), timeout=1)
+        sock.settimeout(1)
+        closed = False
+        try:
+            sock.sendall(
+                raw_post_headers(
+                    server,
+                    body,
+                    nonce="hostile-shutdown-00001",
+                )
+                + body[:1]
+            )
+            started_at = time.monotonic()
+            server.shutdown()
+            server.server_close()
+            closed = True
+            thread.join(timeout=2)
+
+            self.assertFalse(thread.is_alive())
+            self.assertLess(time.monotonic() - started_at, 2)
+            self.assertEqual([], descriptors_beneath(self.root))
+        finally:
+            sock.close()
+            if not closed:
+                server.shutdown()
+                server.server_close()
+            thread.join(timeout=2)
 
     def test_health_failure_returns_generic_error_without_traceback_or_path(self) -> None:
         captured_stderr = io.StringIO()

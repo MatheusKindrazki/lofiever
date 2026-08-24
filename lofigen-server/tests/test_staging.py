@@ -11,7 +11,7 @@ class StagingConfinementTests(unittest.TestCase):
     def test_only_safe_relative_paths_resolve_below_the_staging_root(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir) / "staging"
-            root.mkdir()
+            root.mkdir(mode=0o700)
             staging = StagingRoot(root)
 
             resolved = staging.resolve("campaign-1/candidate-1/raw.wav")
@@ -36,7 +36,7 @@ class StagingConfinementTests(unittest.TestCase):
             workspace = Path(temp_dir)
             root = workspace / "staging"
             outside = workspace / "outside"
-            root.mkdir()
+            root.mkdir(mode=0o700)
             outside.mkdir()
             (root / "escape").symlink_to(outside, target_is_directory=True)
 
@@ -48,7 +48,7 @@ class StagingConfinementTests(unittest.TestCase):
             workspace = Path(temp_dir)
             real_root = workspace / "real-staging"
             linked_root = workspace / "linked-staging"
-            real_root.mkdir()
+            real_root.mkdir(mode=0o700)
             linked_root.symlink_to(real_root, target_is_directory=True)
 
             with self.assertRaises(StagingPathError):
@@ -57,7 +57,7 @@ class StagingConfinementTests(unittest.TestCase):
     def test_secure_io_creates_and_reads_artifacts_beneath_the_root(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir) / "staging"
-            root.mkdir()
+            root.mkdir(mode=0o700)
             staging = StagingRoot(root)
             self.addCleanup(staging.close)
 
@@ -82,7 +82,7 @@ class StagingConfinementTests(unittest.TestCase):
             workspace = Path(temp_dir)
             root = workspace / "staging"
             outside = workspace / "outside"
-            root.mkdir()
+            root.mkdir(mode=0o700)
             outside.mkdir()
             campaign = root / "campaign-1"
             campaign.mkdir()
@@ -107,7 +107,7 @@ class StagingConfinementTests(unittest.TestCase):
             root = workspace / "staging"
             original_root = workspace / "original-staging"
             outside = workspace / "outside"
-            root.mkdir()
+            root.mkdir(mode=0o700)
             outside.mkdir()
             staging = StagingRoot(root)
             self.addCleanup(staging.close)
@@ -125,7 +125,7 @@ class StagingConfinementTests(unittest.TestCase):
             workspace = Path(temp_dir)
             root = workspace / "staging"
             outside = workspace / "outside.wav"
-            root.mkdir()
+            root.mkdir(mode=0o700)
             outside.write_bytes(b"outside")
             (root / "artifact.wav").symlink_to(outside)
             staging = StagingRoot(root)

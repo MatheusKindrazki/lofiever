@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 import errno
+import hmac
 import ipaddress
 import os
 from pathlib import Path
@@ -11,6 +12,8 @@ import stat
 import subprocess
 from typing import Mapping
 from urllib.parse import urlsplit
+
+from .staging import DirectoryIdentity
 
 
 PROTOCOL_VERSION_PATTERN = re.compile(r"^[1-9][0-9]*(?:\.[0-9]+){0,2}$")
@@ -49,6 +52,16 @@ class ServerConfig:
     vae_chunk: int | None = None
     batch_ceiling: int = 1
     acestep_url: str = "http://127.0.0.1:8001"
+    _staging_identity: DirectoryIdentity | None = field(
+        default=None,
+        repr=False,
+        compare=False,
+    )
+    _run_identity: DirectoryIdentity | None = field(
+        default=None,
+        repr=False,
+        compare=False,
+    )
 
 
 def _parse_bool(value: str | None, *, default: bool = False) -> bool:
@@ -132,7 +145,7 @@ def _local_tailscale_addresses() -> frozenset[ipaddress.IPv4Address | ipaddress.
     return frozenset(addresses)
 
 
-def _validate_staging_dir(raw_path: str | None) -> Path:
+def _validate_staging_dir(raw_path: str | None) -> tuple[Path, DirectoryIdentity]:
     if not raw_path:
         raise ConfigError("staging_dir_required")
 
@@ -148,14 +161,14 @@ def _validate_staging_dir(raw_path: str | None) -> Path:
         raise ConfigError("staging_dir_unavailable")
     if (
         metadata.st_uid != os.geteuid()
-        or stat.S_IMODE(metadata.st_mode) & 0o077
+        or stat.S_IMODE(metadata.st_mode) != 0o700
         or not os.access(resolved, os.R_OK | os.W_OK | os.X_OK)
     ):
         raise ConfigError("unsafe_staging_dir")
-    return resolved
+    return resolved, DirectoryIdentity.from_stat(metadata)
 
 
-def _validate_run_dir(raw_path: str | None) -> Path:
+def _validate_run_dir(raw_path: str | None) -> tuple[Path, DirectoryIdentity]:
     if not raw_path:
         raise ConfigError("run_dir_required")
 
@@ -170,11 +183,31 @@ def _validate_run_dir(raw_path: str | None) -> Path:
     if (
         not stat.S_ISDIR(metadata.st_mode)
         or metadata.st_uid != os.geteuid()
-        or stat.S_IMODE(metadata.st_mode) & 0o077
+        or stat.S_IMODE(metadata.st_mode) != 0o700
         or not os.access(resolved, os.R_OK | os.W_OK | os.X_OK)
     ):
         raise ConfigError("unsafe_run_dir")
-    return resolved
+    return resolved, DirectoryIdentity.from_stat(metadata)
+
+
+def _validate_hmac_key_parent_descriptor(
+    descriptor: int,
+    *,
+    is_direct_parent: bool,
+) -> None:
+    metadata = os.fstat(descriptor)
+    if not stat.S_ISDIR(metadata.st_mode):
+        raise ConfigError("unsafe_hmac_key_parent")
+    if metadata.st_uid not in {0, os.geteuid()}:
+        raise ConfigError("hmac_key_parent_owner")
+    mode = stat.S_IMODE(metadata.st_mode)
+    trusted_sticky_system_parent = (
+        not is_direct_parent
+        and metadata.st_uid == 0
+        and bool(mode & stat.S_ISVTX)
+    )
+    if mode & 0o022 and not trusted_sticky_system_parent:
+        raise ConfigError("hmac_key_parent_permissions")
 
 
 def _load_hmac_key(raw_path: str | None) -> tuple[Path, bytes]:
@@ -194,11 +227,15 @@ def _load_hmac_key(raw_path: str | None) -> tuple[Path, bytes]:
 
     try:
         parent_descriptor = os.open(candidate.anchor, directory_flags)
-    except OSError as error:
+    except OSError:
         raise ConfigError("hmac_key_unavailable")
 
     try:
         parent_segments = candidate.parts[1:-1]
+        _validate_hmac_key_parent_descriptor(
+            parent_descriptor,
+            is_direct_parent=not parent_segments,
+        )
         for index, segment in enumerate(parent_segments):
             try:
                 next_descriptor = os.open(
@@ -211,18 +248,11 @@ def _load_hmac_key(raw_path: str | None) -> tuple[Path, bytes]:
                     raise ConfigError("unsafe_hmac_key_parent") from error
                 raise ConfigError("hmac_key_unavailable") from error
             try:
-                metadata = os.fstat(next_descriptor)
-                if not stat.S_ISDIR(metadata.st_mode):
-                    raise ConfigError("unsafe_hmac_key_parent")
-                mode = stat.S_IMODE(metadata.st_mode)
                 is_direct_parent = index == len(parent_segments) - 1
-                trusted_sticky_system_parent = (
-                    not is_direct_parent
-                    and metadata.st_uid == 0
-                    and bool(mode & stat.S_ISVTX)
+                _validate_hmac_key_parent_descriptor(
+                    next_descriptor,
+                    is_direct_parent=is_direct_parent,
                 )
-                if mode & 0o022 and not trusted_sticky_system_parent:
-                    raise ConfigError("hmac_key_parent_permissions")
             except BaseException:
                 os.close(next_descriptor)
                 raise
@@ -258,7 +288,13 @@ def _load_hmac_key(raw_path: str | None) -> tuple[Path, bytes]:
 
     if len(raw_key) > MAXIMUM_HMAC_KEY_BYTES + 1:
         raise ConfigError("hmac_key_length")
-    key = raw_key.rstrip(b"\r\n")
+    key = raw_key
+    if key.endswith(b"\n"):
+        key = key[:-1]
+        if key.endswith((b"\r", b"\n")):
+            raise ConfigError("hmac_key_length")
+    elif key.endswith(b"\r"):
+        raise ConfigError("hmac_key_length")
     if not MINIMUM_HMAC_KEY_BYTES <= len(key) <= MAXIMUM_HMAC_KEY_BYTES:
         raise ConfigError("hmac_key_length")
     return candidate, key
@@ -364,10 +400,10 @@ def load_config(
     if not 1 <= hmac_window_seconds <= 300:
         raise ConfigError("invalid_hmac_window")
 
-    staging_dir = _validate_staging_dir(
+    staging_dir, staging_identity = _validate_staging_dir(
         str(values["staging_dir"]) if values.get("staging_dir") else None
     )
-    run_dir = _validate_run_dir(
+    run_dir, run_identity = _validate_run_dir(
         str(values["run_dir"]) if values.get("run_dir") else None
     )
     hmac_key_file, hmac_key = _load_hmac_key(
@@ -428,4 +464,56 @@ def load_config(
         vae_chunk=vae_chunk,
         batch_ceiling=batch_ceiling,
         acestep_url=acestep_url,
+        _staging_identity=staging_identity,
+        _run_identity=run_identity,
     )
+
+
+def revalidate_server_config(config: ServerConfig) -> ServerConfig:
+    """Rebuild a runtime config through the public validation boundary.
+
+    `ServerConfig` remains a useful immutable value object, but constructing it directly is not a
+    validation capability. The server factory calls this function and uses only the freshly
+    validated result and directory identities.
+    """
+
+    if not isinstance(config, ServerConfig):
+        raise ConfigError("invalid_server_config")
+    normalized = load_config(
+        {
+            "bind": config.bind,
+            "port": config.port,
+            "protocol_version": config.protocol_version,
+            "worker_id": config.worker_id,
+            "staging_dir": str(config.staging_dir),
+            "run_dir": str(config.run_dir),
+            "hmac_key_file": str(config.hmac_key_file),
+            "hmac_window_seconds": config.hmac_window_seconds,
+            "allow_non_loopback": config.allow_non_loopback,
+            "device": config.device,
+            "lm_backend": config.lm_backend,
+            "model_id": config.model_id,
+            "model_revision": config.model_revision,
+            "vae_chunk": config.vae_chunk,
+            "batch_ceiling": config.batch_ceiling,
+            "acestep_url": config.acestep_url,
+        }
+    )
+    if not isinstance(config.hmac_key, bytes) or not hmac.compare_digest(
+        normalized.hmac_key,
+        config.hmac_key,
+    ):
+        raise ConfigError("invalid_hmac_key")
+    if normalized != config:
+        raise ConfigError("invalid_server_config")
+    if (
+        config._staging_identity is not None
+        and normalized._staging_identity != config._staging_identity
+    ):
+        raise ConfigError("staging_identity_changed")
+    if (
+        config._run_identity is not None
+        and normalized._run_identity != config._run_identity
+    ):
+        raise ConfigError("run_identity_changed")
+    return normalized

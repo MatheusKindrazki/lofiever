@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 import os
 from pathlib import Path
 import re
@@ -11,13 +12,40 @@ SAFE_SEGMENT = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 
 
 class StagingPathError(ValueError):
-    pass
+    def __init__(self, code: str) -> None:
+        super().__init__(code)
+        self.code = code
+
+
+@dataclass(frozen=True)
+class DirectoryIdentity:
+    device: int
+    inode: int
+    owner: int
+    mode: int
+
+    @classmethod
+    def from_stat(cls, metadata: os.stat_result) -> DirectoryIdentity:
+        return cls(
+            device=metadata.st_dev,
+            inode=metadata.st_ino,
+            owner=metadata.st_uid,
+            mode=stat.S_IMODE(metadata.st_mode),
+        )
+
+    def matches(self, metadata: os.stat_result) -> bool:
+        return self == DirectoryIdentity.from_stat(metadata)
 
 
 class StagingRoot:
     """Hold a staging dirfd and perform symlink-safe artifact I/O beneath it."""
 
-    def __init__(self, root: Path) -> None:
+    def __init__(
+        self,
+        root: Path,
+        *,
+        expected_identity: DirectoryIdentity | None = None,
+    ) -> None:
         candidate = root.absolute()
         try:
             path_metadata = candidate.lstat()
@@ -44,6 +72,13 @@ class StagingRoot:
             metadata = os.fstat(root_fd)
             if not stat.S_ISDIR(metadata.st_mode):
                 raise StagingPathError("staging root is not a directory")
+            if expected_identity is not None and not expected_identity.matches(metadata):
+                raise StagingPathError("staging_identity_changed")
+            if (
+                metadata.st_uid != os.geteuid()
+                or stat.S_IMODE(metadata.st_mode) != 0o700
+            ):
+                raise StagingPathError("unsafe_staging_dir")
             resolved_root = candidate.resolve(strict=True)
         except BaseException:
             os.close(root_fd)

@@ -21,7 +21,10 @@
   ],
   "properties": {
     "protocolVersion": { "type": "string", "pattern": "^1(?:\\.[0-9]+){0,2}$" },
-    "workerId": { "type": "string", "minLength": 1, "maxLength": 64 },
+    "workerId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"
+    },
     "engine": {
       "type": "object",
       "additionalProperties": false,
@@ -32,8 +35,14 @@
         "upstreamApiVersion": { "const": "1" }
       }
     },
-    "device": { "type": "string", "minLength": 1 },
-    "lmBackend": { "type": "string", "minLength": 1 },
+    "device": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]{0,127}$"
+    },
+    "lmBackend": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]{0,127}$"
+    },
     "vaeChunk": { "type": ["integer", "null"], "minimum": 1 },
     "batchCeiling": { "type": "integer", "minimum": 1, "maximum": 8 },
     "durationSeconds": {
@@ -46,8 +55,14 @@
       }
     },
     "referenceAudio": { "const": false },
-    "modelId": { "type": ["string", "null"] },
-    "modelRevision": { "type": ["string", "null"] },
+    "modelId": {
+      "type": ["string", "null"],
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]{0,127}$"
+    },
+    "modelRevision": {
+      "type": ["string", "null"],
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]{0,127}$"
+    },
     "modelLoaded": { "const": false },
     "generationAvailable": { "const": false }
   }

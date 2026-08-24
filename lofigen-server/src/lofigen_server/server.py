@@ -19,11 +19,11 @@ from .auth import (
     SignatureVerifier,
     SqliteNonceStore,
 )
-from .config import ServerConfig
+from .config import ConfigError, ServerConfig, revalidate_server_config
 from .runtime import DrainController
 from .safe_logging import SafeJsonLogger
 from .schemas import PayloadError, validate_drain_request
-from .staging import StagingRoot
+from .staging import StagingPathError, StagingRoot
 
 
 ACE_STEP_REPO_COMMIT = "14c0211d5a0653b0f63e27686f4c3f151b4d8629"
@@ -56,19 +56,29 @@ class LofigenHttpServer(ThreadingHTTPServer):
         self.drain_controller = drain_controller
         self.request_timeout_seconds = request_timeout_seconds
         self._handler_slots = BoundedSemaphore(maximum_handlers)
-        self.staging = StagingRoot(config.staging_dir)
+        self.staging = StagingRoot(
+            config.staging_dir,
+            expected_identity=config._staging_identity,
+        )
+        self.nonce_store: SqliteNonceStore | None = None
         try:
+            self.nonce_store = SqliteNonceStore(
+                config.run_dir,
+                expected_run_identity=config._run_identity,
+            )
             self.signature_verifier = SignatureVerifier(
                 config.hmac_key,
                 worker_id=config.worker_id,
                 window_seconds=config.hmac_window_seconds,
                 clock=clock,
-                nonce_store=SqliteNonceStore(config.run_dir),
+                nonce_store=self.nonce_store,
             )
             if ":" in config.bind:
                 self.address_family = socket.AF_INET6
             super().__init__((config.bind, config.port), LofigenRequestHandler)
         except BaseException:
+            if self.nonce_store is not None:
+                self.nonce_store.close()
             self.staging.close()
             raise
 
@@ -76,7 +86,11 @@ class LofigenHttpServer(ThreadingHTTPServer):
         try:
             super().server_close()
         finally:
-            self.staging.close()
+            try:
+                if self.nonce_store is not None:
+                    self.nonce_store.close()
+            finally:
+                self.staging.close()
 
     def get_request(self) -> tuple[socket.socket, object]:
         request, client_address = super().get_request()
@@ -254,6 +268,19 @@ class LofigenRequestHandler(BaseHTTPRequestHandler):
             return None, HTTPStatus.BAD_REQUEST
         return body, None
 
+    def _bodyless_transport_is_valid(self) -> bool:
+        content_length_values = self.headers.get_all("Content-Length", failobj=[])
+        transfer_encoding_values = self.headers.get_all(
+            "Transfer-Encoding",
+            failobj=[],
+        )
+        if transfer_encoding_values or len(content_length_values) > 1:
+            return False
+        if not content_length_values:
+            return True
+        length_text = content_length_values[0].strip()
+        return bool(CONTENT_LENGTH_PATTERN.fullmatch(length_text)) and length_text == "0"
+
     def _write_error(self, status: HTTPStatus, code: str) -> None:
         self._write_json(
             status,
@@ -311,7 +338,10 @@ class LofigenRequestHandler(BaseHTTPRequestHandler):
                 status = HTTPStatus.OK
                 self._write_json(status, self._health_payload())
             elif route == "/v1/capabilities":
-                if not self._authenticate("GET", route):
+                if not self._bodyless_transport_is_valid():
+                    status = HTTPStatus.BAD_REQUEST
+                    self._write_error(status, "invalid_request_headers")
+                elif not self._authenticate("GET", route):
                     status = HTTPStatus.UNAUTHORIZED
                 else:
                     status = HTTPStatus.OK
@@ -451,11 +481,15 @@ def create_server(
     request_timeout_seconds: float = DEFAULT_REQUEST_TIMEOUT_SECONDS,
     maximum_handlers: int = DEFAULT_MAXIMUM_HANDLERS,
 ) -> LofigenHttpServer:
-    return LofigenHttpServer(
-        config,
-        clock=clock,
-        logger=SafeJsonLogger(log_stream or sys.stdout),
-        drain_controller=drain_controller or DrainController(),
-        request_timeout_seconds=request_timeout_seconds,
-        maximum_handlers=maximum_handlers,
-    )
+    validated_config = revalidate_server_config(config)
+    try:
+        return LofigenHttpServer(
+            validated_config,
+            clock=clock,
+            logger=SafeJsonLogger(log_stream or sys.stdout),
+            drain_controller=drain_controller or DrainController(),
+            request_timeout_seconds=request_timeout_seconds,
+            maximum_handlers=maximum_handlers,
+        )
+    except StagingPathError as error:
+        raise ConfigError(error.code) from error
