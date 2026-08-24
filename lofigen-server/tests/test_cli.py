@@ -60,6 +60,22 @@ class LofigenServerCliTests(unittest.TestCase):
             str(self.key_file),
         ]
 
+    def tailscale_environment(
+        self,
+        *addresses: str,
+        exit_code: int = 0,
+    ) -> dict[str, str]:
+        binary_dir = self.root / f"tailscale-bin-{len(list(self.root.glob('tailscale-bin-*')))}"
+        binary_dir.mkdir()
+        binary = binary_dir / "tailscale"
+        output = "\n".join(addresses)
+        binary.write_text(
+            f"#!/bin/sh\nprintf '%s\\n' '{output}'\nexit {exit_code}\n",
+            encoding="utf-8",
+        )
+        binary.chmod(0o700)
+        return {"PATH": f"{binary_dir}:{os.environ.get('PATH', '')}"}
+
     def test_check_config_uses_safe_defaults_without_exposing_paths(self) -> None:
         result = self.run_cli(*self.valid_arguments())
 
@@ -118,16 +134,100 @@ class LofigenServerCliTests(unittest.TestCase):
         )
 
     def test_environment_must_explicitly_opt_in_to_a_tailscale_bind(self) -> None:
-        result = self.run_cli(
-            *self.valid_arguments(),
-            environment={
+        environment = self.tailscale_environment(
+            "100.64.0.10",
+            "fd7a:115c:a1e0::10",
+        )
+        environment.update(
+            {
                 "LOFIGEN_ALLOW_NON_LOOPBACK": "true",
                 "LOFIGEN_BIND": "100.64.0.10",
-            },
+            }
+        )
+        result = self.run_cli(
+            *self.valid_arguments(),
+            environment=environment,
         )
 
         self.assertEqual(0, result.returncode, result.stderr)
         self.assertEqual("100.64.0.10", json.loads(result.stdout)["bind"])
+
+    def test_non_loopback_bind_must_be_a_local_tailscale_address(self) -> None:
+        rejected = {
+            "192.168.1.20": "tailscale_bind_required",
+            "203.0.113.20": "tailscale_bind_required",
+            "100.64.0.99": "tailscale_address_not_local",
+            "fd00::20": "tailscale_bind_required",
+        }
+
+        for bind, error_code in rejected.items():
+            with self.subTest(bind=bind):
+                environment = self.tailscale_environment(
+                    "100.64.0.10",
+                    "fd7a:115c:a1e0::10",
+                )
+                result = self.run_cli(
+                    *self.valid_arguments(),
+                    "--bind",
+                    bind,
+                    "--allow-non-loopback",
+                    environment=environment,
+                )
+
+                self.assertEqual(2, result.returncode)
+                self.assertEqual(
+                    {"error": {"code": error_code}, "status": "error"},
+                    json.loads(result.stderr),
+                )
+
+    def test_local_tailscale_ipv6_address_is_accepted(self) -> None:
+        environment = self.tailscale_environment(
+            "100.64.0.10",
+            "fd7a:115c:a1e0::10",
+        )
+        result = self.run_cli(
+            *self.valid_arguments(),
+            "--bind",
+            "fd7a:115c:a1e0::10",
+            "--allow-non-loopback",
+            environment=environment,
+        )
+
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual("fd7a:115c:a1e0::10", json.loads(result.stdout)["bind"])
+
+    def test_tailscale_bind_fails_closed_when_local_cli_is_unavailable(self) -> None:
+        empty_path = self.root / "empty-path"
+        empty_path.mkdir()
+        result = self.run_cli(
+            *self.valid_arguments(),
+            "--bind",
+            "100.64.0.10",
+            "--allow-non-loopback",
+            environment={"PATH": str(empty_path)},
+        )
+
+        self.assertEqual(2, result.returncode)
+        self.assertEqual(
+            {"error": {"code": "tailscale_unavailable"}, "status": "error"},
+            json.loads(result.stderr),
+        )
+
+    def test_tailscale_bind_fails_closed_when_no_interface_address_is_reported(self) -> None:
+        environment = self.tailscale_environment(exit_code=1)
+        result = self.run_cli(
+            *self.valid_arguments(),
+            "--bind",
+            "100.64.0.10",
+            "--allow-non-loopback",
+            environment=environment,
+        )
+
+        self.assertEqual(2, result.returncode)
+        self.assertEqual(
+            {"error": {"code": "tailscale_unavailable"}, "status": "error"},
+            json.loads(result.stderr),
+        )
 
     def test_v1_routes_reject_a_different_protocol_major(self) -> None:
         result = self.run_cli(
