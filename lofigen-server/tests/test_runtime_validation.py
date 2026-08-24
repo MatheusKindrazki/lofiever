@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
+import io
 import os
 from pathlib import Path
 import socket
@@ -10,7 +11,9 @@ from unittest.mock import patch
 
 from lofigen_server import ServerConfig
 from lofigen_server.config import ConfigError, load_config
-from lofigen_server.server import create_server
+from lofigen_server.runtime import DrainController
+from lofigen_server.safe_logging import SafeJsonLogger
+from lofigen_server.server import LofigenHttpServer, create_server
 from lofigen_server.staging import StagingRoot
 
 
@@ -104,6 +107,43 @@ class RuntimeConfigValidationTests(unittest.TestCase):
 
         self.staging_dir.chmod(0o755)
         self.assert_create_rejected(base_config, "unsafe_staging_dir")
+
+    def test_direct_http_server_rejects_raw_config_before_bind_or_runtime_handles(self) -> None:
+        occupied = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.addCleanup(occupied.close)
+        occupied.bind(("127.0.0.1", 0))
+        occupied.listen(1)
+        missing_key_file = self.root / "missing.key"
+        raw_config = ServerConfig(
+            bind="0.0.0.0",
+            port=occupied.getsockname()[1],
+            protocol_version="1",
+            worker_id="m5-local",
+            staging_dir=self.staging_dir,
+            run_dir=self.run_dir,
+            hmac_key_file=missing_key_file,
+            hmac_key=b"x",
+            hmac_window_seconds=9_999,
+        )
+
+        server = None
+        try:
+            with self.assertRaises(ConfigError) as caught:
+                server = LofigenHttpServer(
+                    raw_config,
+                    clock=lambda: 1_700_000_000,
+                    logger=SafeJsonLogger(io.StringIO()),
+                    drain_controller=DrainController(),
+                    request_timeout_seconds=1,
+                    maximum_handlers=1,
+                )
+        finally:
+            if server is not None:
+                server.server_close()
+
+        self.assertEqual("unsafe_bind", caught.exception.code)
+        self.assertFalse((self.run_dir / "hmac-nonces.sqlite3").exists())
+        self.assertEqual([], descriptors_beneath(self.root))
 
     def test_staging_replacement_between_load_and_server_is_rejected(self) -> None:
         config = load_config(self.values())
