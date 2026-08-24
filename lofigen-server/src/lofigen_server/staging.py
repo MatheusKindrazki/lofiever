@@ -63,6 +63,17 @@ class StagingRoot:
             os.close(self._root_fd)
             self._root_fd = -1
 
+    def free_bytes(self) -> int:
+        """Measure available bytes on the volume backing the held root directory fd."""
+
+        if self._root_fd < 0:
+            raise StagingPathError("staging root is closed")
+        try:
+            volume = os.fstatvfs(self._root_fd)
+        except OSError as error:
+            raise StagingPathError("staging volume is unavailable") from error
+        return volume.f_bavail * volume.f_frsize
+
     def _parts(self, relative_path: str) -> tuple[str, ...]:
         if not relative_path or "\x00" in relative_path or "\\" in relative_path:
             raise StagingPathError("unsafe staging path")

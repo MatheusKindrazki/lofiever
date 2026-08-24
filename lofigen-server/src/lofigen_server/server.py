@@ -6,7 +6,6 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import re
 import secrets
-import shutil
 import socket
 import sys
 from threading import BoundedSemaphore, Event, Timer
@@ -263,7 +262,7 @@ class LofigenRequestHandler(BaseHTTPRequestHandler):
 
     def _health_payload(self) -> dict[str, object]:
         runtime = self.server.drain_controller.snapshot()
-        free_bytes = shutil.disk_usage(self.server.staging.root).free
+        free_bytes = self.server.staging.free_bytes()
         uptime = max(0, int(self.server.clock() - self.server.started_at))
         return {
             "batchCeiling": self.server.config.batch_ceiling,
