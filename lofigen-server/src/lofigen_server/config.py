@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import errno
 import ipaddress
 import os
 from pathlib import Path
@@ -173,25 +174,81 @@ def _load_hmac_key(raw_path: str | None) -> tuple[Path, bytes]:
     if not raw_path:
         raise ConfigError("hmac_key_required")
 
-    candidate = Path(raw_path).expanduser()
-    if candidate.is_symlink():
-        raise ConfigError("unsafe_hmac_key_file")
+    candidate = Path(raw_path).expanduser().absolute()
+    _validate_hmac_key_parents(candidate)
     try:
-        metadata = candidate.stat()
+        path_metadata = candidate.lstat()
     except OSError as error:
         raise ConfigError("hmac_key_unavailable") from error
-    if not stat.S_ISREG(metadata.st_mode):
+    if stat.S_ISLNK(path_metadata.st_mode):
+        raise ConfigError("unsafe_hmac_key_file")
+
+    nofollow = getattr(os, "O_NOFOLLOW", 0)
+    if nofollow == 0:
+        raise ConfigError("unsafe_hmac_key_file")
+    flags = os.O_RDONLY | nofollow | getattr(os, "O_CLOEXEC", 0)
+    try:
+        descriptor = os.open(candidate, flags)
+    except OSError as error:
+        if error.errno == errno.ELOOP:
+            raise ConfigError("unsafe_hmac_key_file") from error
         raise ConfigError("hmac_key_unavailable")
-    if stat.S_IMODE(metadata.st_mode) & 0o077:
-        raise ConfigError("hmac_key_permissions")
 
     try:
-        key = candidate.read_bytes().rstrip(b"\r\n")
-    except OSError as error:
-        raise ConfigError("hmac_key_unavailable") from error
+        metadata = os.fstat(descriptor)
+        if not stat.S_ISREG(metadata.st_mode):
+            raise ConfigError("hmac_key_unavailable")
+        if metadata.st_uid != os.geteuid():
+            raise ConfigError("hmac_key_owner")
+        if stat.S_IMODE(metadata.st_mode) & 0o077:
+            raise ConfigError("hmac_key_permissions")
+        try:
+            raw_key = os.read(descriptor, MAXIMUM_HMAC_KEY_BYTES + 2)
+        except OSError as error:
+            raise ConfigError("hmac_key_unavailable") from error
+    finally:
+        os.close(descriptor)
+
+    if len(raw_key) > MAXIMUM_HMAC_KEY_BYTES + 1:
+        raise ConfigError("hmac_key_length")
+    key = raw_key.rstrip(b"\r\n")
     if not MINIMUM_HMAC_KEY_BYTES <= len(key) <= MAXIMUM_HMAC_KEY_BYTES:
         raise ConfigError("hmac_key_length")
-    return candidate.resolve(strict=True), key
+    return candidate, key
+
+
+def _validate_hmac_key_parents(candidate: Path) -> None:
+    direct_parent = candidate.parent
+    for parent in (direct_parent, *direct_parent.parents):
+        try:
+            metadata = parent.lstat()
+        except OSError as error:
+            raise ConfigError("hmac_key_unavailable") from error
+        if stat.S_ISLNK(metadata.st_mode):
+            trusted_system_link = False
+            if metadata.st_uid == 0 and str(parent) in {"/tmp", "/var"}:
+                try:
+                    trusted_system_link = parent.resolve(strict=True) in {
+                        Path("/private/tmp"),
+                        Path("/private/var"),
+                    }
+                except OSError:
+                    trusted_system_link = False
+            if trusted_system_link:
+                continue
+            raise ConfigError("unsafe_hmac_key_parent")
+        if not stat.S_ISDIR(metadata.st_mode):
+            raise ConfigError("unsafe_hmac_key_parent")
+
+        mode = stat.S_IMODE(metadata.st_mode)
+        writable_by_others = mode & 0o022
+        trusted_sticky_system_parent = (
+            parent != direct_parent
+            and metadata.st_uid == 0
+            and bool(mode & stat.S_ISVTX)
+        )
+        if writable_by_others and not trusted_sticky_system_parent:
+            raise ConfigError("hmac_key_parent_permissions")
 
 
 def _optional_capability_value(value: object, *, code: str) -> str | None:

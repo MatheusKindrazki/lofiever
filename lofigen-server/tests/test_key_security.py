@@ -65,6 +65,7 @@ class HmacKeyLoadingSecurityTests(unittest.TestCase):
 
         unsafe_parent = self.root / "unsafe-parent"
         unsafe_parent.mkdir(mode=0o770)
+        unsafe_parent.chmod(0o770)
         nested_key = unsafe_parent / "hmac.key"
         self.write_key(nested_key)
         self.assert_config_error("hmac_key_parent_permissions", nested_key)
