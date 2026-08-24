@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from http.client import HTTPConnection
 import io
 import math
 import os
 from pathlib import Path
 import socket
 import tempfile
+import threading
 import unittest
 from unittest.mock import patch
 
@@ -173,6 +175,7 @@ class RuntimeConfigValidationTests(unittest.TestCase):
             ("timeout-false", False, 1),
             ("timeout-nan", math.nan, 1),
             ("timeout-infinity", math.inf, 1),
+            ("timeout-over-platform", threading.TIMEOUT_MAX * 2, 1),
             ("timeout-zero", 0, 1),
             ("timeout-negative", -1, 1),
             ("handlers-fractional", 1, 1.5),
@@ -228,6 +231,40 @@ class RuntimeConfigValidationTests(unittest.TestCase):
                     bind_probe.bind(("127.0.0.1", port))
                 finally:
                     bind_probe.close()
+
+    def test_request_timeout_normal_and_platform_boundary_accept_connections(self) -> None:
+        for label, timeout in [
+            ("normal", 1.0),
+            ("platform-boundary", threading.TIMEOUT_MAX),
+        ]:
+            with self.subTest(label=label):
+                config = load_config(self.values())
+                server = create_server(
+                    config,
+                    request_timeout_seconds=timeout,
+                    log_stream=io.StringIO(),
+                )
+                thread = threading.Thread(
+                    target=server.serve_forever,
+                    daemon=False,
+                )
+                thread.start()
+                try:
+                    connection = HTTPConnection(
+                        "127.0.0.1",
+                        server.server_port,
+                        timeout=1,
+                    )
+                    connection.request("GET", "/v1/health")
+                    response = connection.getresponse()
+                    response.read()
+                    connection.close()
+
+                    self.assertEqual(200, response.status)
+                finally:
+                    server.shutdown()
+                    server.server_close()
+                    thread.join(timeout=2)
 
     def test_staging_replacement_between_load_and_server_is_rejected(self) -> None:
         config = load_config(self.values())
