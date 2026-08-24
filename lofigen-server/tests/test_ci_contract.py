@@ -17,6 +17,7 @@ class LofigenCiContractTests(unittest.TestCase):
         self.assertIn("python-version: ${{ matrix.python-version }}", lofigen_job)
         self.assertIn("python -m pip wheel --no-deps", lofigen_job)
         self.assertIn("python -m pip install --force-reinstall", lofigen_job)
+        self.assertIn("jsonschema>=4.23,<5", lofigen_job)
         self.assertNotIn("PYTHONPATH:", lofigen_job)
 
     def test_ci_smokes_packaged_schemas_and_console_config(self) -> None:

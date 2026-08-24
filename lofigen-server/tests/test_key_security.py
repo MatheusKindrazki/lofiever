@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 import stat
 import tempfile
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
@@ -71,6 +72,39 @@ class HmacKeyLoadingSecurityTests(unittest.TestCase):
         nested_key = unsafe_parent / "hmac.key"
         self.write_key(nested_key)
         self.assert_config_error("hmac_key_parent_permissions", nested_key)
+
+    def test_every_key_parent_is_owned_by_root_or_the_effective_user(self) -> None:
+        key_parent = self.root / "owned-parent"
+        key_parent.mkdir(mode=0o700)
+        key_file = key_parent / "hmac.key"
+        self.write_key(key_file)
+        target_inode = key_parent.stat().st_ino
+        real_fstat = os.fstat
+
+        def foreign_owner_for_target(descriptor: int) -> object:
+            metadata = real_fstat(descriptor)
+            if stat.S_ISDIR(metadata.st_mode) and metadata.st_ino == target_inode:
+                return SimpleNamespace(
+                    st_mode=metadata.st_mode,
+                    st_uid=os.geteuid() + 1,
+                )
+            return metadata
+
+        with patch(
+            "lofigen_server.config.os.fstat",
+            side_effect=foreign_owner_for_target,
+        ):
+            self.assert_config_error("hmac_key_parent_owner", key_file)
+
+    def test_key_allows_at_most_one_trailing_newline_within_physical_limit(self) -> None:
+        maximum_key = self.root / "maximum.key"
+        self.write_key(maximum_key, b"k" * 1024 + b"\n")
+        config = load_config(self.values(maximum_key))
+        self.assertEqual(b"k" * 1024, config.hmac_key)
+
+        repeated_newline = self.root / "repeated-newline.key"
+        self.write_key(repeated_newline, b"k" * 1023 + b"\n\n")
+        self.assert_config_error("hmac_key_length", repeated_newline)
 
     def test_key_is_read_from_the_same_descriptor_that_was_validated(self) -> None:
         key_file = self.root / "hmac.key"

@@ -134,6 +134,46 @@ class HttpResourceSafetyTests(unittest.TestCase):
         )
         self.logs = io.StringIO()
 
+    def test_protected_get_rejects_body_framing_before_authentication(self) -> None:
+        requests = {
+            "positive-content-length": (
+                ["Content-Length: 1"],
+                b"x",
+            ),
+            "transfer-encoding": (
+                ["Transfer-Encoding: chunked"],
+                b"1\r\nx\r\n0\r\n\r\n",
+            ),
+            "duplicate-zero-content-length": (
+                ["Content-Length: 0", "Content-Length: 0"],
+                b"",
+            ),
+        }
+
+        with running_server(self.config, logs=self.logs) as server:
+            for label, (transport_headers, body) in requests.items():
+                with self.subTest(label=label):
+                    lines = [
+                        "GET /v1/capabilities HTTP/1.1",
+                        f"Host: 127.0.0.1:{server.server_port}",
+                        *transport_headers,
+                        "Connection: close",
+                    ]
+                    sock = socket.create_connection(
+                        ("127.0.0.1", server.server_port),
+                        timeout=1,
+                    )
+                    sock.settimeout(1)
+                    sock.sendall(
+                        ("\r\n".join(lines) + "\r\n\r\n").encode("ascii")
+                        + body
+                    )
+                    status, payload = receive_json(sock)
+                    sock.close()
+
+                    self.assertEqual(400, status)
+                    self.assertEqual("invalid_request_headers", payload["error"]["code"])
+
     def test_partial_body_times_out_fail_closed_and_server_remains_healthy(self) -> None:
         body = b'{"reason":"maintenance"}'
         with running_server(self.config, logs=self.logs) as server:
