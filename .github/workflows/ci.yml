@@ -102,3 +102,20 @@ jobs:
         run: npm run build
         env:
           SKIP_ENV_VALIDATION: true
+
+  lofigen-contract:
+    name: Lofigen Contract
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Run lofigen-server tests
+        env:
+          PYTHONPATH: lofigen-server/src
+        run: python -m unittest discover -s lofigen-server/tests -v
