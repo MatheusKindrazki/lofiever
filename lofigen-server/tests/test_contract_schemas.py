@@ -22,6 +22,7 @@ EXPECTED_REQUIRED_FIELDS = {
         "status",
         "uptimeSeconds",
         "vaeChunk",
+        "workerId",
     },
     "capabilities.response.schema.json": {
         "batchCeiling",

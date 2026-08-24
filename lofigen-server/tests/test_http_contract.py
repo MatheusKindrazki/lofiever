@@ -106,6 +106,7 @@ class LofigenServerHttpContractTests(unittest.TestCase):
                 "status",
                 "uptimeSeconds",
                 "vaeChunk",
+                "workerId",
             },
             set(payload),
         )
@@ -122,6 +123,7 @@ class LofigenServerHttpContractTests(unittest.TestCase):
         self.assertEqual(0, payload["jobsInFlight"])
         self.assertFalse(payload["draining"])
         self.assertEqual(0, payload["uptimeSeconds"])
+        self.assertEqual("m5-local", payload["workerId"])
         serialized = json.dumps(payload)
         self.assertNotIn(str(self.root), serialized)
         self.assertNotIn(FIXED_KEY.decode(), serialized)
@@ -139,9 +141,11 @@ class LofigenServerHttpContractTests(unittest.TestCase):
 
     def test_capabilities_accepts_the_rfc_hmac_vector(self) -> None:
         headers = {
+            "X-Lofiever-Signature-Version": "1",
+            "X-Lofiever-Worker-Id": "m5-local",
             "X-Lofiever-Timestamp": str(FIXED_NOW),
             "X-Lofiever-Nonce": "nonce-0123456789abcdef",
-            "X-Lofiever-Signature": "c1c0a5e0ac691215320aa5b036f72dc5d91725ceae9e031492c57548fb96a16c",
+            "X-Lofiever-Signature": "a0515e0c4993333fa6435d7824bedadc35b11ea79dbcf5b2a3cb04ed8b4c2daf",
         }
 
         with running_server(self.config, log_stream=self.logs) as server:

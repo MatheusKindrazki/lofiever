@@ -16,6 +16,8 @@ from lofigen_server.server import create_server
 
 FIXED_NOW = 1_700_000_000
 FIXED_KEY = b"0123456789abcdef0123456789abcdef"
+WORKER_ID = "m5-local"
+CANONICAL_LABEL = "LOFIEVER-HMAC-SHA256-V1"
 
 
 def signed_headers(
@@ -28,10 +30,20 @@ def signed_headers(
 ) -> dict[str, str]:
     body_digest = hashlib.sha256(body).hexdigest()
     message = "\n".join(
-        [method.upper(), path, str(timestamp), nonce, body_digest]
+        [
+            CANONICAL_LABEL,
+            WORKER_ID,
+            method.upper(),
+            path,
+            str(timestamp),
+            nonce,
+            body_digest,
+        ]
     ).encode("utf-8")
     signature = hmac.new(FIXED_KEY, message, hashlib.sha256).hexdigest()
     return {
+        "X-Lofiever-Signature-Version": "1",
+        "X-Lofiever-Worker-Id": WORKER_ID,
         "X-Lofiever-Timestamp": str(timestamp),
         "X-Lofiever-Nonce": nonce,
         "X-Lofiever-Signature": signature,
@@ -179,6 +191,8 @@ class LofigenServerSecurityTests(unittest.TestCase):
             "GET",
             "/v1/capabilities",
             headers={
+                "X-Lofiever-Signature-Version": "1",
+                "X-Lofiever-Worker-Id": WORKER_ID,
                 "X-Lofiever-Timestamp": "9" * 5_000,
                 "X-Lofiever-Nonce": "giant-timestamp-000001",
                 "X-Lofiever-Signature": "0" * 64,
@@ -193,6 +207,8 @@ class LofigenServerSecurityTests(unittest.TestCase):
 
     def test_each_hmac_header_must_appear_exactly_once(self) -> None:
         header_names = [
+            "X-Lofiever-Signature-Version",
+            "X-Lofiever-Worker-Id",
             "X-Lofiever-Timestamp",
             "X-Lofiever-Nonce",
             "X-Lofiever-Signature",

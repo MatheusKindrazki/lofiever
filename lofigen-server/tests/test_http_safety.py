@@ -21,14 +21,25 @@ from lofigen_server.server import LofigenHttpServer, create_server
 
 FIXED_NOW = 1_700_000_000
 FIXED_KEY = b"0123456789abcdef0123456789abcdef"
+WORKER_ID = "m5-local"
 
 
 def signed_headers(method: str, path: str, body: bytes, nonce: str) -> dict[str, str]:
     body_digest = hashlib.sha256(body).hexdigest()
     canonical = "\n".join(
-        [method, path, str(FIXED_NOW), nonce, body_digest]
+        [
+            "LOFIEVER-HMAC-SHA256-V1",
+            WORKER_ID,
+            method,
+            path,
+            str(FIXED_NOW),
+            nonce,
+            body_digest,
+        ]
     ).encode("utf-8")
     return {
+        "X-Lofiever-Signature-Version": "1",
+        "X-Lofiever-Worker-Id": WORKER_ID,
         "X-Lofiever-Timestamp": str(FIXED_NOW),
         "X-Lofiever-Nonce": nonce,
         "X-Lofiever-Signature": hmac.new(

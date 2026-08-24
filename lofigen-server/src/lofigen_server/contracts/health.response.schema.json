@@ -17,7 +17,8 @@
     "freeStagingBytes",
     "jobsInFlight",
     "draining",
-    "uptimeSeconds"
+    "uptimeSeconds",
+    "workerId"
   ],
   "properties": {
     "status": { "enum": ["ok", "draining"] },
@@ -32,6 +33,7 @@
     "freeStagingBytes": { "type": "integer", "minimum": 0 },
     "jobsInFlight": { "type": "integer", "minimum": 0 },
     "draining": { "type": "boolean" },
-    "uptimeSeconds": { "type": "integer", "minimum": 0 }
+    "uptimeSeconds": { "type": "integer", "minimum": 0 },
+    "workerId": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$" }
   }
 }

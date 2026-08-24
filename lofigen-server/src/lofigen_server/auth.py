@@ -14,13 +14,25 @@ from typing import Callable, Mapping
 TIMESTAMP_HEADER = "X-Lofiever-Timestamp"
 NONCE_HEADER = "X-Lofiever-Nonce"
 SIGNATURE_HEADER = "X-Lofiever-Signature"
-AUTHENTICATION_HEADERS = (TIMESTAMP_HEADER, NONCE_HEADER, SIGNATURE_HEADER)
+SIGNATURE_VERSION_HEADER = "X-Lofiever-Signature-Version"
+WORKER_ID_HEADER = "X-Lofiever-Worker-Id"
+SIGNATURE_VERSION = "1"
+CANONICAL_LABEL = "LOFIEVER-HMAC-SHA256-V1"
+AUTHENTICATION_HEADERS = (
+    SIGNATURE_VERSION_HEADER,
+    WORKER_ID_HEADER,
+    TIMESTAMP_HEADER,
+    NONCE_HEADER,
+    SIGNATURE_HEADER,
+)
 TIMESTAMP_PATTERN = re.compile(r"^(?:0|[1-9][0-9]{0,11})$")
 NONCE_PATTERN = re.compile(r"^[A-Za-z0-9_-]{16,128}$")
 SIGNATURE_PATTERN = re.compile(r"^[0-9a-f]{64}$")
+WORKER_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 
 
 def canonical_message(
+    worker_id: str,
     method: str,
     path: str,
     timestamp: str,
@@ -31,7 +43,15 @@ def canonical_message(
 
     body_digest = hashlib.sha256(body).hexdigest()
     return "\n".join(
-        [method.upper(), path, timestamp, nonce, body_digest]
+        [
+            CANONICAL_LABEL,
+            worker_id,
+            method.upper(),
+            path,
+            timestamp,
+            nonce,
+            body_digest,
+        ]
     ).encode("utf-8")
 
 
@@ -139,6 +159,8 @@ class AuthDecision:
 
 @dataclass(frozen=True)
 class SignatureEnvelope:
+    signature_version: str
+    worker_id: str
     timestamp_text: str
     timestamp: int
     nonce: str
@@ -150,11 +172,13 @@ class SignatureVerifier:
         self,
         key: bytes,
         *,
+        worker_id: str,
         window_seconds: int,
         clock: Callable[[], float],
         nonce_store: SqliteNonceStore,
     ) -> None:
         self._key = key
+        self._worker_id = worker_id
         self._window_seconds = window_seconds
         self._clock = clock
         self._nonce_store = nonce_store
@@ -178,9 +202,19 @@ class SignatureVerifier:
         """Reject malformed or stale authentication metadata before reading a body."""
 
         normalized_headers = {name.lower(): value for name, value in headers.items()}
+        signature_version = (
+            normalized_headers.get(SIGNATURE_VERSION_HEADER.lower()) or ""
+        ).strip()
+        worker_id = (normalized_headers.get(WORKER_ID_HEADER.lower()) or "").strip()
         timestamp_text = (normalized_headers.get(TIMESTAMP_HEADER.lower()) or "").strip()
         nonce = (normalized_headers.get(NONCE_HEADER.lower()) or "").strip()
         signature = (normalized_headers.get(SIGNATURE_HEADER.lower()) or "").strip()
+        if signature_version != SIGNATURE_VERSION:
+            return None
+        if not WORKER_ID_PATTERN.fullmatch(worker_id):
+            return None
+        if not hmac.compare_digest(worker_id, self._worker_id):
+            return None
         if not TIMESTAMP_PATTERN.fullmatch(timestamp_text):
             return None
         if not NONCE_PATTERN.fullmatch(nonce):
@@ -193,6 +227,8 @@ class SignatureVerifier:
         if abs(now - timestamp) > self._window_seconds:
             return None
         return SignatureEnvelope(
+            signature_version=signature_version,
+            worker_id=worker_id,
             timestamp_text=timestamp_text,
             timestamp=timestamp,
             nonce=nonce,
@@ -213,6 +249,7 @@ class SignatureVerifier:
         expected = hmac.new(
             self._key,
             canonical_message(
+                envelope.worker_id,
                 method,
                 path,
                 envelope.timestamp_text,

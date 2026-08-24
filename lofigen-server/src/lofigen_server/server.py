@@ -60,6 +60,7 @@ class LofigenHttpServer(ThreadingHTTPServer):
         self.staging = StagingRoot(config.staging_dir)
         self.signature_verifier = SignatureVerifier(
             config.hmac_key,
+            worker_id=config.worker_id,
             window_seconds=config.hmac_window_seconds,
             clock=clock,
             nonce_store=SqliteNonceStore(config.run_dir),
@@ -278,6 +279,7 @@ class LofigenRequestHandler(BaseHTTPRequestHandler):
             "status": "draining" if runtime.draining else "ok",
             "uptimeSeconds": uptime,
             "vaeChunk": self.server.config.vae_chunk,
+            "workerId": self.server.config.worker_id,
         }
 
     def _capabilities_payload(self) -> dict[str, object]:
