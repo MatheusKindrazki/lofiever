@@ -290,7 +290,7 @@ class HttpResourceSafetyTests(unittest.TestCase):
     def test_health_failure_returns_generic_error_without_traceback_or_path(self) -> None:
         captured_stderr = io.StringIO()
         with running_server(self.config, logs=self.logs) as server:
-            self.staging_dir.rmdir()
+            server.staging.close()
             with redirect_stderr(captured_stderr):
                 connection = HTTPConnection(
                     "127.0.0.1",
@@ -308,6 +308,25 @@ class HttpResourceSafetyTests(unittest.TestCase):
         self.assertNotIn("Traceback", rendered)
         self.assertNotIn(str(self.root), rendered)
         self.assertNotIn(str(Path.home()), rendered)
+
+    def test_health_uses_the_open_staging_volume_after_root_path_moves(self) -> None:
+        detached_staging = self.root / "detached-staging"
+
+        with running_server(self.config, logs=self.logs) as server:
+            self.staging_dir.rename(detached_staging)
+            connection = HTTPConnection(
+                "127.0.0.1",
+                server.server_port,
+                timeout=1,
+            )
+            connection.request("GET", "/v1/health")
+            response = connection.getresponse()
+            payload = json.loads(response.read())
+            connection.close()
+
+        self.assertEqual(200, response.status)
+        self.assertGreater(payload["freeStagingBytes"], 0)
+        self.assertEqual(payload["freeStagingBytes"], payload["freeDisk"])
 
 
 if __name__ == "__main__":
