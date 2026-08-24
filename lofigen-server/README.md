@@ -18,7 +18,10 @@ The implementation follows RFC 0001 and is pinned to ACE-Step commit
 
 Unknown routes return `404`. Authentication failures always return the same `401`
 `authentication_failed` response. Invalid authenticated drain payloads return `400`; non-JSON
-payloads return `415`; payloads over 1 KiB return `413`.
+payloads return `415`; payloads over 1 KiB return `413`. Duplicate or combined critical content
+headers return `400`, incomplete bodies return `400`, an expired request deadline returns `408`,
+and a saturated handler pool returns `503`. Unexpected handler failures return a generic `500`
+without exception text.
 
 The machine-readable contracts live in
 [`src/lofigen_server/contracts`](src/lofigen_server/contracts). The two disk fields in health are
@@ -45,6 +48,12 @@ X-Lofiever-Nonce: <16-128 ASCII letters, digits, underscore, or hyphen>
 X-Lofiever-Signature: <lowercase hex HMAC-SHA256>
 ```
 
+Each protected request must contain exactly one timestamp, nonce, and signature header. Drain
+requests must also contain exactly one `Content-Length` and one `Content-Type`; combined values,
+duplicate fields, and `Transfer-Encoding` are rejected before body read. The timestamp is the
+canonical unsigned decimal Unix-seconds representation (1-12 digits, with no leading zero except
+`0`). Signature hex is strictly lowercase.
+
 The signed bytes are UTF-8 for this exact newline-delimited message, with no trailing newline:
 
 ```text
@@ -56,13 +65,17 @@ SHA256_HEX_OF_EXACT_BODY_BYTES
 ```
 
 The default timestamp window is ±300 seconds and cannot be configured above 300 seconds. A nonce
-is accepted once inside that window. The replay cache is process-local and bounded because this
-server runs exactly one process. Before enabling multiple server processes, replace it with a
-shared durable nonce store; do not run multiple workers with independent replay caches.
+is accepted once inside that window. Accepted nonces are committed atomically to the bounded
+SQLite ledger at `$LOFIGEN_RUN_DIR/hmac-nonces.sqlite3`. The ledger is shared by processes using
+that run directory and survives restart. A nonce remains retained through
+`signed_timestamp + window`, including the exact validity boundary; each admission removes only a
+bounded batch of older rows and fails closed if the bounded ledger remains full or unavailable.
 
 The key is read once at boot from `LOFIGEN_HMAC_KEY_FILE`. Boot fails when the file is missing,
-shorter than 32 bytes, longer than 1024 bytes, a symlink, non-regular, or readable by group/other.
-The key value and key path are never returned or logged.
+shorter than 32 bytes, longer than 1024 bytes, a symlink, non-regular, not owned by the process
+user, or readable by group/other. Every parent is checked against symlinks and group/world write
+access. The server opens the key once with `O_NOFOLLOW`, validates that descriptor with `fstat`,
+and reads from the same descriptor. The key value and key path are never returned or logged.
 
 ## Configuration
 
@@ -75,6 +88,7 @@ CLI arguments override their corresponding environment variables.
 | `LOFIGEN_PROTOCOL_VERSION` | `--protocol-version` | `1`; only v1 major is accepted |
 | `LOFIGEN_WORKER_ID` | `--worker-id` | `local-worker`; non-sensitive stable identifier |
 | `LOFIGEN_STAGING_DIR` | `--staging-dir` | required existing writable directory; no symlink |
+| `LOFIGEN_RUN_DIR` | `--run-dir` | required existing `0700` directory owned by the process user |
 | `LOFIGEN_HMAC_KEY_FILE` | `--hmac-key-file` | required `0600` regular file |
 | `LOFIGEN_HMAC_WINDOW_SECONDS` | `--hmac-window-seconds` | `300`; allowed `1..300` |
 | `LOFIGEN_ALLOW_NON_LOOPBACK` | `--allow-non-loopback` | `false`; explicit opt-in for a Tailscale address |
@@ -86,21 +100,29 @@ CLI arguments override their corresponding environment variables.
 | `LOFIGEN_MAX_BATCH` | `--batch-ceiling` | `1`; accepted range `1..8` |
 | `LOFIGEN_ACESTEP_URL` | `--acestep-url` | `http://127.0.0.1:8001`; loopback HTTP only |
 
-Non-loopback bind opt-in does not permit wildcard or multicast binds. It exists for an explicit
-Tailscale unicast address; the default remains loopback.
+Non-loopback bind opt-in permits only `100.64.0.0/10` or `fd7a:115c:a1e0::/48`, and only when the
+exact address is reported by the local `tailscale ip` CLI. LAN, public, and another host's CGNAT
+address are rejected. Missing/disconnected Tailscale CLI state fails closed. The default remains
+loopback.
+
+The HTTP server admits at most 16 request handlers and applies a five-second absolute deadline to
+the entire request, including headers and a slowly dripped body. Shutdown waits for admitted
+handlers, while that deadline prevents a partial client from holding shutdown indefinitely. Drain
+still affects job admission only: jobs already counted by `DrainController` continue to completion.
 
 See [`lofigen.example.env`](lofigen.example.env) for a value-free template.
 
 ## Reproducible local boot (without weights)
 
-Use Python 3.11 or 3.12. The tested local interpreters are 3.11.15 and 3.12.7.
+Use Python 3.11 or 3.12. The final local interpreters are 3.11.15 and 3.12.11.
 
 ```bash
 cd lofigen-server
 uv sync --frozen --python 3.12
 
-mkdir -p "$HOME/lofigen/staging" "$HOME/lofigen/run" "$HOME/lofigen/logs"
 umask 077
+mkdir -p "$HOME/lofigen/staging" "$HOME/lofigen/run" "$HOME/lofigen/logs"
+chmod 700 "$HOME/lofigen" "$HOME/lofigen/staging" "$HOME/lofigen/run" "$HOME/lofigen/logs"
 openssl rand -hex 32 > "$HOME/lofigen/.hmac"
 chmod 600 "$HOME/lofigen/.hmac"
 
@@ -180,9 +202,12 @@ email addresses, audio bytes, or configured absolute paths. Invalid payload resp
 and do not echo input.
 
 `StagingRoot` accepts only ASCII slash-separated relative segments. It rejects absolute paths,
-`.`/`..`, backslashes, NULs, percent-encoded punctuation, and roots or descendants that resolve
-through a symlink outside staging. Future artifact I/O must use this resolver; accepting a path
-from an upstream response is prohibited.
+`.`/`..`, backslashes, NULs, percent-encoded punctuation, and symlink traversal. Its `resolve()`
+result is a preview for diagnostics only and is **not** an I/O authorization. Future artifact I/O
+must use `open_for_read()` or exclusive `open_for_write()`: those APIs hold the root directory fd,
+walk each descendant with `dir_fd` + `O_NOFOLLOW`, and remain confined even if the configured root
+or a descendant path is swapped after validation. Accepting a path from an upstream response is
+prohibited.
 
 ## Drain and rollback
 
@@ -230,7 +255,11 @@ or model weight to roll back in PR-1.
 cd lofigen-server
 uv sync --frozen --python 3.12
 uv run python -m unittest discover -s tests -v
-PYTHONPATH=src python3.11 -m unittest discover -s tests -v
+uv run --python 3.11 python -m unittest discover -s tests -v
 ```
+
+CI builds and installs the wheel before running that suite on Python 3.11 and 3.12, without
+`PYTHONPATH`, then loads all four packaged schemas and runs the installed `lofigen-server
+--check-config` console entrypoint.
 
 RED/green receipts are recorded in [`docs/TDD-EVIDENCE.md`](docs/TDD-EVIDENCE.md).
