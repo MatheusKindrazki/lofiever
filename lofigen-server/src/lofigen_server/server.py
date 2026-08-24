@@ -11,7 +11,7 @@ import time
 from typing import TextIO
 from urllib.parse import urlsplit
 
-from .auth import SignatureVerifier, SqliteNonceStore
+from .auth import AUTHENTICATION_HEADERS, SignatureVerifier, SqliteNonceStore
 from .config import ServerConfig
 from .runtime import DrainController
 from .safe_logging import SafeJsonLogger
@@ -83,24 +83,37 @@ class LofigenRequestHandler(BaseHTTPRequestHandler):
         self.wfile.write(encoded)
         self.close_connection = True
 
-    def _request_headers(self) -> dict[str, str]:
-        return {key: value for key, value in self.headers.items()}
+    def _authentication_headers(self) -> dict[str, str] | None:
+        selected: dict[str, str] = {}
+        for name in AUTHENTICATION_HEADERS:
+            values = self.headers.get_all(name, failobj=[])
+            if len(values) != 1:
+                return None
+            selected[name] = values[0]
+        return selected
 
     def _authenticate(self, method: str, route: str, body: bytes = b"") -> bool:
+        headers = self._authentication_headers()
+        if headers is None:
+            self._write_authentication_failure()
+            return False
         decision = self.server.signature_verifier.verify(
             method,
             route,
             body,
-            self._request_headers(),
+            headers,
         )
         if decision.accepted:
             return True
+        self._write_authentication_failure()
+        return False
+
+    def _write_authentication_failure(self) -> None:
         self._write_json(
             HTTPStatus.UNAUTHORIZED,
             {"error": {"code": "authentication_failed"}, "status": "error"},
             extra_headers={"WWW-Authenticate": "HMAC-SHA256"},
         )
-        return False
 
     def _health_payload(self) -> dict[str, object]:
         runtime = self.server.drain_controller.snapshot()

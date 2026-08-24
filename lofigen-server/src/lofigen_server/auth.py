@@ -14,8 +14,10 @@ from typing import Callable, Mapping
 TIMESTAMP_HEADER = "X-Lofiever-Timestamp"
 NONCE_HEADER = "X-Lofiever-Nonce"
 SIGNATURE_HEADER = "X-Lofiever-Signature"
+AUTHENTICATION_HEADERS = (TIMESTAMP_HEADER, NONCE_HEADER, SIGNATURE_HEADER)
+TIMESTAMP_PATTERN = re.compile(r"^(?:0|[1-9][0-9]{0,11})$")
 NONCE_PATTERN = re.compile(r"^[A-Za-z0-9_-]{16,128}$")
-SIGNATURE_PATTERN = re.compile(r"^[0-9a-fA-F]{64}$")
+SIGNATURE_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 
 
 def canonical_message(
@@ -160,7 +162,7 @@ class SignatureVerifier:
         timestamp_text = (normalized_headers.get(TIMESTAMP_HEADER.lower()) or "").strip()
         nonce = (normalized_headers.get(NONCE_HEADER.lower()) or "").strip()
         signature = (normalized_headers.get(SIGNATURE_HEADER.lower()) or "").strip()
-        if not timestamp_text.isascii() or not timestamp_text.isdecimal():
+        if not TIMESTAMP_PATTERN.fullmatch(timestamp_text):
             return AuthDecision(False)
         if not NONCE_PATTERN.fullmatch(nonce):
             return AuthDecision(False)
@@ -177,7 +179,7 @@ class SignatureVerifier:
             canonical_message(method, path, timestamp_text, nonce, body),
             hashlib.sha256,
         ).hexdigest()
-        if not hmac.compare_digest(expected, signature.lower()):
+        if not hmac.compare_digest(expected, signature):
             return AuthDecision(False)
         if not self._nonce_store.accept(
             nonce,
