@@ -16,6 +16,7 @@ from .config import ServerConfig
 from .runtime import DrainController
 from .safe_logging import SafeJsonLogger
 from .schemas import PayloadError, validate_drain_request
+from .staging import StagingRoot
 
 
 ACE_STEP_REPO_COMMIT = "14c0211d5a0653b0f63e27686f4c3f151b4d8629"
@@ -39,6 +40,7 @@ class LofigenHttpServer(ThreadingHTTPServer):
         self.started_at = clock()
         self.logger = logger
         self.drain_controller = drain_controller
+        self.staging = StagingRoot(config.staging_dir)
         self.signature_verifier = SignatureVerifier(
             config.hmac_key,
             window_seconds=config.hmac_window_seconds,
@@ -101,7 +103,7 @@ class LofigenRequestHandler(BaseHTTPRequestHandler):
 
     def _health_payload(self) -> dict[str, object]:
         runtime = self.server.drain_controller.snapshot()
-        free_bytes = shutil.disk_usage(self.server.config.staging_dir).free
+        free_bytes = shutil.disk_usage(self.server.staging.root).free
         uptime = max(0, int(self.server.clock() - self.server.started_at))
         return {
             "batchCeiling": self.server.config.batch_ceiling,
