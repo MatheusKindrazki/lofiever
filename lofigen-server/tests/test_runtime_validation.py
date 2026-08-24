@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 import io
+import math
 import os
 from pathlib import Path
 import socket
@@ -165,6 +166,68 @@ class RuntimeConfigValidationTests(unittest.TestCase):
             bind_probe.bind(("0.0.0.0", port))
         finally:
             bind_probe.close()
+
+    def test_invalid_public_http_limits_are_rejected_before_side_effects(self) -> None:
+        invalid_limits = [
+            ("timeout-true", True, 1),
+            ("timeout-false", False, 1),
+            ("timeout-nan", math.nan, 1),
+            ("timeout-infinity", math.inf, 1),
+            ("timeout-zero", 0, 1),
+            ("timeout-negative", -1, 1),
+            ("handlers-fractional", 1, 1.5),
+            ("handlers-nan", 1, math.nan),
+            ("handlers-infinity", 1, math.inf),
+            ("handlers-true", 1, True),
+            ("handlers-false", 1, False),
+            ("handlers-zero", 1, 0),
+            ("handlers-negative", 1, -1),
+        ]
+
+        for label, request_timeout, maximum_handlers in invalid_limits:
+            with self.subTest(label=label):
+                case_root = self.root / label
+                staging_dir = case_root / "staging"
+                run_dir = case_root / "run"
+                staging_dir.mkdir(parents=True, mode=0o700)
+                run_dir.mkdir(mode=0o700)
+                key_file = case_root / "hmac.key"
+                key_file.write_bytes(FIXED_KEY)
+                key_file.chmod(0o600)
+                port = unused_loopback_port()
+                config = load_config(
+                    {
+                        "bind": "127.0.0.1",
+                        "port": port,
+                        "worker_id": "m5-local",
+                        "staging_dir": str(staging_dir),
+                        "run_dir": str(run_dir),
+                        "hmac_key_file": str(key_file),
+                    }
+                )
+                server = None
+                try:
+                    with self.assertRaises(ValueError) as caught:
+                        server = LofigenHttpServer(
+                            config,
+                            clock=lambda: 1_700_000_000,
+                            logger=SafeJsonLogger(io.StringIO()),
+                            drain_controller=DrainController(),
+                            request_timeout_seconds=request_timeout,
+                            maximum_handlers=maximum_handlers,
+                        )
+                finally:
+                    if server is not None:
+                        server.server_close()
+
+                self.assertEqual("invalid HTTP safety limits", str(caught.exception))
+                self.assertFalse((run_dir / "hmac-nonces.sqlite3").exists())
+                self.assertEqual([], descriptors_beneath(case_root))
+                bind_probe = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                try:
+                    bind_probe.bind(("127.0.0.1", port))
+                finally:
+                    bind_probe.close()
 
     def test_staging_replacement_between_load_and_server_is_rejected(self) -> None:
         config = load_config(self.values())
