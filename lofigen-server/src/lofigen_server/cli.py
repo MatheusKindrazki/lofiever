@@ -50,7 +50,11 @@ def build_parser(environment: Mapping[str, str]) -> argparse.ArgumentParser:
     parser.add_argument(
         "--allow-non-loopback",
         action="store_true",
-        default=False,
+        default=_environment_default(
+            environment,
+            "LOFIGEN_ALLOW_NON_LOOPBACK",
+            "false",
+        ),
     )
     parser.add_argument(
         "--device",
