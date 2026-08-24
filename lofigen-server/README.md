@@ -101,7 +101,7 @@ CLI arguments override their corresponding environment variables.
 | `LOFIGEN_BIND` | `--bind` | `127.0.0.1`; `0.0.0.0` is always rejected |
 | `LOFIGEN_PORT` | `--port` | `8787` |
 | `LOFIGEN_PROTOCOL_VERSION` | `--protocol-version` | `1`; only v1 major is accepted |
-| `LOFIGEN_WORKER_ID` | `--worker-id` | `local-worker`; stable signed HMAC audience |
+| `LOFIGEN_WORKER_ID` | `--worker-id` | required; stable signed HMAC audience, with no fallback identity |
 | `LOFIGEN_STAGING_DIR` | `--staging-dir` | required existing `0700` directory owned by the process user |
 | `LOFIGEN_RUN_DIR` | `--run-dir` | required existing `0700` directory owned by the process user |
 | `LOFIGEN_HMAC_KEY_FILE` | `--hmac-key-file` | required `0600` regular file |
