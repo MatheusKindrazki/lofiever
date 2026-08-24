@@ -348,7 +348,10 @@ def load_config(
     ):
         raise ConfigError("invalid_protocol_version")
 
-    worker_id = str(values.get("worker_id") or "local-worker")
+    worker_id_value = values.get("worker_id")
+    if worker_id_value is None or str(worker_id_value) == "":
+        raise ConfigError("worker_id_required")
+    worker_id = str(worker_id_value)
     if not WORKER_ID_PATTERN.fullmatch(worker_id):
         raise ConfigError("invalid_worker_id")
 

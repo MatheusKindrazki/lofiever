@@ -33,7 +33,7 @@ def build_parser(environment: Mapping[str, str]) -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--worker-id",
-        default=_environment_default(environment, "LOFIGEN_WORKER_ID", "local-worker"),
+        default=_environment_default(environment, "LOFIGEN_WORKER_ID"),
     )
     parser.add_argument(
         "--staging-dir",

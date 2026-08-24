@@ -138,6 +138,7 @@ jobs:
           printf '%s' '0123456789abcdef0123456789abcdef' > "$runtime_root/hmac.key"
           chmod 600 "$runtime_root/hmac.key"
           lofigen-server --check-config \
+            --worker-id "ci-${{ matrix.python-version }}" \
             --staging-dir "$runtime_root/staging" \
             --run-dir "$runtime_root/run" \
             --hmac-key-file "$runtime_root/hmac.key"
