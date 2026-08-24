@@ -111,6 +111,18 @@ class LofigenServerCliTests(unittest.TestCase):
             json.loads(result.stderr),
         )
 
+    def test_environment_must_explicitly_opt_in_to_a_tailscale_bind(self) -> None:
+        result = self.run_cli(
+            *self.valid_arguments(),
+            environment={
+                "LOFIGEN_ALLOW_NON_LOOPBACK": "true",
+                "LOFIGEN_BIND": "100.64.0.10",
+            },
+        )
+
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual("100.64.0.10", json.loads(result.stdout)["bind"])
+
 
 if __name__ == "__main__":
     unittest.main()

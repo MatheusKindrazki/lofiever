@@ -132,6 +132,169 @@ class LofigenServerSecurityTests(unittest.TestCase):
         )
         self.assertNotIn(marker, self.logs.getvalue())
 
+    def test_timestamp_must_be_inside_the_bounded_window(self) -> None:
+        for offset, nonce in [(-301, "stale-request-0000001"), (301, "future-request-000001")]:
+            headers = signed_headers(
+                "GET",
+                "/v1/capabilities",
+                b"",
+                nonce=nonce,
+                timestamp=FIXED_NOW + offset,
+            )
+
+            status, payload = self.request(
+                "GET",
+                "/v1/capabilities",
+                headers=headers,
+            )
+
+            self.assertEqual(401, status)
+            self.assertEqual(
+                {"error": {"code": "authentication_failed"}, "status": "error"},
+                payload,
+            )
+
+    def test_nonce_replay_is_rejected(self) -> None:
+        headers = signed_headers(
+            "GET",
+            "/v1/capabilities",
+            b"",
+            nonce="replay-nonce-00000001",
+        )
+
+        first_status, _ = self.request(
+            "GET",
+            "/v1/capabilities",
+            headers=headers,
+        )
+        replay_status, replay_payload = self.request(
+            "GET",
+            "/v1/capabilities",
+            headers=headers,
+        )
+
+        self.assertEqual(200, first_status)
+        self.assertEqual(401, replay_status)
+        self.assertEqual(
+            {"error": {"code": "authentication_failed"}, "status": "error"},
+            replay_payload,
+        )
+
+    def test_body_tampering_fails_before_drain(self) -> None:
+        signed_body = b'{"reason":"operator_request"}'
+        tampered_body = b'{"reason":"maintenance"}'
+        headers = signed_headers(
+            "POST",
+            "/v1/admin/drain",
+            signed_body,
+            nonce="tampered-body-0000001",
+        )
+        headers["Content-Type"] = "application/json"
+
+        status, payload = self.request(
+            "POST",
+            "/v1/admin/drain",
+            body=tampered_body,
+            headers=headers,
+        )
+        _, health = self.request("GET", "/v1/health")
+
+        self.assertEqual(401, status)
+        self.assertEqual(
+            {"error": {"code": "authentication_failed"}, "status": "error"},
+            payload,
+        )
+        self.assertFalse(health["draining"])
+
+    def test_invalid_signature_does_not_consume_the_nonce(self) -> None:
+        valid_headers = signed_headers(
+            "GET",
+            "/v1/capabilities",
+            b"",
+            nonce="retry-nonce-000000001",
+        )
+        invalid_headers = dict(valid_headers)
+        invalid_headers["X-Lofiever-Signature"] = "0" * 64
+
+        rejected_status, _ = self.request(
+            "GET",
+            "/v1/capabilities",
+            headers=invalid_headers,
+        )
+        accepted_status, _ = self.request(
+            "GET",
+            "/v1/capabilities",
+            headers=valid_headers,
+        )
+
+        self.assertEqual(401, rejected_status)
+        self.assertEqual(200, accepted_status)
+
+    def test_drain_schema_rejects_sensitive_unknown_fields_without_echoing_them(self) -> None:
+        sensitive_values = [
+            "secret-value-0001",
+            "listener@example.com",
+            str(Path.home() / "private-audio.wav"),
+            "clear prompt should never be logged",
+        ]
+        body = json.dumps(
+            {
+                "reason": "operator_request",
+                "secret": sensitive_values[0],
+                "email": sensitive_values[1],
+                "path": sensitive_values[2],
+                "prompt": sensitive_values[3],
+            }
+        ).encode("utf-8")
+        headers = signed_headers(
+            "POST",
+            "/v1/admin/drain",
+            body,
+            nonce="schema-reject-0000001",
+        )
+        headers["Content-Type"] = "application/json"
+
+        status, payload = self.request(
+            "POST",
+            "/v1/admin/drain",
+            body=body,
+            headers=headers,
+        )
+
+        self.assertEqual(400, status)
+        self.assertEqual(
+            {"error": {"code": "invalid_payload"}, "status": "error"},
+            payload,
+        )
+        rendered_response = json.dumps(payload)
+        rendered_logs = self.logs.getvalue()
+        for sensitive_value in sensitive_values:
+            self.assertNotIn(sensitive_value, rendered_response)
+            self.assertNotIn(sensitive_value, rendered_logs)
+
+    def test_drain_requires_json_content_type_after_authentication(self) -> None:
+        body = b'{"reason":"maintenance"}'
+        headers = signed_headers(
+            "POST",
+            "/v1/admin/drain",
+            body,
+            nonce="content-type-00000001",
+        )
+        headers["Content-Type"] = "text/plain"
+
+        status, payload = self.request(
+            "POST",
+            "/v1/admin/drain",
+            body=body,
+            headers=headers,
+        )
+
+        self.assertEqual(415, status)
+        self.assertEqual(
+            {"error": {"code": "json_required"}, "status": "error"},
+            payload,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
