@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lofiever-lofigen-server"
+version = "0.1.0"
+description = "Headless local music worker contract for Lofiever"
+requires-python = ">=3.11,<3.13"
+dependencies = []
+
+[project.scripts]
+lofigen-server = "lofigen_server.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
