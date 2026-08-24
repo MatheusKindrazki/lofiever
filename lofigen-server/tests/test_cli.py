@@ -10,7 +10,6 @@ import unittest
 
 
 SERVER_ROOT = Path(__file__).resolve().parents[1]
-SOURCE_ROOT = SERVER_ROOT / "src"
 
 
 class LofigenServerCliTests(unittest.TestCase):
@@ -37,7 +36,6 @@ class LofigenServerCliTests(unittest.TestCase):
             for key, value in os.environ.items()
             if not key.startswith("LOFIGEN_")
         }
-        clean_environment["PYTHONPATH"] = str(SOURCE_ROOT)
         clean_environment.update(environment or {})
 
         return subprocess.run(
