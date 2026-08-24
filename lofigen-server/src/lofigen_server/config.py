@@ -7,6 +7,7 @@ from pathlib import Path
 import re
 import stat
 from typing import Mapping
+from urllib.parse import urlsplit
 
 
 PROTOCOL_VERSION_PATTERN = re.compile(r"^[1-9][0-9]*(?:\.[0-9]+){0,2}$")
@@ -41,6 +42,7 @@ class ServerConfig:
     model_revision: str | None = None
     vae_chunk: int | None = None
     batch_ceiling: int = 1
+    acestep_url: str = "http://127.0.0.1:8001"
 
 
 def _parse_bool(value: str | None, *, default: bool = False) -> bool:
@@ -124,6 +126,28 @@ def _optional_capability_value(value: object, *, code: str) -> str | None:
     return normalized
 
 
+def _validate_acestep_url(raw_url: object) -> str:
+    try:
+        parsed = urlsplit(str(raw_url))
+        port = parsed.port
+        address = ipaddress.ip_address(parsed.hostname or "")
+    except (ValueError, TypeError) as error:
+        raise ConfigError("unsafe_acestep_url") from error
+    if (
+        parsed.scheme != "http"
+        or parsed.username is not None
+        or parsed.password is not None
+        or parsed.path not in {"", "/"}
+        or parsed.query
+        or parsed.fragment
+        or address.version != 4
+        or not address.is_loopback
+        or port is None
+    ):
+        raise ConfigError("unsafe_acestep_url")
+    return f"http://{address.compressed}:{port}"
+
+
 def load_config(
     values: Mapping[str, str | bool | int | None],
 ) -> ServerConfig:
@@ -145,7 +169,10 @@ def load_config(
         raise ConfigError("invalid_port")
 
     protocol_version = str(values.get("protocol_version") or "1")
-    if not PROTOCOL_VERSION_PATTERN.fullmatch(protocol_version):
+    if (
+        not PROTOCOL_VERSION_PATTERN.fullmatch(protocol_version)
+        or protocol_version.split(".", maxsplit=1)[0] != "1"
+    ):
         raise ConfigError("invalid_protocol_version")
 
     worker_id = str(values.get("worker_id") or "local-worker")
@@ -200,6 +227,9 @@ def load_config(
     )
     if not 1 <= batch_ceiling <= 8:
         raise ConfigError("invalid_batch_ceiling")
+    acestep_url = _validate_acestep_url(
+        values.get("acestep_url", "http://127.0.0.1:8001")
+    )
 
     return ServerConfig(
         bind=bind,
@@ -217,4 +247,5 @@ def load_config(
         model_revision=model_revision,
         vae_chunk=vae_chunk,
         batch_ceiling=batch_ceiling,
+        acestep_url=acestep_url,
     )

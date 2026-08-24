@@ -84,6 +84,14 @@ def build_parser(environment: Mapping[str, str]) -> argparse.ArgumentParser:
         "--batch-ceiling",
         default=_environment_default(environment, "LOFIGEN_MAX_BATCH", "1"),
     )
+    parser.add_argument(
+        "--acestep-url",
+        default=_environment_default(
+            environment,
+            "LOFIGEN_ACESTEP_URL",
+            "http://127.0.0.1:8001",
+        ),
+    )
     parser.add_argument("--check-config", action="store_true")
     return parser
 
