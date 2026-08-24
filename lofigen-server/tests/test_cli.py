@@ -51,6 +51,8 @@ class LofigenServerCliTests(unittest.TestCase):
     def valid_arguments(self) -> list[str]:
         return [
             "--check-config",
+            "--worker-id",
+            "m5-local",
             "--staging-dir",
             str(self.staging_dir),
             "--run-dir",
@@ -85,7 +87,7 @@ class LofigenServerCliTests(unittest.TestCase):
                 "port": 8787,
                 "protocolVersion": "1",
                 "status": "ok",
-                "workerId": "local-worker",
+                "workerId": "m5-local",
             },
             json.loads(result.stdout),
         )
@@ -105,6 +107,8 @@ class LofigenServerCliTests(unittest.TestCase):
     def test_startup_fails_closed_without_hmac_key_file(self) -> None:
         result = self.run_cli(
             "--check-config",
+            "--worker-id",
+            "m5-local",
             "--staging-dir",
             str(self.staging_dir),
             "--run-dir",
@@ -117,6 +121,23 @@ class LofigenServerCliTests(unittest.TestCase):
             json.loads(result.stderr),
         )
         self.assertNotIn(str(Path.home()), result.stderr)
+
+    def test_worker_identity_is_required(self) -> None:
+        result = self.run_cli(
+            "--check-config",
+            "--staging-dir",
+            str(self.staging_dir),
+            "--run-dir",
+            str(self.run_dir),
+            "--hmac-key-file",
+            str(self.key_file),
+        )
+
+        self.assertEqual(2, result.returncode)
+        self.assertEqual(
+            {"error": {"code": "worker_id_required"}, "status": "error"},
+            json.loads(result.stderr),
+        )
 
     def test_staging_directory_must_be_owned_and_private(self) -> None:
         self.staging_dir.chmod(0o750)

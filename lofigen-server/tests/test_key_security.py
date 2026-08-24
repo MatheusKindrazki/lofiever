@@ -26,6 +26,7 @@ class HmacKeyLoadingSecurityTests(unittest.TestCase):
 
     def values(self, key_file: Path) -> dict[str, object]:
         return {
+            "worker_id": "m5-local",
             "staging_dir": str(self.staging_dir),
             "run_dir": str(self.run_dir),
             "hmac_key_file": str(key_file),

@@ -26,6 +26,7 @@ class LofigenCiContractTests(unittest.TestCase):
         self.assertIn("importlib import resources", lofigen_job)
         self.assertIn('schemas packaged: 4', lofigen_job)
         self.assertIn("lofigen-server --check-config", lofigen_job)
+        self.assertIn("--worker-id", lofigen_job)
         self.assertIn("--run-dir", lofigen_job)
 
 
