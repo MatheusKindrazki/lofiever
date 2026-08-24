@@ -108,6 +108,25 @@ class RuntimeConfigValidationTests(unittest.TestCase):
         self.staging_dir.chmod(0o755)
         self.assert_create_rejected(base_config, "unsafe_staging_dir")
 
+    def test_boolean_numeric_config_is_rejected_before_http_exposure(self) -> None:
+        base_values = {
+            **self.values(),
+            "vae_chunk": 4,
+            "batch_ceiling": 1,
+        }
+        boolean_fields = {
+            "port": "invalid_port",
+            "hmac_window_seconds": "invalid_hmac_window",
+            "vae_chunk": "invalid_vae_chunk",
+            "batch_ceiling": "invalid_batch_ceiling",
+        }
+
+        for field, code in boolean_fields.items():
+            with self.subTest(field=field):
+                with self.assertRaises(ConfigError) as caught:
+                    load_config({**base_values, field: True})
+                self.assertEqual(code, caught.exception.code)
+
     def test_direct_http_server_rejects_raw_config_before_bind_or_runtime_handles(self) -> None:
         port = unused_loopback_port()
         missing_key_file = self.root / "missing.key"
