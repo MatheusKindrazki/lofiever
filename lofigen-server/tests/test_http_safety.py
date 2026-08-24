@@ -7,6 +7,7 @@ from http.client import HTTPConnection
 import io
 import json
 from pathlib import Path
+import select
 import socket
 import tempfile
 import threading
@@ -174,6 +175,9 @@ class HttpResourceSafetyTests(unittest.TestCase):
                 except OSError:
                     break
                 time.sleep(0.05)
+                readable, _, _ = select.select([sock], [], [], 0)
+                if readable:
+                    break
 
             status, payload = receive_json(sock)
             elapsed = time.monotonic() - started_at

@@ -137,6 +137,14 @@ class AuthDecision:
     accepted: bool
 
 
+@dataclass(frozen=True)
+class SignatureEnvelope:
+    timestamp_text: str
+    timestamp: int
+    nonce: str
+    signature: str
+
+
 class SignatureVerifier:
     def __init__(
         self,
@@ -158,33 +166,67 @@ class SignatureVerifier:
         body: bytes,
         headers: Mapping[str, str],
     ) -> AuthDecision:
+        envelope = self.prevalidate(headers)
+        if envelope is None:
+            return AuthDecision(False)
+        return self.verify_prevalidated(method, path, body, envelope)
+
+    def prevalidate(
+        self,
+        headers: Mapping[str, str],
+    ) -> SignatureEnvelope | None:
+        """Reject malformed or stale authentication metadata before reading a body."""
+
         normalized_headers = {name.lower(): value for name, value in headers.items()}
         timestamp_text = (normalized_headers.get(TIMESTAMP_HEADER.lower()) or "").strip()
         nonce = (normalized_headers.get(NONCE_HEADER.lower()) or "").strip()
         signature = (normalized_headers.get(SIGNATURE_HEADER.lower()) or "").strip()
         if not TIMESTAMP_PATTERN.fullmatch(timestamp_text):
-            return AuthDecision(False)
+            return None
         if not NONCE_PATTERN.fullmatch(nonce):
-            return AuthDecision(False)
+            return None
         if not SIGNATURE_PATTERN.fullmatch(signature):
-            return AuthDecision(False)
+            return None
 
         timestamp = int(timestamp_text)
         now = self._clock()
         if abs(now - timestamp) > self._window_seconds:
+            return None
+        return SignatureEnvelope(
+            timestamp_text=timestamp_text,
+            timestamp=timestamp,
+            nonce=nonce,
+            signature=signature,
+        )
+
+    def verify_prevalidated(
+        self,
+        method: str,
+        path: str,
+        body: bytes,
+        envelope: SignatureEnvelope,
+    ) -> AuthDecision:
+        now = self._clock()
+        if abs(now - envelope.timestamp) > self._window_seconds:
             return AuthDecision(False)
 
         expected = hmac.new(
             self._key,
-            canonical_message(method, path, timestamp_text, nonce, body),
+            canonical_message(
+                method,
+                path,
+                envelope.timestamp_text,
+                envelope.nonce,
+                body,
+            ),
             hashlib.sha256,
         ).hexdigest()
-        if not hmac.compare_digest(expected, signature):
+        if not hmac.compare_digest(expected, envelope.signature):
             return AuthDecision(False)
         if not self._nonce_store.accept(
-            nonce,
+            envelope.nonce,
             now=now,
-            signed_timestamp=timestamp,
+            signed_timestamp=envelope.timestamp,
             window_seconds=self._window_seconds,
         ):
             return AuthDecision(False)
