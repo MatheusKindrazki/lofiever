@@ -686,7 +686,7 @@ async function executableConfig(root) {
   if (process.platform !== 'darwin') {
     await writeFile(
       ffprobePath,
-      '#!/bin/sh\nlast=""\nfor value in "$@"; do last="$value"; done\n[ "$last" = "pipe:0" ] || exit 91\ntemporary=$(/usr/bin/mktemp -t lofiever-ffprobe)\ntrap \'/bin/rm -f "$temporary"\' EXIT\n/bin/cat > "$temporary"\nset -- $(/usr/bin/od -An -tu4 -j24 -N20 "$temporary")\nsample_rate="$1"\nbyte_rate="$2"\ndata_bytes="$5"\n/usr/bin/awk -v data_bytes="$data_bytes" -v byte_rate="$byte_rate" -v sample_rate="$sample_rate" \'BEGIN { samples = data_bytes * sample_rate / byte_rate; printf "{\\"streams\\":[{\\"index\\":0,\\"codec_type\\":\\"audio\\",\\"sample_rate\\":\\"%d\\"}],\\"frames\\":[{\\"stream_index\\":0,\\"nb_samples\\":\\"%d\\"}],\\"format\\":{\\"duration\\":\\"%.6f\\"}}\\n", sample_rate, samples, data_bytes / byte_rate }\'\n',
+      '#!/bin/sh\nlast=""\nfor value in "$@"; do last="$value"; done\n[ "$last" = "pipe:0" ] || exit 91\ntemporary=$(/usr/bin/mktemp /tmp/lofiever-ffprobe.XXXXXX) || exit 92\ntrap \'/bin/rm -f "$temporary"\' EXIT\n/bin/cat > "$temporary"\nset -- $(/usr/bin/od -An -tu4 -j24 -N20 "$temporary")\nsample_rate="$1"\nbyte_rate="$2"\ndata_bytes="$5"\n/usr/bin/awk -v data_bytes="$data_bytes" -v byte_rate="$byte_rate" -v sample_rate="$sample_rate" \'BEGIN { samples = data_bytes * sample_rate / byte_rate; printf "{\\"streams\\":[{\\"index\\":0,\\"codec_type\\":\\"audio\\",\\"sample_rate\\":\\"%d\\"}],\\"frames\\":[{\\"stream_index\\":0,\\"nb_samples\\":\\"%d\\"}],\\"format\\":{\\"duration\\":\\"%.6f\\"}}\\n", sample_rate, samples, data_bytes / byte_rate }\'\n',
     );
     await chmod(ffprobePath, 0o755);
   }

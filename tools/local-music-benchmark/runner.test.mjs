@@ -65,7 +65,7 @@ last=""
 for value in "$@"; do last="$value"; done
 [ "$last" = "pipe:0" ] || exit 91
 [ -z "$LOFIEVER_FFPROBE_MARKER" ] || printf spawned > "$LOFIEVER_FFPROBE_MARKER"
-temporary=$(/usr/bin/mktemp -t lofiever-ffprobe)
+temporary=$(/usr/bin/mktemp /tmp/lofiever-ffprobe.XXXXXX) || exit 92
 trap '/bin/rm -f "$temporary"' EXIT
 /bin/cat > "$temporary"
 set -- $(/usr/bin/od -An -tu4 -j24 -N20 "$temporary")
@@ -817,13 +817,12 @@ test('execute manifests require adapter, uv, and ffprobe closure receipts', () =
     removeClosure(manifest);
     assert.equal(spikeManifestSchema.safeParse(manifest).success, false);
   }
-  const nonMachO = plannedManifest();
-  nonMachO.adapter.dynamicLinker = {
-    ...nonMachO.adapter.dynamicLinker,
-    format: 'not-mach-o',
-    images: [],
+  const invalidClosure = plannedManifest();
+  invalidClosure.adapter.dynamicLinker = {
+    ...invalidClosure.adapter.dynamicLinker,
+    osBuild: process.platform === 'darwin' ? null : 'forged-os-build',
   };
-  assert.equal(spikeManifestSchema.safeParse(nonMachO).success, false);
+  assert.equal(spikeManifestSchema.safeParse(invalidClosure).success, false);
 });
 
 test('records actual candidate durations/artifacts and computes RTF from their total duration', async (t) => {
