@@ -172,6 +172,108 @@ test('execution rejects configured host labels that differ from local observatio
   );
 });
 
+test('hashes nested binary .pth package data without parsing it as site configuration', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'lofiever-nested-pth-'));
+  const sitePackages = path.join(root, 'site-packages');
+  const assetDirectory = path.join(sitePackages, 'package', 'assets');
+  const nestedWeights = path.join(assetDirectory, 'model.pth');
+  await mkdir(assetDirectory, { recursive: true });
+  await writeFile(nestedWeights, Buffer.from([0xff, 0x00, 0x80, 0x01]));
+
+  const initial = await pinPythonRuntimeDirectory(sitePackages);
+  assert.match(initial.sha256, /^sha256:[a-f0-9]{64}$/u);
+
+  await writeFile(nestedWeights, Buffer.from([0xff, 0x00, 0x80, 0x02]));
+  const changed = await pinPythonRuntimeDirectory(sitePackages);
+  assert.notEqual(changed.sha256, initial.sha256);
+
+  await writeFile(
+    path.join(sitePackages, 'top-level-path-config.pth'),
+    Buffer.from([0xff, 0x00]),
+  );
+  await assert.rejects(pinPythonRuntimeDirectory(sitePackages), {
+    code: 'python_path_configuration_invalid',
+  });
+
+  await unlink(path.join(sitePackages, 'top-level-path-config.pth'));
+  const topLevelLink = path.join(sitePackages, 'linked-path-config.pth');
+  await symlink(path.relative(sitePackages, nestedWeights), topLevelLink);
+  await assert.rejects(pinPythonRuntimeDirectory(sitePackages), {
+    code: 'python_path_configuration_invalid',
+  });
+
+  await unlink(topLevelLink);
+  const nestedLink = path.join(assetDirectory, 'linked-model.pth');
+  await symlink(path.basename(nestedWeights), nestedLink);
+  const linkedAsset = await pinPythonRuntimeDirectory(sitePackages);
+  assert.match(linkedAsset.sha256, /^sha256:[a-f0-9]{64}$/u);
+
+  const homonymousAssetDirectory = path.join(assetDirectory, 'site-packages');
+  await mkdir(homonymousAssetDirectory);
+  await writeFile(
+    path.join(homonymousAssetDirectory, 'nested-model.pth'),
+    Buffer.from([0xff, 0x00]),
+  );
+  const homonymousAsset = await pinPythonRuntimeDirectory(sitePackages);
+  assert.match(homonymousAsset.sha256, /^sha256:[a-f0-9]{64}$/u);
+
+  const outside = path.join(root, 'outside-model.pth');
+  await writeFile(outside, Buffer.from([0xff, 0x00]));
+  const escapingLink = path.join(assetDirectory, 'escaping-model.pth');
+  await symlink(outside, escapingLink);
+  await assert.rejects(pinPythonRuntimeDirectory(sitePackages), {
+    code: 'runtime_symlink_escape',
+  });
+});
+
+test('rejects logical Python site directories that are symbolic links', async () => {
+  const exactRoot = await mkdtemp(path.join(os.tmpdir(), 'lofiever-site-alias-'));
+  const actualPackages = path.join(exactRoot, 'actual-packages');
+  const sitePackagesAlias = path.join(exactRoot, 'site-packages');
+  await mkdir(actualPackages);
+  await writeFile(
+    path.join(actualPackages, 'startup.pth'),
+    'import os; os.system("false")\n',
+  );
+  await symlink(path.basename(actualPackages), sitePackagesAlias);
+  await assert.rejects(pinPythonRuntimeDirectory(sitePackagesAlias), {
+    code: 'python_site_directory_symlink',
+  });
+
+  const runtimeRoot = await mkdtemp(path.join(os.tmpdir(), 'lofiever-runtime-alias-'));
+  const runtimeLibrary = path.join(runtimeRoot, 'lib');
+  const runtimeVersion = path.join(runtimeLibrary, 'Python3.12');
+  const runtimePackages = path.join(runtimeRoot, 'actual-packages');
+  await mkdir(runtimeVersion, { recursive: true });
+  await mkdir(runtimePackages);
+  await writeFile(
+    path.join(runtimePackages, 'startup.pth'),
+    'import os; os.system("false")\n',
+  );
+  await symlink('../../actual-packages', path.join(runtimeVersion, 'Site-Packages'));
+  await assert.rejects(pinPythonRuntimeDirectory(runtimeLibrary, {
+    pathConfigurationMode: 'runtime-library',
+  }), {
+    code: 'python_site_directory_symlink',
+  });
+});
+
+test('validates path configuration in nested runtime site-packages directories', async () => {
+  const runtimeRoot = await mkdtemp(path.join(os.tmpdir(), 'lofiever-runtime-pth-'));
+  const sitePackages = path.join(runtimeRoot, 'lib', 'Python3.12', 'Site-Packages');
+  await mkdir(sitePackages, { recursive: true });
+  await writeFile(
+    path.join(sitePackages, 'startup.pth'),
+    'import os; os.system("false")\n',
+  );
+
+  await assert.rejects(pinPythonRuntimeDirectory(path.join(runtimeRoot, 'lib'), {
+    pathConfigurationMode: 'runtime-library',
+  }), {
+    code: 'python_path_configuration_external',
+  });
+});
+
 test(
   'accepts the simple pinned import hook in a real bare uv Python 3.12 venv',
   { skip: process.platform !== 'darwin' },
@@ -477,6 +579,7 @@ async function verifyRealDarwinExecutionEnvironment() {
   );
   const outsideLibraryPin = await pinPythonRuntimeDirectory(outsideSnapshotLibrary, {
     pythonExecutable: config.adapter.executable.realpath,
+    pathConfigurationMode: 'runtime-library',
   });
   const relocatedRuntime = structuredClone(verified);
   relocatedRuntime.adapter.pythonRuntime.snapshotLibrary = outsideLibraryPin;
