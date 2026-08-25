@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Issue and PR templates
 - Jest testing setup
 - CODEOWNERS file
+- Headless `lofigen-server` local music worker contract with a public health endpoint plus
+  authenticated capabilities and cooperative drain endpoints
 
 ## [0.1.0] - 2024-XX-XX
 

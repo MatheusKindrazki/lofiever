@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lofiever.local/contracts/v1/health.response.schema.json",
+  "title": "Lofigen health response",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "status",
+    "protocolVersion",
+    "modelId",
+    "modelRevision",
+    "device",
+    "lmBackend",
+    "vaeChunk",
+    "batchCeiling",
+    "freeDisk",
+    "freeStagingBytes",
+    "jobsInFlight",
+    "draining",
+    "uptimeSeconds",
+    "workerId"
+  ],
+  "properties": {
+    "status": { "enum": ["ok", "draining"] },
+    "protocolVersion": { "type": "string", "pattern": "^1(?:\\.[0-9]+){0,2}$" },
+    "modelId": {
+      "type": ["string", "null"],
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]{0,127}$"
+    },
+    "modelRevision": {
+      "type": ["string", "null"],
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]{0,127}$"
+    },
+    "device": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]{0,127}$"
+    },
+    "lmBackend": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]{0,127}$"
+    },
+    "vaeChunk": { "type": ["integer", "null"], "minimum": 1 },
+    "batchCeiling": { "type": "integer", "minimum": 1, "maximum": 8 },
+    "freeDisk": { "type": "integer", "minimum": 0 },
+    "freeStagingBytes": { "type": "integer", "minimum": 0 },
+    "jobsInFlight": { "type": "integer", "minimum": 0 },
+    "draining": { "type": "boolean" },
+    "uptimeSeconds": { "type": "integer", "minimum": 0 },
+    "workerId": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$" }
+  }
+}

@@ -102,3 +102,54 @@ jobs:
         run: npm run build
         env:
           SKIP_ENV_VALIDATION: true
+
+  lofigen-contract:
+    name: Lofigen Contract (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.11', '3.12']
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Build lofigen-server wheel
+        run: python -m pip wheel --no-deps --wheel-dir "$RUNNER_TEMP/lofigen-wheel" ./lofigen-server
+
+      - name: Install lofigen-server wheel
+        run: |
+          python -m pip install --force-reinstall "$RUNNER_TEMP"/lofigen-wheel/*.whl
+          python -m pip install 'jsonschema>=4.23,<5'
+
+      - name: Run lofigen-server tests
+        run: python -m unittest discover -s lofigen-server/tests -v
+
+      - name: Smoke packaged schemas and console config
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          runtime_root="$RUNNER_TEMP/lofigen-runtime-${{ matrix.python-version }}"
+          install -d -m 700 "$runtime_root/staging" "$runtime_root/run"
+          printf '%s' '0123456789abcdef0123456789abcdef' > "$runtime_root/hmac.key"
+          chmod 600 "$runtime_root/hmac.key"
+          lofigen-server --check-config \
+            --worker-id "ci-${{ matrix.python-version }}" \
+            --staging-dir "$runtime_root/staging" \
+            --run-dir "$runtime_root/run" \
+            --hmac-key-file "$runtime_root/hmac.key"
+          python - <<'PY'
+          from importlib import resources
+
+          contracts = resources.files("lofigen_server").joinpath("contracts")
+          schemas = sorted(path.name for path in contracts.iterdir() if path.name.endswith(".json"))
+          if len(schemas) != 4:
+              raise SystemExit(f"expected 4 packaged schemas, found {schemas}")
+          print("schemas packaged: 4")
+          PY
