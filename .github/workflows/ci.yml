@@ -76,6 +76,31 @@ jobs:
       - name: Run tests
         run: npm test
 
+  local-music-benchmark:
+    name: Local Music Benchmark Contract
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check benchmark ESM syntax
+        run: find tools/local-music-benchmark -type f -name '*.mjs' -print0 | xargs -0 -n1 node --check
+
+      - name: Run schema, fixture, CLI, and hostile benchmark tests
+        run: node --test tools/local-music-benchmark/*.test.mjs
+
+      - name: Confirm committed schema and fixture drift
+        run: git diff --exit-code -- tools/local-music-benchmark/schemas tools/local-music-benchmark/fixtures/dry-run-manifest.v1.json
+
   build:
     name: Build
     runs-on: ubuntu-latest

@@ -1,0 +1,53 @@
+{
+  "schemaVersion": "1.0.0",
+  "benchmarkId": "lofiever-spike-dry-run-no-model",
+  "matrixFile": "./lofiever-spike-matrix.v1.json",
+  "host": {
+    "machine": "dry-run-unmeasured",
+    "chip": null,
+    "memoryBytes": null,
+    "osVersion": null
+  },
+  "engine": {
+    "name": "ace-step-1.5",
+    "repositoryPath": null,
+    "repoCommit": "14c0211d5a0653b0f63e27686f4c3f151b4d8629"
+  },
+  "model": {
+    "id": "dry-run-no-model",
+    "revision": "not-installed",
+    "weights": null,
+    "lm": {
+      "id": "acestep-5Hz-lm-0.6B",
+      "revision": "not-installed",
+      "weights": null
+    }
+  },
+  "runtime": {
+    "device": "mps",
+    "lmBackend": "mlx",
+    "vaeChunk": null,
+    "serverCommit": null,
+    "runDirectory": null
+  },
+  "adapter": {
+    "kind": "persistent-jsonl-v1",
+    "workingDirectory": null,
+    "executable": null,
+    "script": null,
+    "requestTimeoutSeconds": 900,
+    "terminateGraceSeconds": 5,
+    "maxOutputBytes": 1048576
+  },
+  "toolchain": {
+    "git": null,
+    "node": null,
+    "python": null,
+    "uv": null,
+    "ffmpeg": null,
+    "ffprobe": null
+  },
+  "energyCollection": {
+    "source": "none"
+  }
+}

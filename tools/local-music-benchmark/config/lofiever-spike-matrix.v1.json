@@ -1,0 +1,7 @@
+{
+  "schemaVersion": "1.0.0",
+  "durationSeconds": [150, 180, 184],
+  "batchSize": [1, 2, 4],
+  "warmup": 1,
+  "repetitions": 3
+}
