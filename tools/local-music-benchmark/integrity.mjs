@@ -364,7 +364,44 @@ function isInside(rootPath, candidatePath) {
   return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
 }
 
-async function listRuntimeTree(rootPath, relativeDirectory = '', pathImports = []) {
+const PYTHON_SITE_DIRECTORY_NAMES = Object.freeze(['site-packages', 'dist-packages']);
+
+function isPythonSiteDirectoryName(value) {
+  return PYTHON_SITE_DIRECTORY_NAMES.includes(value.toLowerCase());
+}
+
+function isRuntimeLibrarySiteDirectory(relativeDirectory) {
+  const segments = relativeDirectory.split(path.sep).filter(Boolean);
+  return (
+    (segments.length === 1 && isPythonSiteDirectoryName(segments[0])) ||
+    (segments.length === 2 &&
+      /^python\d+\.\d+$/u.test(segments[0].toLowerCase()) &&
+      isPythonSiteDirectoryName(segments[1]))
+  );
+}
+
+function isPythonPathConfigurationEntry(relativeDirectory, entryName, mode) {
+  if (!entryName.toLowerCase().endsWith('.pth')) return false;
+  return mode === 'site-packages'
+    ? relativeDirectory === ''
+    : isRuntimeLibrarySiteDirectory(relativeDirectory);
+}
+
+function isProtectedPythonSiteSymlink(relativePath, mode) {
+  if (mode !== 'runtime-library') return false;
+  const segments = relativePath.split(path.sep).filter(Boolean);
+  return (
+    (segments.length === 1 && /^python\d+\.\d+$/u.test(segments[0].toLowerCase())) ||
+    isRuntimeLibrarySiteDirectory(relativePath)
+  );
+}
+
+async function listRuntimeTree(
+  rootPath,
+  relativeDirectory = '',
+  pathImports = [],
+  pathConfigurationMode = 'site-packages',
+) {
   const directoryPath = path.join(rootPath, relativeDirectory);
   const directory = await opendir(directoryPath);
   const entries = [];
@@ -378,6 +415,12 @@ async function listRuntimeTree(rootPath, relativeDirectory = '', pathImports = [
     const stats = await lstat(absolutePath);
     const receiptPath = relativePath.split(path.sep).join('/');
     if (stats.isSymbolicLink()) {
+      if (isProtectedPythonSiteSymlink(relativePath, pathConfigurationMode)) {
+        throw new BenchmarkIntegrityError(
+          'python_site_directory_symlink',
+          `Python site directory aliases are not supported: ${receiptPath}`,
+        );
+      }
       const resolvedTarget = await realpath(absolutePath);
       if (!isInside(rootPath, resolvedTarget)) {
         throw new BenchmarkIntegrityError(
@@ -385,7 +428,11 @@ async function listRuntimeTree(rootPath, relativeDirectory = '', pathImports = [
           `Python runtime symlink escapes its pinned tree: ${receiptPath}`,
         );
       }
-      if (entry.name.toLowerCase().endsWith('.pth')) {
+      if (isPythonPathConfigurationEntry(
+        relativeDirectory,
+        entry.name,
+        pathConfigurationMode,
+      )) {
         const imports = await validatePythonPathFile(
           rootPath,
           resolvedTarget,
@@ -406,9 +453,18 @@ async function listRuntimeTree(rootPath, relativeDirectory = '', pathImports = [
       });
     } else if (stats.isDirectory()) {
       result.push({ path: receiptPath, type: 'directory' });
-      result.push(...(await listRuntimeTree(rootPath, relativePath, pathImports)));
+      result.push(...(await listRuntimeTree(
+        rootPath,
+        relativePath,
+        pathImports,
+        pathConfigurationMode,
+      )));
     } else if (stats.isFile()) {
-      if (entry.name.toLowerCase().endsWith('.pth')) {
+      if (isPythonPathConfigurationEntry(
+        relativeDirectory,
+        entry.name,
+        pathConfigurationMode,
+      )) {
         const imports = await validatePythonPathFile(
           rootPath,
           absolutePath,
@@ -607,8 +663,21 @@ async function verifyPythonPathImports(pythonExecutable, pathImports) {
 
 export async function pinPythonRuntimeDirectory(
   directoryPath,
-  { pythonExecutable = null } = {},
+  {
+    pythonExecutable = null,
+    pathConfigurationMode = 'site-packages',
+  } = {},
 ) {
+  if (!['runtime-library', 'site-packages'].includes(pathConfigurationMode)) {
+    throw new TypeError('Python path configuration mode is invalid.');
+  }
+  const requestedStats = await lstat(directoryPath);
+  if (pathConfigurationMode === 'site-packages' && requestedStats.isSymbolicLink()) {
+    throw new BenchmarkIntegrityError(
+      'python_site_directory_symlink',
+      'The pinned Python site-packages root must not be a symbolic link.',
+    );
+  }
   const canonicalPath = await realpath(directoryPath);
   const stats = await lstat(canonicalPath);
   if (!stats.isDirectory()) {
@@ -618,7 +687,12 @@ export async function pinPythonRuntimeDirectory(
     );
   }
   const pathImports = [];
-  const tree = await listRuntimeTree(canonicalPath, '', pathImports);
+  const tree = await listRuntimeTree(
+    canonicalPath,
+    '',
+    pathImports,
+    pathConfigurationMode,
+  );
   if (pathImports.length > 0) {
     if (pythonExecutable === null) {
       throw new BenchmarkIntegrityError(
@@ -667,6 +741,7 @@ async function detectVirtualEnvironment(executable, pythonVersion) {
     try {
       sitePackages = await pinPythonRuntimeDirectory(sitePackagesPath, {
         pythonExecutable: executable.realpath,
+        pathConfigurationMode: 'site-packages',
       });
     } catch (error) {
       if (error?.code !== 'ENOENT') throw error;
@@ -843,6 +918,7 @@ async function verifyPythonBundle(
     });
     const snapshotLibrary = await pinPythonRuntimeDirectory(path.join(bundle, 'lib'), {
       pythonExecutable: executable.realpath,
+      pathConfigurationMode: 'runtime-library',
     });
     if (snapshotLibrary.sha256 !== sourceLibrary.sha256) {
       throw new Error('Python runtime library snapshot changed.');
@@ -873,7 +949,10 @@ async function verifyPythonBundle(
                 path.basename(path.dirname(sourceVirtualEnvironment.sitePackages.realpath)),
                 'site-packages',
               ),
-              { pythonExecutable: executable.realpath },
+              {
+                pythonExecutable: executable.realpath,
+                pathConfigurationMode: 'site-packages',
+              },
             );
       if (
         sitePackages !== null &&
@@ -895,6 +974,7 @@ async function verifyPythonBundle(
     }
     const currentSourceLibrary = await pinPythonRuntimeDirectory(sourceLibrary.realpath, {
       pythonExecutable: sourceExecutableRealpath,
+      pathConfigurationMode: 'runtime-library',
     });
     if (serializeManifest(currentSourceLibrary) !== serializeManifest(sourceLibrary)) {
       throw new Error('Python runtime library source changed.');
@@ -919,7 +999,10 @@ async function verifyPythonBundle(
     if (sourceVirtualEnvironment !== null && sourceVirtualEnvironment.sitePackages !== null) {
       const currentSitePackages = await pinPythonRuntimeDirectory(
         sourceVirtualEnvironment.sitePackages.realpath,
-        { pythonExecutable: sourceExecutableRealpath },
+        {
+          pythonExecutable: sourceExecutableRealpath,
+          pathConfigurationMode: 'site-packages',
+        },
       );
       if (
         serializeManifest(currentSitePackages) !==
@@ -975,7 +1058,10 @@ async function preparePythonExecutionBundle(executable, pythonVersion, runDirect
     );
   }
   const [sourceLibrary, sourceVirtualEnvironment, executableBytes] = await Promise.all([
-    pinPythonRuntimeDirectory(libraryPath, { pythonExecutable: executable.realpath }),
+    pinPythonRuntimeDirectory(libraryPath, {
+      pythonExecutable: executable.realpath,
+      pathConfigurationMode: 'runtime-library',
+    }),
     detectVirtualEnvironment(executable, pythonVersion),
     readPinnedFileBytes(executable, { executable: true, label: 'adapter executable' }),
   ]);
@@ -1188,6 +1274,7 @@ async function revalidatePythonExecutionBundle(
   if (libraryStats?.isDirectory()) {
     sourceLibrary = await pinPythonRuntimeDirectory(libraryPath, {
       pythonExecutable: sourceExecutable.realpath,
+      pathConfigurationMode: 'runtime-library',
     });
     sourceVirtualEnvironment = await detectVirtualEnvironment(sourceExecutable, pythonVersion);
     const bundleIdentity = sha256Value(
@@ -1274,7 +1361,10 @@ async function revalidatePythonExecutionBundle(
     }
     const snapshotLibrary = await pinPythonRuntimeDirectory(
       expectedRuntime.snapshotLibrary.path,
-      { pythonExecutable: sourceExecutable.realpath },
+      {
+        pythonExecutable: sourceExecutable.realpath,
+        pathConfigurationMode: 'runtime-library',
+      },
     );
     assertSameIntegrityReceipt(
       snapshotLibrary,
@@ -1356,7 +1446,10 @@ async function revalidatePythonExecutionBundle(
         }
         snapshotSitePackages = await pinPythonRuntimeDirectory(
           expectedVirtualEnvironment.snapshotSitePackages.path,
-          { pythonExecutable: sourceExecutable.realpath },
+          {
+            pythonExecutable: sourceExecutable.realpath,
+            pathConfigurationMode: 'site-packages',
+          },
         );
         assertSameIntegrityReceipt(
           snapshotSitePackages,

@@ -156,7 +156,14 @@ This is a static Mach-O startup-closure receipt, not a claim to the adapter's co
 It does not discover arbitrary later `dlopen` or `execve` calls. The reviewed persistent adapter
 and its installed packages remain part of the smoke review boundary.
 
-Python `.pth` files are part of that trust boundary. A line may contain only a simple
+Python `.pth` files directly inside an effective `site-packages`/`dist-packages` directory are
+part of that trust boundary because those are the entries `site.py` processes. The verifier carries
+that context explicitly for a pinned site root and for the runtime-library layout
+`pythonX.Y/<site-dir>`; matching directory aliases are rejected instead of losing their lexical
+startup identity through `realpath`, and matching is case-normalized for macOS filesystems. Nested
+`.pth` package assets (including assets below another
+directory that merely shares the `site-packages` name) remain byte-for-byte hashed runtime inputs
+but are not interpreted as path configuration. A configuration line may contain only a simple
 `import module_name` whose complete module resolves inside the snapshotted site-packages tree
 (including uv's `import _virtualenv`). The pinned interpreter probes with `-I -S`, an environment
 without `PYTHONPATH`, and the builtin/frozen/path finders against the explicit snapshot directory;
