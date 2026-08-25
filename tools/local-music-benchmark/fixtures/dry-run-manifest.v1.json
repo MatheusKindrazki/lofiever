@@ -1,0 +1,302 @@
+{
+  "adapter": {
+    "dynamicLinker": null,
+    "executable": null,
+    "kind": "persistent-jsonl-v1",
+    "maxOutputBytes": 1048576,
+    "pythonRuntime": null,
+    "requestTimeoutSeconds": 900,
+    "script": null,
+    "terminateGraceSeconds": 5,
+    "workingDirectory": null
+  },
+  "benchmarkId": "lofiever-spike-dry-run-no-model",
+  "configurationSha256": "sha256:baebc5b99ac2183a9763375dc7cac3c451b65664189ab560dba3dc1671eafc5f",
+  "energyCollection": {
+    "requested": false,
+    "source": "none",
+    "unavailableReason": "not_requested"
+  },
+  "engine": {
+    "clean": null,
+    "name": "ace-step-1.5",
+    "repoCommit": "14c0211d5a0653b0f63e27686f4c3f151b4d8629",
+    "repositoryPath": null
+  },
+  "environment": [],
+  "environmentSha256": null,
+  "executionMode": "dry-run",
+  "factors": {
+    "batchSizeEffective": null,
+    "batchSizeRequested": 2,
+    "durationSeconds": 180,
+    "repetitions": 3,
+    "warmup": 1
+  },
+  "host": {
+    "chip": null,
+    "machine": "dry-run-unmeasured",
+    "memoryBytes": null,
+    "osVersion": null
+  },
+  "manifestType": "lofiever.local-music-spike-run",
+  "model": {
+    "id": "dry-run-no-model",
+    "lm": {
+      "id": "acestep-5Hz-lm-0.6B",
+      "revision": "not-installed",
+      "weights": null
+    },
+    "revision": "not-installed",
+    "weights": null
+  },
+  "repetitions": [
+    {
+      "attempt": 0,
+      "attemptReceipts": [],
+      "audioDurationSeconds": null,
+      "batchSizeEffective": null,
+      "batchSizeRequested": 2,
+      "candidates": [],
+      "commandReceipt": {
+        "attemptReceiptSha256": null,
+        "command": [
+          "$PINNED_PYTHON",
+          "-P",
+          "$PINNED_ADAPTER_SCRIPT",
+          "--protocol",
+          "lofiever-benchmark-jsonl-v1"
+        ],
+        "commandSha256": "sha256:2028ca0dcd3d89766fe649708be6e5785540ee7e8737e842625daecbcf71f61d",
+        "environment": [],
+        "executed": false,
+        "exitCode": null,
+        "finishedAt": null,
+        "previousAttemptReceiptSha256": null,
+        "requestSha256": null,
+        "sidecar": null,
+        "signal": null,
+        "startedAt": null,
+        "stderrBytes": null,
+        "stderrSha256": null,
+        "stdoutBytes": null,
+        "stdoutSha256": null,
+        "transport": "persistent-jsonl-v1",
+        "workingDirectory": "$PINNED_WORKING_DIRECTORY"
+      },
+      "discarded": false,
+      "energyWh": null,
+      "error": null,
+      "index": 1,
+      "metricUnavailableReason": {
+        "audioDurationSeconds": "dry_run",
+        "batchSizeEffective": "dry_run",
+        "energyWh": "dry_run",
+        "peakMemoryBytes": "dry_run",
+        "rtf": "dry_run",
+        "wallTimeSeconds": "dry_run"
+      },
+      "peakMemoryBytes": null,
+      "phase": "repetition",
+      "rtf": null,
+      "status": "planned",
+      "wallTimeSeconds": null
+    },
+    {
+      "attempt": 0,
+      "attemptReceipts": [],
+      "audioDurationSeconds": null,
+      "batchSizeEffective": null,
+      "batchSizeRequested": 2,
+      "candidates": [],
+      "commandReceipt": {
+        "attemptReceiptSha256": null,
+        "command": [
+          "$PINNED_PYTHON",
+          "-P",
+          "$PINNED_ADAPTER_SCRIPT",
+          "--protocol",
+          "lofiever-benchmark-jsonl-v1"
+        ],
+        "commandSha256": "sha256:2028ca0dcd3d89766fe649708be6e5785540ee7e8737e842625daecbcf71f61d",
+        "environment": [],
+        "executed": false,
+        "exitCode": null,
+        "finishedAt": null,
+        "previousAttemptReceiptSha256": null,
+        "requestSha256": null,
+        "sidecar": null,
+        "signal": null,
+        "startedAt": null,
+        "stderrBytes": null,
+        "stderrSha256": null,
+        "stdoutBytes": null,
+        "stdoutSha256": null,
+        "transport": "persistent-jsonl-v1",
+        "workingDirectory": "$PINNED_WORKING_DIRECTORY"
+      },
+      "discarded": false,
+      "energyWh": null,
+      "error": null,
+      "index": 2,
+      "metricUnavailableReason": {
+        "audioDurationSeconds": "dry_run",
+        "batchSizeEffective": "dry_run",
+        "energyWh": "dry_run",
+        "peakMemoryBytes": "dry_run",
+        "rtf": "dry_run",
+        "wallTimeSeconds": "dry_run"
+      },
+      "peakMemoryBytes": null,
+      "phase": "repetition",
+      "rtf": null,
+      "status": "planned",
+      "wallTimeSeconds": null
+    },
+    {
+      "attempt": 0,
+      "attemptReceipts": [],
+      "audioDurationSeconds": null,
+      "batchSizeEffective": null,
+      "batchSizeRequested": 2,
+      "candidates": [],
+      "commandReceipt": {
+        "attemptReceiptSha256": null,
+        "command": [
+          "$PINNED_PYTHON",
+          "-P",
+          "$PINNED_ADAPTER_SCRIPT",
+          "--protocol",
+          "lofiever-benchmark-jsonl-v1"
+        ],
+        "commandSha256": "sha256:2028ca0dcd3d89766fe649708be6e5785540ee7e8737e842625daecbcf71f61d",
+        "environment": [],
+        "executed": false,
+        "exitCode": null,
+        "finishedAt": null,
+        "previousAttemptReceiptSha256": null,
+        "requestSha256": null,
+        "sidecar": null,
+        "signal": null,
+        "startedAt": null,
+        "stderrBytes": null,
+        "stderrSha256": null,
+        "stdoutBytes": null,
+        "stdoutSha256": null,
+        "transport": "persistent-jsonl-v1",
+        "workingDirectory": "$PINNED_WORKING_DIRECTORY"
+      },
+      "discarded": false,
+      "energyWh": null,
+      "error": null,
+      "index": 3,
+      "metricUnavailableReason": {
+        "audioDurationSeconds": "dry_run",
+        "batchSizeEffective": "dry_run",
+        "energyWh": "dry_run",
+        "peakMemoryBytes": "dry_run",
+        "rtf": "dry_run",
+        "wallTimeSeconds": "dry_run"
+      },
+      "peakMemoryBytes": null,
+      "phase": "repetition",
+      "rtf": null,
+      "status": "planned",
+      "wallTimeSeconds": null
+    }
+  ],
+  "runId": "9acd567b1361ce6d729b2c8ac82b22a0defded9771fa7d77f0f0d44c506d84c4",
+  "runtime": {
+    "device": "mps",
+    "harnessClean": null,
+    "harnessCommit": "c2bbbf3a6e2b9e6ca835057f80557c0395a3bc6e",
+    "harnessRepositoryPath": null,
+    "lmBackend": "mlx",
+    "runDirectory": null,
+    "runDirectoryIdentity": null,
+    "serverCommit": null,
+    "vaeChunk": null
+  },
+  "schemaVersion": "1.0.0",
+  "state": "planned",
+  "summary": {
+    "allocationFailures": 0,
+    "completedRepetitions": 0,
+    "energyUnavailableReason": "not_requested",
+    "energyWhTotal": null,
+    "failedRepetitions": 0,
+    "pendingRepetitions": 3,
+    "rtfMean": null,
+    "rtfStdDev": null,
+    "skippedRepetitions": 0,
+    "totalRepetitions": 3
+  },
+  "toolchain": {
+    "ffmpeg": null,
+    "ffprobe": null,
+    "git": null,
+    "node": null,
+    "python": null,
+    "uv": null
+  },
+  "unavailableIdentity": {
+    "adapter": "dry_run",
+    "engineRepository": "dry_run",
+    "environment": "dry_run",
+    "harnessRepository": "dry_run",
+    "lmWeights": "dry_run",
+    "modelWeights": "dry_run",
+    "toolchain": "dry_run"
+  },
+  "warmup": {
+    "attempt": 0,
+    "attemptReceipts": [],
+    "audioDurationSeconds": null,
+    "batchSizeEffective": null,
+    "batchSizeRequested": 2,
+    "candidates": [],
+    "commandReceipt": {
+      "attemptReceiptSha256": null,
+      "command": [
+        "$PINNED_PYTHON",
+        "-P",
+        "$PINNED_ADAPTER_SCRIPT",
+        "--protocol",
+        "lofiever-benchmark-jsonl-v1"
+      ],
+      "commandSha256": "sha256:2028ca0dcd3d89766fe649708be6e5785540ee7e8737e842625daecbcf71f61d",
+      "environment": [],
+      "executed": false,
+      "exitCode": null,
+      "finishedAt": null,
+      "previousAttemptReceiptSha256": null,
+      "requestSha256": null,
+      "sidecar": null,
+      "signal": null,
+      "startedAt": null,
+      "stderrBytes": null,
+      "stderrSha256": null,
+      "stdoutBytes": null,
+      "stdoutSha256": null,
+      "transport": "persistent-jsonl-v1",
+      "workingDirectory": "$PINNED_WORKING_DIRECTORY"
+    },
+    "discarded": true,
+    "energyWh": null,
+    "error": null,
+    "index": 0,
+    "metricUnavailableReason": {
+      "audioDurationSeconds": "dry_run",
+      "batchSizeEffective": "dry_run",
+      "energyWh": "dry_run",
+      "peakMemoryBytes": "dry_run",
+      "rtf": "dry_run",
+      "wallTimeSeconds": "dry_run"
+    },
+    "peakMemoryBytes": null,
+    "phase": "warmup",
+    "rtf": null,
+    "status": "planned",
+    "wallTimeSeconds": null
+  }
+}
