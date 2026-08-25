@@ -1,17 +1,10 @@
-import { execFile } from 'node:child_process';
 import { createHash, randomBytes } from 'node:crypto';
 import { constants, fstatSync, lstatSync } from 'node:fs';
 import { link, lstat, mkdir, open, realpath, rename, unlink } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { promisify } from 'node:util';
 
-const execFileAsync = promisify(execFile);
-const PROCESS_IDENTITY_ENVIRONMENT = Object.freeze({
-  LANG: 'C',
-  LC_ALL: 'C',
-  TZ: 'UTC',
-});
+import { observeProcessStartIdentityWithPs } from './process-identity.mjs';
 
 function sha256Receipt(value) {
   return `sha256:${createHash('sha256').update(value).digest('hex')}`;
@@ -492,30 +485,9 @@ export async function renameFileDurable(sourcePath, destinationPath) {
   }
 }
 
-async function queryProcessStartIdentity(pid, hostname) {
-  try {
-    const { stdout } = await execFileAsync(
-      '/bin/ps',
-      ['-o', 'lstart=', '-p', String(pid)],
-      {
-        encoding: 'utf8',
-        env: PROCESS_IDENTITY_ENVIRONMENT,
-        maxBuffer: 16 * 1024,
-        shell: false,
-        timeout: 5000,
-      },
-    );
-    const startedAt = stdout.trim();
-    if (startedAt.length === 0) return null;
-    return sha256Receipt(`${hostname}\0${pid}\0${startedAt}`);
-  } catch {
-    return null;
-  }
-}
-
-async function currentOwner(observeHostname) {
+async function currentOwner(observeHostname, observeProcessStartIdentity) {
   const hostname = observeHostname();
-  const processStartIdentity = await queryProcessStartIdentity(process.pid, hostname);
+  const processStartIdentity = await observeProcessStartIdentity(process.pid, hostname);
   if (processStartIdentity === null) {
     throw new BenchmarkStorageError(
       'benchmark_process_identity_unavailable',
@@ -671,7 +643,7 @@ async function assertLockUnchanged(lockPath, expected) {
   }
 }
 
-async function ownerIsStale(existing, observeHostname) {
+async function ownerIsStale(existing, observeHostname, observeProcessStartIdentity) {
   const currentHostname = observeHostname();
   if (existing.hostname !== currentHostname) {
     throw new BenchmarkStorageError(
@@ -681,7 +653,7 @@ async function ownerIsStale(existing, observeHostname) {
     );
   }
   if (isAlive(existing.pid)) {
-    const actualStartIdentity = await queryProcessStartIdentity(
+    const actualStartIdentity = await observeProcessStartIdentity(
       existing.pid,
       existing.hostname,
     );
@@ -1097,7 +1069,12 @@ function ownedLockHandle(lockPath, owner, { onCleanupGuardWrite } = {}) {
   };
 }
 
-async function acquireRecoveryGuard(lockPath, owner, observeHostname) {
+async function acquireRecoveryGuard(
+  lockPath,
+  owner,
+  observeHostname,
+  observeProcessStartIdentity,
+) {
   const guardPath = `${lockPath}.recovery`;
   for (let attempt = 0; attempt < 4; attempt += 1) {
     try {
@@ -1114,7 +1091,11 @@ async function acquireRecoveryGuard(lockPath, owner, observeHostname) {
     } catch (error) {
       if (error?.code !== 'EEXIST') throw error;
       const existing = await readLockOwner(guardPath);
-      if (!(await ownerIsStale(existing.owner, observeHostname))) {
+      if (!(await ownerIsStale(
+        existing.owner,
+        observeHostname,
+        observeProcessStartIdentity,
+      ))) {
         throw new BenchmarkStorageError(
           'benchmark_lock_recovery_in_progress',
           'Another live process is serializing benchmark lock recovery.',
@@ -1127,7 +1108,11 @@ async function acquireRecoveryGuard(lockPath, owner, observeHostname) {
       } catch (error) {
         if (error?.code !== 'EEXIST') throw error;
         const reaper = await readLockOwner(reaperPath);
-        if (!(await ownerIsStale(reaper.owner, observeHostname))) {
+        if (!(await ownerIsStale(
+          reaper.owner,
+          observeHostname,
+          observeProcessStartIdentity,
+        ))) {
           throw new BenchmarkStorageError(
             'benchmark_lock_recovery_in_progress',
             'Another live process is recovering an abandoned benchmark guard.',
@@ -1148,7 +1133,11 @@ async function acquireRecoveryGuard(lockPath, owner, observeHostname) {
           if (error?.code === 'ENOENT') continue;
           throw error;
         }
-        if (!(await ownerIsStale(currentGuard.owner, observeHostname))) {
+        if (!(await ownerIsStale(
+          currentGuard.owner,
+          observeHostname,
+          observeProcessStartIdentity,
+        ))) {
           throw new BenchmarkStorageError(
             'benchmark_lock_recovery_in_progress',
             'The benchmark recovery guard gained a live owner.',
@@ -1215,12 +1204,16 @@ export async function acquireRunLock(
   manifestPath,
   {
     observeHostname = os.hostname,
+    observeProcessStartIdentity = observeProcessStartIdentityWithPs,
     onBeforeStaleQuarantine,
     onCleanupGuardWrite,
   } = {},
 ) {
   if (typeof observeHostname !== 'function') {
     throw new TypeError('Benchmark lock hostname observer must be a function.');
+  }
+  if (typeof observeProcessStartIdentity !== 'function') {
+    throw new TypeError('Benchmark lock process-identity observer must be a function.');
   }
   if (
     onBeforeStaleQuarantine !== undefined &&
@@ -1235,8 +1228,13 @@ export async function acquireRunLock(
     throw new TypeError('onCleanupGuardWrite must be a function when provided.');
   }
   const lockPath = `${manifestPath}.lock`;
-  const owner = await currentOwner(observeHostname);
-  const guard = await acquireRecoveryGuard(lockPath, owner, observeHostname);
+  const owner = await currentOwner(observeHostname, observeProcessStartIdentity);
+  const guard = await acquireRecoveryGuard(
+    lockPath,
+    owner,
+    observeHostname,
+    observeProcessStartIdentity,
+  );
   try {
     let cleanupGuard = await readCleanupGuard(lockPath);
     if (cleanupGuard !== null) {
@@ -1250,7 +1248,11 @@ export async function acquireRunLock(
         if (error?.code === 'ENOENT') throw cleanupGuardError(lockPath, cleanupGuard);
         throw error;
       }
-      if (!(await ownerIsStale(existing.owner, observeHostname))) {
+      if (!(await ownerIsStale(
+        existing.owner,
+        observeHostname,
+        observeProcessStartIdentity,
+      ))) {
         throw new BenchmarkStorageError(
           'benchmark_locked',
           'Another live process owns the machine-wide benchmark lock.',
@@ -1268,7 +1270,11 @@ export async function acquireRunLock(
     } catch (error) {
       if (error?.code !== 'EEXIST') throw error;
       const existing = await readLockOwner(lockPath);
-      if (!(await ownerIsStale(existing.owner, observeHostname))) {
+      if (!(await ownerIsStale(
+        existing.owner,
+        observeHostname,
+        observeProcessStartIdentity,
+      ))) {
         throw new BenchmarkStorageError(
           'benchmark_locked',
           'Another live process owns the machine-wide benchmark lock.',
