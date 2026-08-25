@@ -467,10 +467,16 @@ per-output owner is stale only after both the exact parent and exact helper are 
 have been proven reused. Recovery is serialized by an exclusive owner guard and passes the originally
 observed full file receipt into the quarantine rename, so a second contender cannot rename a live
 replacement; malformed locks fail closed.
-The macOS process-start query uses absolute `/bin/ps` with `LC_ALL=C`, `LANG=C`, `TZ=UTC`, no
-shell, and no inherited environment, so lock identity cannot drift with the contender's locale or
-timezone. Hostname is observed once per owner/stale decision and reused for the start hash and all
-owner fields; an observation change is an identity conflict, never evidence of staleness.
+In execute mode on macOS, process starts are observed inside the sandbox by the already verified,
+private Python snapshot calling `proc_pidinfo(PROC_PIDTBSDINFO)` through `libproc`. The embedded
+probe runs isolated, without a shell or inherited environment, and accepts only an exact bounded
+frame for the requested PID and current UID. It validates the microsecond field but derives the
+schema-1.x receipt from the UTC/C whole-second representation, preserving compatibility with
+existing `/bin/ps -o lstart=` owners. Any unavailable or malformed observation fails closed; there
+is no `/bin/ps` fallback during execute. Dry-run remains outside the sandbox and uses the legacy
+absolute `/bin/ps` observer with `LC_ALL=C`, `LANG=C`, and `TZ=UTC`. Hostname is observed once per
+owner/stale decision and reused for the start hash and all owner fields; an observation change is
+an identity conflict, never evidence of staleness.
 
 On POSIX, the adapter is isolated in a detached process group. Shutdown targets the recorded PGID,
 not merely the leader PID, and verifies group disappearance after TERM/KILL. The first observed

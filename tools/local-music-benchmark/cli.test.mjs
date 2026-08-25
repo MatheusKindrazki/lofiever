@@ -654,6 +654,42 @@ test('CLI modes reject an intermediate output-root symlink before helper or adap
   assert.deepEqual(await readdir(outsideOutput), ['sentinel.txt']);
 });
 
+test('CLI execute verifies its Python boundary before acquiring either benchmark lock', async () => {
+  const root = await canonicalTemp(path.join(os.tmpdir(), 'lofiever-cli-lock-observer-'));
+  const outputDirectory = path.join(root, 'output');
+  const executableConfigPath = await executableConfig(root);
+  await mkdir(outputDirectory, { mode: 0o700 });
+
+  await assert.rejects(
+    runCli(
+      [
+        '--config',
+        executableConfigPath,
+        '--output',
+        outputDirectory,
+        '--execute',
+        '--cell',
+        '150:1',
+      ],
+      {
+        io: { stdout: () => {}, stderr: () => {} },
+        verifyExecutionEnvironment: async () => {
+          const error = new Error('Fixture refuses the unverified Python boundary.');
+          error.code = 'fixture_python_boundary_unverified';
+          throw error;
+        },
+      },
+    ),
+    { code: 'fixture_python_boundary_unverified' },
+  );
+
+  await assert.rejects(stat(path.join(outputDirectory, 'benchmark-run.lock')), {
+    code: 'ENOENT',
+  });
+  await assert.rejects(stat(path.join(outputDirectory, 'cells')), { code: 'ENOENT' });
+  await assert.rejects(stat(path.join(root, '.test-machine-metal.lock')), { code: 'ENOENT' });
+});
+
 async function pin(filePath, version) {
   const canonical = await realpath(filePath);
   const value = {

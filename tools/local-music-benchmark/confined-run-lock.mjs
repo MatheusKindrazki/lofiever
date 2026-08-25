@@ -1,17 +1,9 @@
-import { execFile } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import os from 'node:os';
-import { promisify } from 'node:util';
 
 import { sha256Receipt } from './manifest.mjs';
+import { observeProcessStartIdentityWithPs } from './process-identity.mjs';
 import { BenchmarkStorageError } from './storage.mjs';
-
-const execFileAsync = promisify(execFile);
-const PROCESS_IDENTITY_ENVIRONMENT = Object.freeze({
-  LANG: 'C',
-  LC_ALL: 'C',
-  TZ: 'UTC',
-});
 
 function exactKeys(value, expected) {
   return (
@@ -22,34 +14,12 @@ function exactKeys(value, expected) {
   );
 }
 
-async function queryProcessStartIdentity(pid, hostname) {
-  try {
-    const { stdout } = await execFileAsync(
-      '/bin/ps',
-      ['-o', 'lstart=', '-p', String(pid)],
-      {
-        encoding: 'utf8',
-        env: PROCESS_IDENTITY_ENVIRONMENT,
-        maxBuffer: 16 * 1024,
-        shell: false,
-        timeout: 5_000,
-      },
-    );
-    const startedAt = stdout.trim();
-    return startedAt.length === 0
-      ? null
-      : sha256Receipt(`${hostname}\0${pid}\0${startedAt}`);
-  } catch {
-    return null;
-  }
-}
-
-async function currentOwner(store, observeHostname) {
+async function currentOwner(store, observeHostname, observeProcessStartIdentity) {
   const hostname = observeHostname();
-  const processStartIdentity = await queryProcessStartIdentity(process.pid, hostname);
+  const processStartIdentity = await observeProcessStartIdentity(process.pid, hostname);
   const helperPid = store?.helperProcessId;
   const helperProcessStartIdentity = Number.isInteger(helperPid) && helperPid > 0
-    ? await queryProcessStartIdentity(helperPid, hostname)
+    ? await observeProcessStartIdentity(helperPid, hostname)
     : null;
   if (processStartIdentity === null || helperProcessStartIdentity === null) {
     throw new BenchmarkStorageError(
@@ -117,9 +87,14 @@ function isAlive(pid) {
   }
 }
 
-async function exactProcessIsLive(pid, expectedStartIdentity, hostname) {
+async function exactProcessIsLive(
+  pid,
+  expectedStartIdentity,
+  hostname,
+  observeProcessStartIdentity,
+) {
   if (!isAlive(pid)) return false;
-  const observed = await queryProcessStartIdentity(pid, hostname);
+  const observed = await observeProcessStartIdentity(pid, hostname);
   if (observed === null) {
     if (isAlive(pid)) {
       throw new BenchmarkStorageError(
@@ -132,7 +107,7 @@ async function exactProcessIsLive(pid, expectedStartIdentity, hostname) {
   return observed === expectedStartIdentity;
 }
 
-async function ownerIsStale(owner, observeHostname) {
+async function ownerIsStale(owner, observeHostname, observeProcessStartIdentity) {
   const currentHostname = observeHostname();
   if (owner.hostname !== currentHostname) {
     throw new BenchmarkStorageError(
@@ -144,11 +119,13 @@ async function ownerIsStale(owner, observeHostname) {
     owner.pid,
     owner.processStartIdentity,
     owner.hostname,
+    observeProcessStartIdentity,
   );
   const helperLive = await exactProcessIsLive(
     owner.helperPid,
     owner.helperProcessStartIdentity,
     owner.hostname,
+    observeProcessStartIdentity,
   );
   return !parentLive && !helperLive;
 }
@@ -354,7 +331,13 @@ function quarantineName(relativePath, label, owner) {
   return `${relativePath}.${label}-${Date.now()}-${owner.processIdentity.slice(-12)}-${randomBytes(4).toString('hex')}`;
 }
 
-async function acquireRecovery(store, baseName, owner, observeHostname) {
+async function acquireRecovery(
+  store,
+  baseName,
+  owner,
+  observeHostname,
+  observeProcessStartIdentity,
+) {
   const path = `${baseName}.lock.recovery`;
   for (let attempt = 0; attempt < 4; attempt += 1) {
     try {
@@ -363,7 +346,11 @@ async function acquireRecovery(store, baseName, owner, observeHostname) {
     } catch (error) {
       if (error?.code !== 'benchmark_lock_exists') throw error;
       const existing = await readOwner(store, path);
-      if (!(await ownerIsStale(existing.owner, observeHostname))) {
+      if (!(await ownerIsStale(
+        existing.owner,
+        observeHostname,
+        observeProcessStartIdentity,
+      ))) {
         throw new BenchmarkStorageError(
           'benchmark_lock_recovery_in_progress',
           'Another live process is recovering the confined benchmark lock.',
@@ -530,7 +517,10 @@ function ownedHandle(store, baseName, owner) {
 export async function acquireConfinedRunLock(
   store,
   baseName = 'benchmark-run',
-  { observeHostname = os.hostname } = {},
+  {
+    observeHostname = os.hostname,
+    observeProcessStartIdentity = observeProcessStartIdentityWithPs,
+  } = {},
 ) {
   if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,31}$/u.test(baseName)) {
     throw new TypeError('Confined benchmark lock name is invalid.');
@@ -538,20 +528,37 @@ export async function acquireConfinedRunLock(
   if (typeof observeHostname !== 'function') {
     throw new TypeError('Confined lock hostname observer must be a function.');
   }
-  const owner = await currentOwner(store, observeHostname);
+  if (typeof observeProcessStartIdentity !== 'function') {
+    throw new TypeError('Confined lock process-identity observer must be a function.');
+  }
+  const owner = await currentOwner(
+    store,
+    observeHostname,
+    observeProcessStartIdentity,
+  );
   const lockPath = `${baseName}.lock`;
   const guardPath = `${lockPath}.cleanup-unproven`;
   const observedBeforeRecovery = await readOwner(store, lockPath, { allowMissing: true });
   if (
     observedBeforeRecovery !== null &&
-    !(await ownerIsStale(observedBeforeRecovery.owner, observeHostname))
+    !(await ownerIsStale(
+      observedBeforeRecovery.owner,
+      observeHostname,
+      observeProcessStartIdentity,
+    ))
   ) {
     throw new BenchmarkStorageError(
       'benchmark_locked',
       'Another live parent or confined-output helper owns the benchmark lock.',
     );
   }
-  const recovery = await acquireRecovery(store, baseName, owner, observeHostname);
+  const recovery = await acquireRecovery(
+    store,
+    baseName,
+    owner,
+    observeHostname,
+    observeProcessStartIdentity,
+  );
   try {
     const cleanup = await readGuard(store, guardPath);
     if (cleanup !== null) {
@@ -579,7 +586,11 @@ export async function acquireConfinedRunLock(
           'Confined cleanup guard owner does not match its lock owner.',
         );
       }
-      if (!(await ownerIsStale(existing.owner, observeHostname))) {
+      if (!(await ownerIsStale(
+        existing.owner,
+        observeHostname,
+        observeProcessStartIdentity,
+      ))) {
         throw new BenchmarkStorageError(
           'benchmark_locked',
           'Another live process owns the confined benchmark lock.',
@@ -609,7 +620,11 @@ export async function acquireConfinedRunLock(
       } catch (error) {
         if (error?.code !== 'benchmark_lock_exists') throw error;
         const existing = await readOwner(store, lockPath);
-        if (!(await ownerIsStale(existing.owner, observeHostname))) {
+        if (!(await ownerIsStale(
+          existing.owner,
+          observeHostname,
+          observeProcessStartIdentity,
+        ))) {
           throw new BenchmarkStorageError(
             'benchmark_locked',
             'Another live process owns the confined benchmark lock.',

@@ -26,6 +26,9 @@ import {
   serializeManifest,
 } from './manifest.mjs';
 import {
+  createExecutionProcessIdentityObserver,
+} from './process-identity.mjs';
+import {
   readCheckpointBytes,
   runBenchmarkManifest as runBenchmarkManifestDefault,
 } from './runner.mjs';
@@ -253,16 +256,23 @@ async function executeCells({
   runBenchmarkManifest,
 }) {
   assertExecutableBenchmarkConfig(config);
-  const sessionLock = await acquireConfinedRunLock(outputStore, 'benchmark-run');
-  let retainSessionLock = false;
-  try {
-    await outputStore.ensureDirectory('cells');
   const initialVerified = await verifyExecutionEnvironment(config);
   if (typeof process.getuid !== 'function') {
-    const error = new Error('A stable user identity is required for the machine-wide lock.');
+    const error = new Error('A stable user identity is required for benchmark locks.');
     error.code = 'benchmark_user_identity_unavailable';
     throw error;
   }
+  const observeProcessStartIdentity = createExecutionProcessIdentityObserver({
+    platform: process.platform,
+    pythonExecutable: initialVerified.adapter.executable.realpath,
+    expectedUid: process.getuid(),
+  });
+  const sessionLock = await acquireConfinedRunLock(outputStore, 'benchmark-run', {
+    observeProcessStartIdentity,
+  });
+  let retainSessionLock = false;
+  try {
+    await outputStore.ensureDirectory('cells');
   if (
     machineLockPathOverride !== null &&
     (typeof machineLockPathOverride !== 'string' ||
@@ -298,7 +308,10 @@ async function executeCells({
     }
   };
   try {
-    metalLock = await acquireRunLock(machineLockPath, machineLockOptions);
+    metalLock = await acquireRunLock(machineLockPath, {
+      ...machineLockOptions,
+      observeProcessStartIdentity,
+    });
     for (const cell of cells) {
       const verified = await verifyExecutionEnvironment(config);
       const initialIdentity = executionIdentityReceipt(initialVerified);
