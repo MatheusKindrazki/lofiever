@@ -22,6 +22,10 @@ import { promisify } from 'node:util';
 import { serializeManifest } from './manifest.mjs';
 import { spikeManifestSchema } from './schema.mjs';
 import {
+  environmentForPinnedManagedPython,
+  managedPythonFindArguments,
+} from './uv-managed-python.mjs';
+import {
   assertExecutableClosureConfined,
   assertMachOExecutableClosure,
   assertRelocatablePythonClosure,
@@ -1776,17 +1780,10 @@ async function verifyUvManagedPython(uv, python, pythonVersion, environment) {
   try {
     ({ stdout } = await execFileAsync(
       uv.realpath,
-      [
-        'python',
-        'find',
-        '--managed-python',
-        '--no-python-downloads',
-        '--no-project',
-        version,
-      ],
+      managedPythonFindArguments(version),
       {
         encoding: 'utf8',
-        env: environment,
+        env: environmentForPinnedManagedPython(environment, python.realpath),
         maxBuffer: 64 * 1024,
         timeout: 10_000,
       },

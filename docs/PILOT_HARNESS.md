@@ -246,7 +246,8 @@ load a model, or start the adapter. Create a private parent/run directory, then 
 model revisions, the reviewed adapter path, and the tool executables:
 
 ```bash
-install -d -m 700 "$HOME/lofigen" "$HOME/lofigen/run"
+install -d -m 700 "$HOME/lofigen" "$HOME/lofigen/run" "$HOME/lofigen/tmp"
+export TMPDIR="$HOME/lofigen/tmp"
 
 LOFIEVER_BENCHMARK_ID=lofiever-spike-001 \
 LOFIEVER_ENGINE_REPOSITORY=/absolute/path/to/ACE-Step-1.5 \
@@ -283,6 +284,14 @@ only `HOME`, `TMPDIR`, `LANG`, and `LC_ALL`; `DYLD_*`, `LD_LIBRARY_PATH`, and `L
 rejected before any recipe subprocess. This matrix accepts exactly `device=mps` and
 `lmBackend=mlx`; `LOFIEVER_VAE_CHUNK` is required and must be a positive integer selected for the
 real smoke setup (the example value is not an inferred benchmark result).
+
+For the managed-runtime lookup only, the recipe and every execution revalidation derive
+`UV_PYTHON_INSTALL_DIR` from the pinned Python realpath. This supports an isolated uv installation
+such as `$HOME/lofigen/python/cpython-3.12.14-macos-aarch64-none/bin/python3.12` without trusting an
+inherited uv setting or requiring a second runtime under uv's default global data directory. The
+lookup also passes `--no-cache`; any temporary state follows the already-sanitized `TMPDIR` instead
+of touching uv's global cache. `--offline` and `--no-config` also prevent the identity lookup from
+consulting the network or user/system uv configuration.
 
 The resulting configuration uses the committed canonical matrix and contains measured pins for:
 

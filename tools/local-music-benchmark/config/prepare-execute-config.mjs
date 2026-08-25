@@ -24,6 +24,10 @@ import {
 import { serializeManifest } from '../manifest.mjs';
 import { MAX_ADAPTER_OUTPUT_BYTES } from '../limits.mjs';
 import { writeFileAtomicDurable } from '../storage.mjs';
+import {
+  environmentForPinnedManagedPython,
+  managedPythonFindArguments,
+} from '../uv-managed-python.mjs';
 
 const execFileAsync = promisify(execFile);
 const matrixPath = new URL('./lofiever-spike-matrix.v1.json', import.meta.url).pathname;
@@ -164,17 +168,10 @@ async function assertUvManagedPython(uv, python, version, closure, environment) 
   await revalidateExecutableClosure({ ...uv, dynamicLinker: closure });
   const { stdout } = await execFileAsync(
     uv.realpath,
-    [
-      'python',
-      'find',
-      '--managed-python',
-      '--no-python-downloads',
-      '--no-project',
-      version,
-    ],
+    managedPythonFindArguments(version),
     {
       encoding: 'utf8',
-      env: environment,
+      env: environmentForPinnedManagedPython(environment, python.realpath),
       maxBuffer: 64 * 1024,
       timeout: 10_000,
     },
